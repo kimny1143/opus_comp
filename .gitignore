@@ -16,3 +16,6 @@ yarn-error.log*
 
 # MacOS files
 .DS_Store
+
+# Development documentation
+dev_docs/

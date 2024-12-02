@@ -1,44 +1,71 @@
 import NextAuth from 'next-auth';
+import { PrismaAdapter } from '@next-auth/prisma-adapter';
+import { prisma } from '@/lib/prisma';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import { compare } from 'bcryptjs';
 
 export default NextAuth({
   providers: [
     CredentialsProvider({
+      id: 'credentials',
+      name: 'Credentials',
       credentials: {
-        username: { label: "ユーザー名", type: "text", placeholder: "ユーザー名を入力" },
-        password: { label: "パスワード", type: "password" },
+        email: { label: "メールアドレス", type: "email" },
+        password: { label: "パスワード", type: "password" }
       },
-      async authorize(credentials, req) {
-        if (!credentials) return null;
-        const { username, password } = credentials;
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error('メールアドレスとパスワードを入力してください');
+        }
 
-        // 認証ロジックをここに記述
-        if (username === 'admin' && password === 'password') {
-          return { id: '1', name: '管理者', email: 'admin@example.com', role: 'admin' };
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            password: true,
+            role: true
+          }
+        });
+
+        if (!user || !await compare(credentials.password, user.password)) {
+          throw new Error('メールアドレスまたはパスワードが正しくありません');
         }
-        // 一般ユーザー
-        if (username === 'user' && password === 'password') {
-          return { id: '2', name: 'ユーザー', email: 'user@example.com', role: 'user' };
-        }
-        // 認証失敗の場合は null を返す
-        return null;
-      },
-    }),
-  ],
-  callbacks: {
-    async session({ session, token }) {
-      if (token) {
-        session.user!.id = token.id;
-        session.user!.role = token.role;
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role
+        };
       }
-      return session;
-    },
+    })
+  ],
+  adapter: PrismaAdapter(prisma),
+  session: {
+    strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  pages: {
+    signIn: '/auth/signin',
+    error: '/auth/error',
+  },
+  callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
         token.role = user.role;
       }
       return token;
     },
-  },
-}); 
+    async session({ session, token }) {
+      if (session?.user) {
+        (session.user as any).role = token.role;
+      }
+      return session;
+    },
+    async redirect({ url, baseUrl }) {
+      return url.startsWith(baseUrl) ? url : baseUrl;
+    }
+  }
+});

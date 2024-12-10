@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/check-purchase-orders",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/check-invoices",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/check-reminders",
+      "schedule": "0 9 * * *"
+    }
+  ]
+} 

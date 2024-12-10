@@ -10,16 +10,12 @@ generator client {
 model User {
   id            String    @id @default(cuid())
   name          String?
-  email         String   @unique
+  email         String?   @unique
   emailVerified DateTime?
-  password      String
   image         String?
-  role          String    @default("user")
   accounts      Account[]
   sessions      Session[]
-  vendors       Vendor[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  statusHistory PurchaseOrderStatusHistory[]
 }
 
 model Account {
@@ -28,12 +24,12 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String?
-  access_token      String?
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String?
+  id_token          String? @db.Text
   session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -46,30 +42,97 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
+model PurchaseOrder {
+  id            String    @id @default(cuid())
+  orderNumber   String    @unique
+  orderDate     DateTime
+  vendorId      String
+  status        String    @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED
+  totalAmount   Decimal   @db.Decimal(10, 2)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  @@unique([identifier, token])
+  vendor        Vendor    @relation(fields: [vendorId], references: [id])
+  items         PurchaseOrderItem[]
+  statusHistory PurchaseOrderStatusHistory[]
+  invoices      Invoice[]
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  itemName        String
+  quantity        Int
+  unitPrice       Decimal       @db.Decimal(10, 2)
+  taxRate         Decimal       @db.Decimal(5, 2)
+  description     String?
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+}
+
+model PurchaseOrderStatusHistory {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  userId          String
+  status          String
+  comment         String?
+  createdAt       DateTime      @default(now())
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  user            User          @relation(fields: [userId], references: [id])
 }
 
 model Vendor {
-  id            String    @id @default(cuid())
-  name          String
-  email         String?
-  address       String?
-  phone         String?
-  registrationNumber String?
-  contactPerson String?
-  status        String    @default("active")
-  tags          String[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  createdBy     String
-  user          User      @relation(fields: [createdBy], references: [id])
-} 
+  id             String          @id @default(cuid())
+  name           String
+  code           String          @unique
+  contactPerson  String?
+  email          String?
+  phone          String?
+  address        String?
+  purchaseOrders PurchaseOrder[]
+}
+
+model InvoiceTemplate {
+  id          String              @id @default(cuid())
+  name        String
+  description String?
+  items       InvoiceTemplateItem[]
+  invoices    Invoice[]
+}
+
+model InvoiceTemplateItem {
+  id               String          @id @default(cuid())
+  templateId       String
+  itemName         String
+  quantity         Int
+  unitPrice        Decimal        @db.Decimal(10, 2)
+  taxRate          Decimal        @db.Decimal(5, 2)
+  description      String?
+  template         InvoiceTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+}
+
+model Invoice {
+  id              String    @id @default(cuid())
+  templateId      String
+  purchaseOrderId String
+  status          String    @default("DRAFT") // DRAFT, ISSUED, PAID
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  template        InvoiceTemplate @relation(fields: [templateId], references: [id])
+  purchaseOrder   PurchaseOrder   @relation(fields: [purchaseOrderId], references: [id])
+  items           InvoiceItem[]
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  itemName    String
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  taxRate     Decimal  @db.Decimal(5, 2)
+  description String?
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}

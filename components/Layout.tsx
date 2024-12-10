@@ -1,26 +1,17 @@
-import Header from './Header'
-import Sidebar from './Sidebar'
+import React, { ReactNode } from 'react';
 
-type LayoutProps = {
-  children: React.ReactNode
-  showHeader?: boolean
-  showSidebar?: boolean
+interface LayoutProps {
+  children: ReactNode;
 }
 
-export default function Layout({ 
-  children, 
-  showHeader = true,
-  showSidebar = true 
-}: LayoutProps) {
+const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
-    <div className="min-h-screen bg-gray-100">
-      {showHeader && <Header />}
-      <div className="flex">
-        {showSidebar && <Sidebar />}
-        <main className="flex-1 p-6">
-          {children}
-        </main>
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      <main className="container mx-auto px-4">
+        {children}
+      </main>
     </div>
-  )
-} 
+  );
+};
+
+export default Layout; 

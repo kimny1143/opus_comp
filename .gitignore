@@ -19,3 +19,6 @@ yarn-error.log*
 
 # Development documentation
 dev_docs/
+
+# Logo files
+logo/

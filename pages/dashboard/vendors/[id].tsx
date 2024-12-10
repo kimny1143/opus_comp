@@ -1,29 +1,13 @@
-import { useSession } from 'next-auth/react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
-
-type Vendor = {
-  id: string;
-  name: string;
-  email: string | null;
-  address: string | null;
-  phone: string | null;
-  registrationNumber: string | null;
-  contactPerson: string | null;
-  status: string;
-  tags: string[];
-  updatedAt: string;
-};
+import { Vendor } from '@prisma/client';
 
 export default function VendorDetail() {
-  const { data: session, status } = useSession();
   const router = useRouter();
   const { id } = router.query;
   const [vendor, setVendor] = useState<Vendor | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -38,138 +22,158 @@ export default function VendorDetail() {
       const data = await res.json();
       setVendor(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '取引先の取得中にエラーが発生しました');
-    } finally {
-      setLoading(false);
+      setError(err instanceof Error ? err.message : 'エラーが発生しました');
     }
-  }
-
-  async function handleDelete() {
-    if (!confirm('この取引先を無効化してもよろしいですか？')) return;
-
-    try {
-      const res = await fetch(`/api/vendors/${id}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) throw new Error('取引先の削除に失敗しました');
-      router.push('/dashboard');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '取引先の削除中にエラーが発生しました');
-    }
-  }
-
-  if (status === 'loading' || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
-      </div>
-    );
-  }
-
-  if (!vendor && !loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900">取引先が見つかりません</h2>
-          <Link href="/dashboard" className="mt-4 text-indigo-600 hover:text-indigo-500">
-            ダッシュボードに戻る
-          </Link>
-        </div>
-      </div>
-    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-            <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
-              <div>
-                <h3 className="text-lg leading-6 font-medium text-gray-900">取引先詳細</h3>
-                <p className="mt-1 max-w-2xl text-sm text-gray-500">取引先の詳細情報</p>
-              </div>
-              <div className="space-x-3">
-                <Link
-                  href={`/dashboard/vendors/${id}/edit`}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-                >
-                  編集
-                </Link>
-                <button
-                  onClick={handleDelete}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
-                >
-                  削除
-                </button>
-              </div>
-            </div>
-            <div className="border-t border-gray-200">
-              <dl>
-                <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                  <dt className="text-sm font-medium text-gray-500">会社名</dt>
-                  <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{vendor?.name}</dd>
-                </div>
-                <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                  <dt className="text-sm font-medium text-gray-500">メールアドレス</dt>
-                  <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{vendor?.email || '-'}</dd>
-                </div>
-                <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                  <dt className="text-sm font-medium text-gray-500">住所</dt>
-                  <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{vendor?.address || '-'}</dd>
-                </div>
-                <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                  <dt className="text-sm font-medium text-gray-500">電話番号</dt>
-                  <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{vendor?.phone || '-'}</dd>
-                </div>
-                <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                  <dt className="text-sm font-medium text-gray-500">登録番号</dt>
-                  <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                    {vendor?.registrationNumber || '-'}
-                  </dd>
-                </div>
-                <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                  <dt className="text-sm font-medium text-gray-500">担当者</dt>
-                  <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                    {vendor?.contactPerson || '-'}
-                  </dd>
-                </div>
-                <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                  <dt className="text-sm font-medium text-gray-500">ステータス</dt>
-                  <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                    <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        vendor?.status === 'active'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      {vendor?.status === 'active' ? '有効' : '無効'}
-                    </span>
-                  </dd>
-                </div>
-                {vendor?.tags && vendor.tags.length > 0 && (
-                  <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                    <dt className="text-sm font-medium text-gray-500">タグ</dt>
-                    <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                      <div className="flex flex-wrap gap-2">
-                        {vendor.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="px-2 py-1 rounded-full text-xs bg-indigo-100 text-indigo-800"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </dd>
-                  </div>
-                )}
-              </dl>
-            </div>
+    <div className="py-6">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="bg-white rounded-lg shadow px-6 py-8">
+          <div className="mb-6">
+            <h1 className="text-2xl font-semibold text-gray-900">取引先詳細</h1>
           </div>
+
+          {error && (
+            <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
+              <p className="text-red-700">{error}</p>
+            </div>
+          )}
+
+          {vendor && (
+            <div className="space-y-8">
+              {/* 基本情報 */}
+              <div>
+                <h2 className="text-lg font-medium text-gray-900 mb-4">基本情報</h2>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">会社名</label>
+                    <p className="mt-1 text-sm text-gray-900">{vendor.name}</p>
+                  </div>
+                  {vendor.email && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">メールアドレス</label>
+                      <p className="mt-1 text-sm text-gray-900">{vendor.email}</p>
+                    </div>
+                  )}
+                  {vendor.phone && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">電話番号</label>
+                      <p className="mt-1 text-sm text-gray-900">{vendor.phone}</p>
+                    </div>
+                  )}
+                  {vendor.contactPerson && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">担当者</label>
+                      <p className="mt-1 text-sm text-gray-900">{vendor.contactPerson}</p>
+                    </div>
+                  )}
+                  {vendor.address && (
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700">住所</label>
+                      <p className="mt-1 text-sm text-gray-900">{vendor.address}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 取引状況と分類 */}
+              <div>
+                <h2 className="text-lg font-medium text-gray-900 mb-4">取引状況と分類</h2>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">取引状況</label>
+                    <p className="mt-1 text-sm text-gray-900">{vendor.status}</p>
+                  </div>
+                  {vendor.industry && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">業種</label>
+                      <p className="mt-1 text-sm text-gray-900">{vendor.industry}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 法的要件 */}
+              <div>
+                <h2 className="text-lg font-medium text-gray-900 mb-4">法的要件</h2>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">事業者区分</label>
+                    <p className="mt-1 text-sm text-gray-900">{vendor.entityType}</p>
+                  </div>
+                  {vendor.registrationNumber && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">登録番号</label>
+                      <p className="mt-1 text-sm text-gray-900">{vendor.registrationNumber}</p>
+                    </div>
+                  )}
+                  {vendor.invoiceNumber && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">インボイス番号</label>
+                      <p className="mt-1 text-sm text-gray-900">{vendor.invoiceNumber}</p>
+                    </div>
+                  )}
+                  {vendor.myNumber && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">マイナンバー</label>
+                      <p className="mt-1 text-sm text-gray-900">{vendor.myNumber}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 日付情報 */}
+              <div>
+                <h2 className="text-lg font-medium text-gray-900 mb-4">日付情報</h2>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  {vendor.establishedDate && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">設立日</label>
+                      <p className="mt-1 text-sm text-gray-900">
+                        {new Date(vendor.establishedDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                  )}
+                  {vendor.contractStartDate && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">取引開始日</label>
+                      <p className="mt-1 text-sm text-gray-900">
+                        {new Date(vendor.contractStartDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* その他 */}
+              {vendor.notes && (
+                <div>
+                  <h2 className="text-lg font-medium text-gray-900 mb-4">その他</h2>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">備考</label>
+                    <p className="mt-1 text-sm text-gray-900">{vendor.notes}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-4">
+                <button
+                  onClick={() => router.back()}
+                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  戻る
+                </button>
+                <Link href={`/dashboard/vendors/${vendor.id}/edit`}>
+                  <button className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    編集
+                  </button>
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
-} 
+}

@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { hash } from 'bcrypt'
+import { hash } from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 
 export default async function handler(
@@ -33,10 +33,11 @@ export default async function handler(
         name,
         email,
         password: hashedPassword,
+        role: 'user', // デフォルトロールを設定
       },
     })
 
-    res.status(200).json({ message: 'ユーザーが作成されました', userId: user.id })
+    res.status(201).json({ message: 'ユーザーが作成されました', userId: user.id })
   } catch (error) {
     console.error('Signup error:', error)
     res.status(500).json({ message: 'サーバーエラーが発生しました' })

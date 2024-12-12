@@ -8,14 +8,24 @@ generator client {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
-  statusHistory PurchaseOrderStatusHistory[]
+  id                    String                       @id @default(cuid())
+  name                  String?
+  email                 String?                      @unique
+  emailVerified         DateTime?
+  image                 String?
+  hashedPassword        String? // passwordをhashedPasswordに変更
+  role                  String                       @default("USER")
+  accounts              Account[]
+  sessions              Session[]
+  statusHistory         PurchaseOrderStatusHistory[]
+  templates             InvoiceTemplate[]
+  createdInvoices       Invoice[]                    @relation("CreatedInvoices")
+  updatedInvoices       Invoice[]                    @relation("UpdatedInvoices")
+  createdPurchaseOrders PurchaseOrder[]              @relation("CreatedPurchaseOrders")
+  updatedPurchaseOrders PurchaseOrder[]              @relation("UpdatedPurchaseOrders")
+  createdVendors        Vendor[]                     @relation("VendorCreatedBy")
+  updatedVendors        Vendor[]                     @relation("VendorUpdatedBy")
+  createdPayments       Payment[]                    @relation("CreatedPayments")
 }
 
 model Account {
@@ -46,93 +56,219 @@ model Session {
 }
 
 model PurchaseOrder {
-  id            String    @id @default(cuid())
-  orderNumber   String    @unique
-  orderDate     DateTime
+  id            String      @id @default(cuid())
+  orderNumber   String      @unique
   vendorId      String
-  status        String    @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED
-  totalAmount   Decimal   @db.Decimal(10, 2)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  orderDate     DateTime
+  deliveryDate  DateTime?
+  description   String?
+  terms         String?
+  totalAmount   Decimal     @db.Decimal(10, 2)
+  taxAmount     Decimal     @db.Decimal(10, 2)
+  status        PurchaseOrderStatus
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  createdById   String
+  updatedById   String?
+  projectId     String?
 
-  vendor        Vendor    @relation(fields: [vendorId], references: [id])
+  vendor        Vendor      @relation(fields: [vendorId], references: [id])
   items         PurchaseOrderItem[]
   statusHistory PurchaseOrderStatusHistory[]
   invoices      Invoice[]
+  createdBy     User        @relation("CreatedPurchaseOrders", fields: [createdById], references: [id])
+  updatedBy     User?       @relation("UpdatedPurchaseOrders", fields: [updatedById], references: [id])
+  project       Project?    @relation(fields: [projectId], references: [id])
+
+  @@index([vendorId])
+  @@index([createdById])
+  @@index([updatedById])
 }
 
 model PurchaseOrderItem {
   id              String        @id @default(cuid())
   purchaseOrderId String
   itemName        String
+  description     String?
   quantity        Int
   unitPrice       Decimal       @db.Decimal(10, 2)
   taxRate         Decimal       @db.Decimal(5, 2)
-  description     String?
+  amount          Decimal       @db.Decimal(10, 2)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  PENDING
+  SENT
+  COMPLETED
+  REJECTED
+  OVERDUE
 }
 
 model PurchaseOrderStatusHistory {
-  id              String        @id @default(cuid())
+  id              String              @id @default(cuid())
   purchaseOrderId String
   userId          String
-  status          String
+  status          PurchaseOrderStatus
   comment         String?
-  createdAt       DateTime      @default(now())
-  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  user            User          @relation(fields: [userId], references: [id])
+  createdAt       DateTime            @default(now())
+  purchaseOrder   PurchaseOrder       @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  user            User                @relation(fields: [userId], references: [id])
+}
+
+enum VendorCategory {
+  CORPORATION
+  INDIVIDUAL
 }
 
 model Vendor {
-  id             String          @id @default(cuid())
-  name           String
-  code           String          @unique
-  contactPerson  String?
-  email          String?
-  phone          String?
-  address        String?
-  purchaseOrders PurchaseOrder[]
+  id                String         @id @default(cuid())
+  category         VendorCategory
+  name             String
+  tradingName      String?
+  code             String?
+  registrationNumber String?
+  status           VendorStatus   @default(ACTIVE)
+  contactPerson    String?
+  email            String?
+  phone            String?
+  address          String?
+  tags             Tag[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  createdById      String
+  updatedById      String?
+  createdBy        User           @relation("VendorCreatedBy", fields: [createdById], references: [id])
+  updatedBy        User?          @relation("VendorUpdatedBy", fields: [updatedById], references: [id])
+  purchaseOrders   PurchaseOrder[]
+  invoices         Invoice[]
+
+  @@index([createdById])
+  @@index([updatedById])
+}
+
+model Tag {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  vendors     Vendor[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model InvoiceTemplate {
-  id          String              @id @default(cuid())
+  id          String                @id @default(cuid())
   name        String
   description String?
   items       InvoiceTemplateItem[]
   invoices    Invoice[]
+  userId      String
+  user        User                  @relation(fields: [userId], references: [id])
 }
 
 model InvoiceTemplateItem {
-  id               String          @id @default(cuid())
-  templateId       String
-  itemName         String
-  quantity         Int
-  unitPrice        Decimal        @db.Decimal(10, 2)
-  taxRate          Decimal        @db.Decimal(5, 2)
-  description      String?
-  template         InvoiceTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  id          String          @id @default(cuid())
+  templateId  String
+  itemName    String
+  quantity    Int
+  unitPrice   Decimal         @db.Decimal(10, 2)
+  taxRate     Decimal         @db.Decimal(5, 2)
+  description String?
+  template    InvoiceTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 }
 
 model Invoice {
-  id              String    @id @default(cuid())
+  id              String        @id @default(cuid())
   templateId      String
   purchaseOrderId String
-  status          String    @default("DRAFT") // DRAFT, ISSUED, PAID
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  status          InvoiceStatus @default(DRAFT) // DRAFT, ISSUED, PAID
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  issueDate       DateTime
+  dueDate         DateTime
+  vendorId        String // 追加: 請求書とベンダーのリレーション
 
-  template        InvoiceTemplate @relation(fields: [templateId], references: [id])
-  purchaseOrder   PurchaseOrder   @relation(fields: [purchaseOrderId], references: [id])
-  items           InvoiceItem[]
+  template      InvoiceTemplate @relation(fields: [templateId], references: [id])
+  purchaseOrder PurchaseOrder   @relation(fields: [purchaseOrderId], references: [id])
+  vendor        Vendor          @relation(fields: [vendorId], references: [id]) // 追加
+  items         InvoiceItem[]
+  createdBy     User            @relation("CreatedInvoices", fields: [createdById], references: [id])
+  createdById   String
+  updatedBy     User?           @relation("UpdatedInvoices", fields: [updatedById], references: [id])
+  updatedById   String?
+  payment       Payment?
 }
 
 model InvoiceItem {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   invoiceId   String
   itemName    String
   quantity    Int
-  unitPrice   Decimal  @db.Decimal(10, 2)
-  taxRate     Decimal  @db.Decimal(5, 2)
+  unitPrice   Decimal @db.Decimal(10, 2)
+  taxRate     Decimal @db.Decimal(5, 2)
   description String?
-  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+enum VendorStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+// 支払い方法の列挙型
+enum PaymentMethod {
+  BANK_TRANSFER
+  DIRECT_DEBIT
+  CREDIT_CARD
+  CASH
+  OTHER
+}
+
+// 支払い情報モデル
+model Payment {
+  id          String        @id @default(cuid())
+  invoiceId   String        @unique // 1つの請求書に1つの支払い
+  invoice     Invoice       @relation(fields: [invoiceId], references: [id])
+  paymentDate DateTime
+  amount      Decimal       @db.Decimal(10, 2)
+  method      PaymentMethod
+  note        String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  createdBy   User          @relation("CreatedPayments", fields: [createdById], references: [id])
+  createdById String
+}
+
+// 将来的な実装のための参考スキーマ
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  members     ProjectMember[]
+  purchaseOrders PurchaseOrder[]
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  role      String   // ADMIN, MEMBER, VIEWER など
+  project   Project  @relation(fields: [projectId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([projectId, userId])
 }

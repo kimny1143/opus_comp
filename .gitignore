@@ -22,3 +22,6 @@ dev_docs/
 
 # Logo files
 logo/
+
+# デザイナーから届いたモックUI
+mock_ui/

@@ -1,132 +1,98 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import { prisma } from '@/lib/prisma';
-import { addDays, subDays, isAfter, isBefore } from 'date-fns';
-import { sendReminderMail, recordReminderHistory } from '@/lib/mail/sendMail';
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { InvoiceStatus, ReminderType } from '@prisma/client'
+import { addDays, differenceInDays } from 'date-fns'
+import { EmailNotificationService } from '@/lib/notification/email-service'
+import { BankInfo } from '@/types/invoice'
 
-// Vercelの場合、Cron Jobからのリクエストを認証するためのシークレット
-const CRON_SECRET = process.env.CRON_SECRET;
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // CRONジョブからのリクエストを認証
-  if (req.headers.authorization !== `Bearer ${CRON_SECRET}`) {
-    return res.status(401).json({ error: '認証が必要です' });
-  }
-
+// リマインダーのチェックと送信
+export async function checkReminders() {
   try {
-    const now = new Date();
-    
-    // 有効なリマインダー設定を全て取得
-    const reminderSettings = await prisma.reminderSetting.findMany({
+    const today = new Date()
+
+    // アクティブな請求書のリマインダー設定を取得
+    const reminders = await prisma.reminderSetting.findMany({
       where: {
         enabled: true,
         invoice: {
           status: {
-            notIn: ['PAID', 'CANCELLED']
+            notIn: [
+              InvoiceStatus.PAID,
+              InvoiceStatus.REJECTED,
+              InvoiceStatus.DRAFT
+            ]
           }
         }
       },
       include: {
         invoice: {
           include: {
-            vendor: {
-              select: {
-                name: true,
-                email: true,
-              }
-            }
+            vendor: true,
+            items: true,
+            template: true
           }
         }
       }
-    });
+    })
 
-    const results = await Promise.all(
-      reminderSettings.map(async (setting) => {
-        try {
-          let shouldSendReminder = false;
-          const { invoice, type, daysBeforeOrAfter } = setting;
+    for (const reminder of reminders) {
+      const { invoice } = reminder
+      if (!invoice) continue
 
-          switch (type) {
-            case 'BEFORE_DUE':
-              // 支払期限の指定日前
-              const reminderDate = subDays(new Date(invoice.dueDate), daysBeforeOrAfter);
-              shouldSendReminder = isBefore(now, new Date(invoice.dueDate)) && 
-                                 isAfter(now, reminderDate);
-              break;
+      let shouldSendReminder = false
+      let daysOverdue = 0
 
-            case 'AFTER_DUE':
-              // 支払期限の指定日後
-              const overdueDate = addDays(new Date(invoice.dueDate), daysBeforeOrAfter);
-              shouldSendReminder = isAfter(now, overdueDate);
-              break;
+      switch (reminder.type) {
+        case ReminderType.BEFORE_DUE:
+          const daysUntilDue = differenceInDays(invoice.dueDate, today)
+          shouldSendReminder = daysUntilDue === reminder.daysBeforeOrAfter
+          break
 
-            case 'AFTER_ISSUE':
-              // 発行後の指定日後
-              const afterIssueDate = addDays(new Date(invoice.issueDate), daysBeforeOrAfter);
-              shouldSendReminder = isAfter(now, afterIssueDate);
-              break;
+        case ReminderType.AFTER_DUE:
+          daysOverdue = differenceInDays(today, invoice.dueDate)
+          shouldSendReminder = daysOverdue === reminder.daysBeforeOrAfter
+          break
+
+        case ReminderType.AFTER_ISSUE:
+          const daysAfterIssue = differenceInDays(today, invoice.issueDate)
+          shouldSendReminder = daysAfterIssue === reminder.daysBeforeOrAfter
+          break
+      }
+
+      if (shouldSendReminder && invoice.vendor.email) {
+        const emailInvoice = {
+          ...invoice,
+          bankInfo: invoice.bankInfo as BankInfo,
+          template: {
+            ...invoice.template,
+            bankInfo: invoice.template.bankInfo as BankInfo
+          },
+          vendor: {
+            ...invoice.vendor,
+            email: invoice.vendor.email
           }
-
-          if (shouldSendReminder) {
-            // 最終送信日をチェック（24時間以内に送信済みの場合はスキップ）
-            if (setting.lastSentAt && 
-                isAfter(setting.lastSentAt, subDays(now, 1))) {
-              return {
-                id: setting.id,
-                status: 'SKIPPED',
-                message: '24時間以内に送信済み'
-              };
-            }
-
-            // メール送信
-            await sendReminderMail(invoice, type, daysBeforeOrAfter);
-
-            // 送信履歴を記録
-            await recordReminderHistory(prisma, setting.id, true);
-
-            // 最終送信日を更新
-            await prisma.reminderSetting.update({
-              where: { id: setting.id },
-              data: { lastSentAt: now }
-            });
-
-            return {
-              id: setting.id,
-              status: 'SUCCESS',
-              message: 'リマインダーを送信しました'
-            };
-          }
-
-          return {
-            id: setting.id,
-            status: 'SKIPPED',
-            message: '送信条件を満たしていません'
-          };
-        } catch (error) {
-          console.error('Error processing reminder:', error);
-          
-          // エラー履歴を記録
-          await recordReminderHistory(
-            prisma, 
-            setting.id, 
-            false, 
-            error instanceof Error ? error.message : '不明なエラー'
-          );
-
-          return {
-            id: setting.id,
-            status: 'ERROR',
-            message: error instanceof Error ? error.message : '不明なエラー'
-          };
         }
-      })
-    );
 
-    res.status(200).json({
-      processed: results.length,
-      results
-    });
+        // メール送信
+        await EmailNotificationService.sendPaymentReminder(
+          emailInvoice,
+          daysOverdue > 0 ? 'overdue' : 'upcoming'
+        )
+
+        // 送信履歴の更新
+        await prisma.reminderSetting.update({
+          where: { id: reminder.id },
+          data: { lastSentAt: today }
+        })
+      }
+    }
+
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ error: 'リマインダーの処理に失敗しました' });
+    console.error('Error checking reminders:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to check reminders' },
+      { status: 500 }
+    )
   }
 } 

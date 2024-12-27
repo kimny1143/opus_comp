@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 import { prisma } from '@/lib/prisma'
 import { handleApiError } from '@/lib/api-utils'
 import { PurchaseOrderStatus } from '@prisma/client'
@@ -9,25 +9,17 @@ interface Props {
   params: { id: string }
 }
 
-export async function GET(request: Request, { params }: Props) {
+export async function GET(request: NextRequest, { params }: Props) {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
       return new NextResponse('Unauthorized', { status: 401 })
     }
 
-    const { id } = await params
-
     const purchaseOrder = await prisma.purchaseOrder.findUnique({
-      where: { id },
+      where: { id: params.id },
       include: {
-        vendor: {
-          select: {
-            id: true,
-            name: true,
-            code: true
-          }
-        },
+        vendor: true,
         items: true,
         statusHistory: {
           include: {
@@ -40,18 +32,6 @@ export async function GET(request: Request, { params }: Props) {
           },
           orderBy: {
             createdAt: 'desc'
-          }
-        },
-        createdBy: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        updatedBy: {
-          select: {
-            id: true,
-            name: true
           }
         }
       }
@@ -81,8 +61,8 @@ export async function GET(request: Request, { params }: Props) {
 }
 
 export async function PUT(
-  request: Request,
-  context: { params: { id: string } }
+  request: NextRequest,
+  { params }: Props
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -90,7 +70,6 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { id } = context.params
     const body = await request.json()
     console.log('Received data in API:', body)
     console.log('Status from request:', body.status)
@@ -107,10 +86,10 @@ export async function PUT(
 
     // ステータス履歴も更新
     const updatedPO = await prisma.purchaseOrder.update({
-      where: { id },
+      where: { id: params.id },
       data: {
         ...data,
-        status: status || PurchaseOrderStatus.DRAFT,
+        status: status as PurchaseOrderStatus || PurchaseOrderStatus.DRAFT,
         updatedAt: new Date(),
         updatedById: session.user.id,
         items: {
@@ -124,39 +103,36 @@ export async function PUT(
             amount: item.amount
           }))
         },
-        // ステータス履歴を追加
         statusHistory: {
           create: {
-            status: status || PurchaseOrderStatus.DRAFT,
-            userId: session.user.id,
+            type: 'PURCHASE_ORDER',
+            status: status as PurchaseOrderStatus || PurchaseOrderStatus.DRAFT,
+            userId: session.user.id
           }
         }
       },
       include: {
-        vendor: {
-          select: {
-            id: true,
-            name: true,
-            code: true
-          }
-        },
+        vendor: true,
         items: true,
         statusHistory: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          },
           orderBy: {
             createdAt: 'desc'
-          },
-          take: 1
+          }
         }
       }
     })
 
-    console.log('Updated PO:', updatedPO)
     return NextResponse.json(updatedPO)
   } catch (error) {
     console.error('Update error:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to update purchase order' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 }

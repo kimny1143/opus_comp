@@ -1,9 +1,10 @@
 import React from 'react'
 import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { PurchaseOrderList } from '@/components/purchase-orders/PurchaseOrderList'
+import { PurchaseOrderStatus } from '@prisma/client'
 
 export default async function PurchaseOrdersPage() {
   const session = await getServerSession(authOptions)
@@ -51,6 +52,10 @@ export default async function PurchaseOrdersPage() {
       unitPrice: item.unitPrice.toNumber(),
       taxRate: item.taxRate.toNumber(),
       amount: item.amount?.toNumber() ?? 0
+    })),
+    statusHistory: order.statusHistory.map(history => ({
+      ...history,
+      status: history.status as PurchaseOrderStatus
     }))
   }))
 

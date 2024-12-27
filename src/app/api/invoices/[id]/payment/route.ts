@@ -1,22 +1,11 @@
-import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { handleApiError, createApiResponse } from '@/lib/api-utils'
-import { Prisma, PrismaClient } from '@prisma/client'
-import { z } from 'zod'
+import { Prisma, InvoiceStatus } from '@prisma/client'
+import { IdRouteContext } from '@/app/api/route-types'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 
-const paymentSchema = z.object({
-  paymentDate: z.string().transform(str => new Date(str)),
-  amount: z.number().positive('支払い金額は0より大きい値を入力してください'),
-  method: z.enum(['BANK_TRANSFER', 'CREDIT_CARD', 'CASH', 'OTHER']),
-  note: z.string().optional()
-})
-
-export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, context: IdRouteContext) {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
@@ -26,46 +15,33 @@ export async function POST(
       )
     }
 
-    const body = await request.json()
-    const { paymentDate, amount, method, note } = paymentSchema.parse(body)
+    const { id } = context.params
+    const data = await request.json()
 
-    // トランザクションで支払い情報を登録
-    const result = await prisma.$transaction(async (prisma) => {
-      // まず支払い情報を作成
-      const payment = await prisma.payment.create({
-        data: {
-          paymentDate,
-          amount: new Prisma.Decimal(amount),
-          method,
-          note,
-          createdById: session.user.id,
-          invoiceId: params.id
-        }
-      })
-
-      // 次に請求書のステータスを更新
-      const invoice = await prisma.invoice.update({
-        where: { id: params.id },
-        data: {
-          status: 'PAID',
-          updatedAt: new Date(),
-          updatedById: session.user.id
-        },
-        include: {
-          items: true,
-          purchaseOrder: {
-            include: {
-              vendor: true
-            }
+    // 支払い情報を更新
+    const updatedInvoice = await prisma.invoice.update({
+      where: { id },
+      data: {
+        payment: {
+          create: {
+            amount: new Prisma.Decimal(data.amount),
+            method: data.method,
+            paymentDate: new Date(data.paymentDate),
+            note: data.note,
+            createdById: session.user.id
           }
-        }
-      })
-
-      return { ...invoice, payment }
+        },
+        status: InvoiceStatus.PAID,
+        updatedById: session.user.id
+      }
     })
 
-    return createApiResponse(result)
+    return NextResponse.json({ success: true, data: { invoice: updatedInvoice } })
   } catch (error) {
-    return handleApiError(error)
+    console.error('Payment update error:', error)
+    return NextResponse.json(
+      { success: false, error: '支払い情報の更新に失敗しました' },
+      { status: 500 }
+    )
   }
 } 

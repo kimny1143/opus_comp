@@ -17,8 +17,8 @@ model User {
   role                  String                       @default("USER")
   accounts              Account[]
   sessions              Session[]
-  statusHistory         PurchaseOrderStatusHistory[]
-  templates             InvoiceTemplate[]
+  statusHistory         StatusHistory[]
+  templates             InvoiceTemplate[]            @relation("UserTemplates")
   createdInvoices       Invoice[]                    @relation("CreatedInvoices")
   updatedInvoices       Invoice[]                    @relation("UpdatedInvoices")
   createdPurchaseOrders PurchaseOrder[]              @relation("CreatedPurchaseOrders")
@@ -26,6 +26,7 @@ model User {
   createdVendors        Vendor[]                     @relation("VendorCreatedBy")
   updatedVendors        Vendor[]                     @relation("VendorUpdatedBy")
   createdPayments       Payment[]                    @relation("CreatedPayments")
+  projectMemberships    ProjectMember[]             @relation("UserProjectMembers")
 }
 
 model Account {
@@ -56,7 +57,7 @@ model Session {
 }
 
 model PurchaseOrder {
-  id            String      @id @default(cuid())
+  id            String      @id @default(uuid())
   orderNumber   String      @unique
   vendorId      String
   orderDate     DateTime
@@ -74,7 +75,7 @@ model PurchaseOrder {
 
   vendor        Vendor      @relation(fields: [vendorId], references: [id])
   items         PurchaseOrderItem[]
-  statusHistory PurchaseOrderStatusHistory[]
+  statusHistory StatusHistory[]
   invoices      Invoice[]
   createdBy     User        @relation("CreatedPurchaseOrders", fields: [createdById], references: [id])
   updatedBy     User?       @relation("UpdatedPurchaseOrders", fields: [updatedById], references: [id])
@@ -103,28 +104,25 @@ model PurchaseOrderItem {
 }
 
 enum PurchaseOrderStatus {
-  DRAFT
-  PENDING
-  SENT
-  COMPLETED
-  REJECTED
-  OVERDUE
-}
-
-model PurchaseOrderStatusHistory {
-  id              String              @id @default(cuid())
-  purchaseOrderId String
-  userId          String
-  status          PurchaseOrderStatus
-  comment         String?
-  createdAt       DateTime            @default(now())
-  purchaseOrder   PurchaseOrder       @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  user            User                @relation(fields: [userId], references: [id])
+  DRAFT       // 下書き
+  PENDING     // 保留中
+  SENT        // 送信済み
+  COMPLETED   // 納品完了
+  REJECTED    // 却下
+  OVERDUE     // 期限超過
 }
 
 enum VendorCategory {
   CORPORATION
   INDIVIDUAL
+}
+
+enum BusinessType {
+  MANUFACTURER      // 製造業
+  WHOLESALER       // 卸売業
+  RETAILER         // 小売業
+  SERVICE_PROVIDER // サービス業
+  OTHER           // その他
 }
 
 model Vendor {
@@ -148,6 +146,7 @@ model Vendor {
   updatedBy        User?          @relation("VendorUpdatedBy", fields: [updatedById], references: [id])
   purchaseOrders   PurchaseOrder[]
   invoices         Invoice[]
+  businessType     BusinessType?
 
   @@index([createdById])
   @@index([updatedById])
@@ -162,13 +161,25 @@ model Tag {
 }
 
 model InvoiceTemplate {
-  id          String                @id @default(cuid())
-  name        String
-  description String?
-  items       InvoiceTemplateItem[]
-  invoices    Invoice[]
-  userId      String
-  user        User                  @relation(fields: [userId], references: [id])
+  id                String   @id @default(uuid())
+  name              String
+  description       String?
+  contractorName    String
+  contractorAddress String
+  registrationNumber String
+  bankInfo         Json
+  defaultItems     Json?
+  paymentTerms     String
+  notes            String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  userId            String
+  user              User                @relation("UserTemplates", fields: [userId], references: [id])
+  templateItems     InvoiceTemplateItem[]
+  invoices          Invoice[]
+
+  @@index([userId])
+  @@map("invoice_templates")
 }
 
 model InvoiceTemplateItem {
@@ -183,25 +194,36 @@ model InvoiceTemplateItem {
 }
 
 model Invoice {
-  id              String        @id @default(cuid())
+  id              String        @id @default(uuid())
   templateId      String
   purchaseOrderId String
-  status          InvoiceStatus @default(DRAFT) // DRAFT, ISSUED, PAID
+  status          InvoiceStatus @default(DRAFT)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   issueDate       DateTime
   dueDate         DateTime
-  vendorId        String // 追加: 請求書とベンダーのリレーション
+  vendorId        String
+  totalAmount     Decimal       @db.Decimal(10, 2)
+  invoiceNumber   String
+  bankInfo        Json
+  notes           String?
 
-  template      InvoiceTemplate @relation(fields: [templateId], references: [id])
-  purchaseOrder PurchaseOrder   @relation(fields: [purchaseOrderId], references: [id])
-  vendor        Vendor          @relation(fields: [vendorId], references: [id]) // 追加
-  items         InvoiceItem[]
-  createdBy     User            @relation("CreatedInvoices", fields: [createdById], references: [id])
-  createdById   String
-  updatedBy     User?           @relation("UpdatedInvoices", fields: [updatedById], references: [id])
-  updatedById   String?
-  payment       Payment?
+  template        InvoiceTemplate @relation(fields: [templateId], references: [id])
+  purchaseOrder   PurchaseOrder   @relation(fields: [purchaseOrderId], references: [id])
+  vendor          Vendor          @relation(fields: [vendorId], references: [id])
+  items           InvoiceItem[]
+  createdBy       User            @relation("CreatedInvoices", fields: [createdById], references: [id])
+  createdById     String
+  updatedBy       User?           @relation("UpdatedInvoices", fields: [updatedById], references: [id])
+  updatedById     String?
+  payment         Payment?
+  reminderLogs    ReminderLog[]
+  reminderSettings ReminderSetting[]
+  statusHistory   StatusHistory[]
+
+  @@index([purchaseOrderId])
+  @@index([vendorId])
+  @@index([templateId])
 }
 
 model InvoiceItem {
@@ -223,10 +245,12 @@ enum VendorStatus {
 
 enum InvoiceStatus {
   DRAFT
-  SENT
+  PENDING
+  REVIEWING
+  APPROVED
   PAID
   OVERDUE
-  CANCELLED
+  REJECTED
 }
 
 // 支払い方法の列挙型
@@ -253,7 +277,7 @@ model Payment {
   createdById String
 }
 
-// 将来的な実装のための参考スキーマ
+// 将来的な実装のための参考キーマ
 model Project {
   id          String   @id @default(cuid())
   name        String
@@ -268,7 +292,59 @@ model ProjectMember {
   userId    String
   role      String   // ADMIN, MEMBER, VIEWER など
   project   Project  @relation(fields: [projectId], references: [id])
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation("UserProjectMembers", fields: [userId], references: [id])
 
   @@unique([projectId, userId])
+}
+
+model ReminderLog {
+  id        String   @id @default(cuid())
+  invoiceId String
+  type      String   // 'upcoming' | 'overdue'
+  sentAt    DateTime
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@map("reminder_logs")
+}
+
+model ReminderSetting {
+  id                String          @id @default(cuid())
+  invoiceId         String
+  type              ReminderType
+  daysBeforeOrAfter Int
+  enabled           Boolean         @default(true)
+  lastSentAt        DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  invoice           Invoice         @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@map("reminder_settings")
+}
+
+enum ReminderType {
+  BEFORE_DUE
+  AFTER_DUE
+  AFTER_ISSUE
+}
+
+// 新しい汎用的なStatusHistory
+model StatusHistory {
+  id              String        @id @default(uuid())
+  type            String        // 'INVOICE' or 'PURCHASE_ORDER'
+  status          String        // InvoiceStatus or PurchaseOrderStatus
+  comment         String?
+  createdAt       DateTime      @default(now())
+  userId          String
+  invoiceId       String?
+  purchaseOrderId String?
+
+  user          User           @relation(fields: [userId], references: [id])
+  invoice       Invoice?       @relation(fields: [invoiceId], references: [id])
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+
+  @@index([invoiceId])
+  @@index([purchaseOrderId])
+  @@index([userId])
 }

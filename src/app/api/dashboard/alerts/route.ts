@@ -1,60 +1,42 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 import { prisma } from '@/lib/prisma'
+import { handleApiError, createApiResponse } from '@/lib/api-utils'
+import { InvoiceStatus } from '@prisma/client'
 
-export async function GET() {
+// GET: アラート情報の取得
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
+    if (!session) {
+      return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
 
-    // 期限切れの請求書を確認
+    // 期限切れの請求書
     const overdueInvoices = await prisma.invoice.count({
       where: {
-        createdById: session.user.id,
-        status: 'OVERDUE'
-      }
-    })
-
-    // 期限が近い支払いを確認
-    const upcomingPayments = await prisma.invoice.count({
-      where: {
-        createdById: session.user.id,
-        status: 'SENT',
+        status: InvoiceStatus.OVERDUE,
         dueDate: {
-          lte: new Date(new Date().setDate(new Date().getDate() + 7)) // 7日以内
+          lt: new Date()
         }
       }
     })
 
-    const alerts = []
+    // 未送信の請求書
+    const pendingInvoices = await prisma.invoice.count({
+      where: {
+        status: InvoiceStatus.PENDING
+      }
+    })
 
-    if (overdueInvoices > 0) {
-      alerts.push({
-        id: 'overdue',
-        type: 'error',
-        message: `${overdueInvoices}件の期限切れ請求書があります`,
-        timestamp: new Date().toISOString()
-      })
-    }
-
-    if (upcomingPayments > 0) {
-      alerts.push({
-        id: 'upcoming',
-        type: 'warning',
-        message: `${upcomingPayments}件の支払期限が近づいています`,
-        timestamp: new Date().toISOString()
-      })
-    }
-
-    return NextResponse.json(alerts)
+    // アラート情報を返す
+    return createApiResponse({
+      overdueInvoices,
+      pendingInvoices,
+      totalAlerts: overdueInvoices + pendingInvoices
+    })
   } catch (error) {
-    console.error('Error:', error)
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 } 

@@ -286,7 +286,7 @@ export function PurchaseOrderForm({ mode, id }: Props) {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h1 className="text-2xl font-bold">
-          {mode === 'create' ? '発注書作成' : '発注書編���'}
+          {mode === 'create' ? '発注書作成' : '発注書編集'}
         </h1>
       </div>
 

@@ -1,81 +1,50 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 import { prisma } from '@/lib/prisma'
-import { Prisma } from '@prisma/client'
+import { handleApiError, createApiResponse } from '@/lib/api-utils'
+import { InvoiceStatus } from '@prisma/client'
+import { addDays } from 'date-fns'
 
-interface InvoiceItem {
-  quantity: number
-  unitPrice: Prisma.Decimal
-  taxRate: Prisma.Decimal
-}
-
-interface Payment {
-  id: string
-  dueDate: Date
-  items: InvoiceItem[]
-  vendor: {
-    name: string
-  }
-}
-
-export async function GET() {
+// GET: 今後の支払い予定を取得
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
+    if (!session) {
+      return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
 
+    const today = new Date()
+    const thirtyDaysLater = addDays(today, 30)
+
+    // 支払い予定の請求書を取得
     const upcomingPayments = await prisma.invoice.findMany({
       where: {
-        createdById: session.user.id,
-        status: {
-          not: 'PAID'
-        },
+        status: InvoiceStatus.APPROVED,
         dueDate: {
-          gte: new Date(),
-          lte: new Date(new Date().setDate(new Date().getDate() + 30))
+          gte: today,
+          lte: thirtyDaysLater
         }
       },
-      select: {
-        id: true,
-        dueDate: true,
-        items: {
-          select: {
-            quantity: true,
-            unitPrice: true,
-            taxRate: true
-          }
-        },
-        vendor: {
-          select: {
-            name: true
-          }
-        }
+      include: {
+        vendor: true,
+        items: true
       },
       orderBy: {
         dueDate: 'asc'
-      },
-      take: 5
+      }
     })
 
-    const formattedPayments = upcomingPayments.map((payment: Payment) => ({
-      id: payment.id,
-      dueDate: payment.dueDate,
-      amount: payment.items.reduce((total: number, item: InvoiceItem) => {
-        const itemTotal = item.quantity * Number(item.unitPrice)
-        const tax = itemTotal * (Number(item.taxRate) / 100)
-        return total + itemTotal + tax
-      }, 0),
-      vendorName: payment.vendor.name
+    // 支払い予定をフォーマット
+    const formattedPayments = upcomingPayments.map(invoice => ({
+      id: invoice.id,
+      dueDate: invoice.dueDate,
+      amount: invoice.totalAmount.toNumber(),
+      vendorName: invoice.vendor.name
     }))
 
-    return NextResponse.json(formattedPayments)
+    return createApiResponse(formattedPayments)
   } catch (error) {
-    console.error('Error:', error)
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 } 

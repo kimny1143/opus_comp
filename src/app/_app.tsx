@@ -1,8 +1,8 @@
 import '@/styles/globals.css';
 import { AppProps } from 'next/app';
 import { SessionProvider } from 'next-auth/react';
-import { QueryClient, QueryClientProvider } from 'react-query';
-import MainLayout from '@/components/layouts/MainLayout'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MainLayout } from '@/components/layouts/MainLayout'
 
 const queryClient = new QueryClient();
 

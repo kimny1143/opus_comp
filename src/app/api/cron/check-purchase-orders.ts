@@ -1,123 +1,74 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import { prisma } from '@/lib/prisma';
-import { sendEmail } from '@/lib/mail';
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { sendEmail } from '@/lib/mail'
+import { PurchaseOrderStatus } from '@prisma/client'
 
-// API Routeを保護するためのシークレットキー
-const CRON_SECRET = process.env.CRON_SECRET;
-
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  // シークレットキーによる認証
-  if (req.headers.authorization !== `Bearer ${CRON_SECRET}`) {
-    return res.status(401).json({ message: '認証が必要です' });
-  }
-
+// 期限切れ発注書のチェック
+export async function checkPurchaseOrders() {
   try {
-    // 1. 期限切れ発注書のチェック
-    const today = new Date();
+    // 期限切れの発注書を検索
     const overdueOrders = await prisma.purchaseOrder.findMany({
       where: {
+        status: PurchaseOrderStatus.PENDING,
         deliveryDate: {
-          lt: today,
-        },
-        statusHistory: {
-          some: {
-            status: {
-              notIn: ['completed', 'rejected'],
-            },
-          },
-        },
+          lt: new Date()
+        }
       },
       include: {
         vendor: true,
-        statusHistory: {
-          orderBy: {
-            createdAt: 'desc',
-          },
-          take: 1,
-        },
-      },
-    });
+        items: true
+      }
+    })
 
-    // 期限切れ発注書の処理
     for (const order of overdueOrders) {
-      // ステータス履歴に警告を追加
-      await prisma.purchaseOrderStatus.create({
-        data: {
-          purchaseOrderId: order.id,
-          status: order.statusHistory[0].status, // 現在のステータスを維持
-          comment: '納期が過ぎています',
-          createdBy: order.createdBy,
-        },
-      });
+      // ステータスを更新
+      const updatedOrder = await prisma.$transaction(async (tx) => {
+        const updated = await tx.purchaseOrder.update({
+          where: { id: order.id },
+          data: {
+            status: PurchaseOrderStatus.COMPLETED,
+            updatedById: 'SYSTEM'
+          },
+          include: {
+            vendor: true,
+            items: true
+          }
+        })
 
-      // メール通知を更新
-      if (order.vendor.email) {
-        await sendEmail(order.vendor.email, 'overdueWarning', {
-          orderNumber: order.orderNumber,
-          vendorName: order.vendor.name,
-        });
+        // ステータス履歴を作成
+        await tx.statusHistory.create({
+          data: {
+            purchaseOrderId: order.id,
+            userId: 'SYSTEM',
+            status: String(PurchaseOrderStatus.COMPLETED),
+            type: 'PURCHASE_ORDER',
+            comment: '納期超過による自動更新'
+          }
+        })
+
+        return updated
+      })
+
+      // メール通知
+      if (updatedOrder.vendor.email) {
+        await sendEmail(
+          updatedOrder.vendor.email,
+          'purchaseOrderStatusUpdated',
+          {
+            purchaseOrder: updatedOrder,
+            oldStatus: PurchaseOrderStatus.PENDING,
+            newStatus: PurchaseOrderStatus.COMPLETED
+          }
+        )
       }
     }
 
-    // 2. 長期未更新の発注書のチェック
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const staleOrders = await prisma.purchaseOrder.findMany({
-      where: {
-        updatedAt: {
-          lt: thirtyDaysAgo,
-        },
-        statusHistory: {
-          some: {
-            status: {
-              notIn: ['completed', 'rejected'],
-            },
-          },
-        },
-      },
-      include: {
-        vendor: true,
-        statusHistory: {
-          orderBy: {
-            createdAt: 'desc',
-          },
-          take: 1,
-        },
-      },
-    });
-
-    // 長期未更新発注書の処理
-    for (const order of staleOrders) {
-      // ステータス履歴に警告を追加
-      await prisma.purchaseOrderStatus.create({
-        data: {
-          purchaseOrderId: order.id,
-          status: order.statusHistory[0].status,
-          comment: '30日以上更新がありません',
-          createdBy: order.createdBy,
-        },
-      });
-
-      // メール通知を更新
-      if (order.vendor.email) {
-        await sendEmail(order.vendor.email, 'staleWarning', {
-          orderNumber: order.orderNumber,
-          vendorName: order.vendor.name,
-        });
-      }
-    }
-
-    return res.status(200).json({
-      message: 'バッチ処理が完了しました',
-      overdueCount: overdueOrders.length,
-      staleCount: staleOrders.length,
-    });
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Batch processing error:', error);
-    return res.status(500).json({ message: 'バッチ処理中にエラーが発生しました' });
+    console.error('Error checking purchase orders:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to check purchase orders' },
+      { status: 500 }
+    )
   }
 } 

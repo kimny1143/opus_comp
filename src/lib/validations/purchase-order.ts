@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { PurchaseOrderStatusEnum } from '@prisma/client'
+import { PurchaseOrderStatus } from '@prisma/client'
 
 const purchaseOrderItemSchema = z.object({
   itemName: z.string().min(1, '品目名は必須です'),
@@ -15,12 +15,13 @@ export const purchaseOrderSchema = z.object({
   orderDate: z.date(),
   deliveryDate: z.date().optional(),
   status: z.enum([
-    PurchaseOrderStatusEnum.DRAFT,
-    PurchaseOrderStatusEnum.SENT,
-    PurchaseOrderStatusEnum.ACCEPTED,
-    PurchaseOrderStatusEnum.REJECTED,
-    PurchaseOrderStatusEnum.COMPLETED
-  ]).default(PurchaseOrderStatusEnum.DRAFT),
+    PurchaseOrderStatus.DRAFT,
+    PurchaseOrderStatus.PENDING,
+    PurchaseOrderStatus.SENT,
+    PurchaseOrderStatus.REJECTED,
+    PurchaseOrderStatus.COMPLETED,
+    PurchaseOrderStatus.OVERDUE
+  ]).default(PurchaseOrderStatus.DRAFT),
   items: z.array(purchaseOrderItemSchema).min(1, '少なくとも1つの品目が必要です'),
   notes: z.string().optional(),
 })
@@ -29,11 +30,12 @@ export const bulkActionSchema = z.object({
   action: z.enum(['delete', 'updateStatus']),
   orderIds: z.array(z.string()).min(1, '発注書を選択してください'),
   status: z.enum([
-    PurchaseOrderStatusEnum.DRAFT,
-    PurchaseOrderStatusEnum.SENT,
-    PurchaseOrderStatusEnum.ACCEPTED,
-    PurchaseOrderStatusEnum.REJECTED,
-    PurchaseOrderStatusEnum.COMPLETED
+    PurchaseOrderStatus.DRAFT,
+    PurchaseOrderStatus.PENDING,
+    PurchaseOrderStatus.SENT,
+    PurchaseOrderStatus.REJECTED,
+    PurchaseOrderStatus.COMPLETED,
+    PurchaseOrderStatus.OVERDUE
   ]).optional(),
 })
 

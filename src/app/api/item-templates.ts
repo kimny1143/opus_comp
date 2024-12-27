@@ -1,23 +1,60 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
 import { PurchaseOrderItem } from '@/types/purchaseOrder';
-import { itemTemplate, templateItem } from '@prisma/client';
+import { InvoiceTemplateItem, Prisma } from '@prisma/client';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options';
 
 interface CreateTemplateBody {
   name: string;
+  description?: string;
+  contractorName: string;
+  contractorAddress: string;
+  registrationNumber: string;
+  bankInfo: {
+    bankName: string;
+    branchName: string;
+    accountType: 'ordinary' | 'current';
+    accountNumber: string;
+    accountHolder: string;
+  };
+  paymentTerms: string;
+  notes: string;
   items: PurchaseOrderItem[];
 }
 
-interface TemplateResponse extends itemTemplate {
-  items: templateItem[];
+interface TemplateResponse {
+  id: string;
+  name: string;
+  description?: string;
+  contractorName: string;
+  contractorAddress: string;
+  registrationNumber: string;
+  bankInfo: {
+    bankName: string;
+    branchName: string;
+    accountType: 'ordinary' | 'current';
+    accountNumber: string;
+    accountHolder: string;
+  };
+  paymentTerms: string;
+  notes: string;
+  createdAt: Date;
+  updatedAt: Date;
+  items: InvoiceTemplateItem[];
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const session = await getServerSession(req, res, authOptions);
+  if (!session) {
+    return res.status(401).json({ error: '認証が必要です' });
+  }
+
   if (req.method === 'GET') {
     try {
-      const templates = await prisma.itemTemplate.findMany({
+      const templates = await prisma.invoiceTemplate.findMany({
         include: {
-          items: true
+          templateItems: true
         },
         orderBy: {
           createdAt: 'desc'
@@ -32,22 +69,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   else if (req.method === 'POST') {
     try {
-      const { name, items } = req.body as CreateTemplateBody;
+      const {
+        name,
+        description,
+        contractorName,
+        contractorAddress,
+        registrationNumber,
+        bankInfo,
+        paymentTerms,
+        notes,
+        items
+      } = req.body as CreateTemplateBody;
 
-      const template = await prisma.itemTemplate.create({
+      const template = await prisma.invoiceTemplate.create({
         data: {
           name,
-          items: {
+          description,
+          contractorName,
+          contractorAddress,
+          registrationNumber,
+          bankInfo,
+          paymentTerms,
+          notes,
+          userId: session.user.id,
+          templateItems: {
             create: items.map(item => ({
-              name: item.name,
+              itemName: item.name,
               quantity: item.quantity,
               unitPrice: item.unitPrice,
+              taxRate: new Prisma.Decimal(0.1),
               description: item.description || null
             }))
           }
         },
         include: {
-          items: true
+          templateItems: true
         }
       });
 
@@ -59,29 +115,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   else if (req.method === 'PUT') {
     try {
-      const { id, name, items } = req.body as CreateTemplateBody & { id: string };
+      const {
+        id,
+        name,
+        description,
+        contractorName,
+        contractorAddress,
+        registrationNumber,
+        bankInfo,
+        paymentTerms,
+        notes,
+        items
+      } = req.body as CreateTemplateBody & { id: string };
 
       // 既存のテンプレートアイテムを削除
-      await prisma.templateItem.deleteMany({
+      await prisma.invoiceTemplateItem.deleteMany({
         where: { templateId: id }
       });
 
       // テンプレートを更新
-      const template = await prisma.itemTemplate.update({
+      const template = await prisma.invoiceTemplate.update({
         where: { id },
         data: {
           name,
-          items: {
+          description,
+          contractorName,
+          contractorAddress,
+          registrationNumber,
+          bankInfo,
+          paymentTerms,
+          notes,
+          templateItems: {
             create: items.map(item => ({
-              name: item.name,
+              itemName: item.name,
               quantity: item.quantity,
               unitPrice: item.unitPrice,
+              taxRate: new Prisma.Decimal(0.1),
               description: item.description || null
             }))
           }
         },
         include: {
-          items: true
+          templateItems: true
         }
       });
 

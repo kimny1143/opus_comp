@@ -1,121 +1,88 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import { prisma } from '@/lib/prisma';
-import { sendEmail } from '@/lib/mail';
-import { InvoiceStatus } from '@/lib/utils/status';
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { sendEmail } from '@/lib/mail'
+import { InvoiceStatus } from '@prisma/client'
+import { BankInfo } from '@/types/invoice'
 
-const CRON_SECRET = process.env.CRON_SECRET;
-
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  // シークレットキーによる認証
-  if (req.headers.authorization !== `Bearer ${CRON_SECRET}`) {
-    return res.status(401).json({ message: '認証が必要です' });
-  }
-
+// 期限切れ請求書のチェック
+export async function checkOverdueInvoices() {
   try {
-    const today = new Date();
-    
-    // 1. 支払期限切れの請求書をチェック
+    // 期限切れの請求書を検索
     const overdueInvoices = await prisma.invoice.findMany({
       where: {
-        status: 'sent',
+        status: InvoiceStatus.PENDING,
         dueDate: {
-          lt: today,
-        },
+          lt: new Date()
+        }
       },
       include: {
         vendor: true,
-      },
-    });
+        items: true,
+        template: true
+      }
+    })
 
-    // 支払期限切れの請求書を処理
     for (const invoice of overdueInvoices) {
-      // ステータスを'overdue'に更新
-      await prisma.invoice.update({
-        where: { id: invoice.id },
-        data: {
-          status: 'overdue' as InvoiceStatus,
-          statusHistory: {
-            create: {
-              status: 'overdue',
-              comment: '支払期限が過ぎたため、自動的にステータスを更新しました',
-              createdBy: invoice.createdBy,
-            },
+      // ステータスを更新
+      const updatedInvoice = await prisma.$transaction(async (tx) => {
+        const updated = await tx.invoice.update({
+          where: { id: invoice.id },
+          data: {
+            status: InvoiceStatus.OVERDUE,
+            updatedById: 'SYSTEM'
           },
-        },
-      });
+          include: {
+            vendor: true,
+            items: true,
+            template: true
+          }
+        })
+
+        // ステータス履歴を作成
+        await tx.statusHistory.create({
+          data: {
+            invoiceId: invoice.id,
+            userId: 'SYSTEM',
+            status: String(InvoiceStatus.OVERDUE),
+            type: 'INVOICE',
+            comment: '支払期限超過による自動更新'
+          }
+        })
+
+        return updated
+      })
 
       // メール通知
-      if (invoice.vendor.email) {
-        await sendEmail(invoice.vendor.email, 'invoiceOverdueWarning', {
-          invoiceNumber: invoice.invoiceNumber,
-          vendorName: invoice.vendor.name,
-          dueDate: invoice.dueDate.toLocaleDateString('ja-JP'),
-        });
+      if (updatedInvoice.vendor.email) {
+        await sendEmail(
+          updatedInvoice.vendor.email,
+          'invoiceStatusUpdated',
+          {
+            invoice: {
+              ...updatedInvoice,
+              bankInfo: updatedInvoice.bankInfo as BankInfo,
+              template: {
+                id: updatedInvoice.template.id,
+                bankInfo: updatedInvoice.template.bankInfo as BankInfo,
+                contractorName: updatedInvoice.template.contractorName,
+                contractorAddress: updatedInvoice.template.contractorAddress,
+                registrationNumber: updatedInvoice.template.registrationNumber,
+                paymentTerms: updatedInvoice.template.paymentTerms
+              }
+            },
+            oldStatus: InvoiceStatus.PENDING,
+            newStatus: InvoiceStatus.OVERDUE
+          }
+        )
       }
     }
 
-    // 2. 支払期限が近い請求書のリマインダー
-    const reminderDate = new Date();
-    reminderDate.setDate(reminderDate.getDate() + 7); // 7日前にリマインダー
-
-    const upcomingInvoices = await prisma.invoice.findMany({
-      where: {
-        status: 'sent',
-        dueDate: {
-          gte: today,
-          lte: reminderDate,
-        },
-        // リマインダーが未送信の請求書のみを対象
-        NOT: {
-          statusHistory: {
-            some: {
-              comment: {
-                contains: 'リマインダーを送信しました',
-              },
-              createdAt: {
-                gte: new Date(new Date().setDate(new Date().getDate() - 7)), // 過去7日以内
-              },
-            },
-          },
-        },
-      },
-      include: {
-        vendor: true,
-      },
-    });
-
-    // 支払期限が近い請求書にリマインダーを送信
-    for (const invoice of upcomingInvoices) {
-      // ステータス履歴にリマインダー送信記録を追加
-      await prisma.invoiceStatus.create({
-        data: {
-          invoiceId: invoice.id,
-          status: invoice.status,
-          comment: 'リマインダーを送信しました',
-          createdBy: invoice.createdBy,
-        },
-      });
-
-      // メール通知
-      if (invoice.vendor.email) {
-        await sendEmail(invoice.vendor.email, 'invoicePaymentReminder', {
-          invoiceNumber: invoice.invoiceNumber,
-          vendorName: invoice.vendor.name,
-          dueDate: invoice.dueDate.toLocaleDateString('ja-JP'),
-        });
-      }
-    }
-
-    return res.status(200).json({
-      message: 'バッチ処理が完了しました',
-      overdueCount: overdueInvoices.length,
-      reminderCount: upcomingInvoices.length,
-    });
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Batch processing error:', error);
-    return res.status(500).json({ message: 'バッチ処理中にエラーが発生しました' });
+    console.error('Error checking overdue invoices:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to check overdue invoices' },
+      { status: 500 }
+    )
   }
-} 
+}

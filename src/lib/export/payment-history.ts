@@ -1,9 +1,14 @@
 import { Invoice, Vendor } from '@prisma/client';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
+import { Prisma } from '@prisma/client';
 
-interface ExportInvoice extends Invoice {
+interface ExportInvoice extends Omit<Invoice, 'totalAmount' | 'taxAmount'> {
   vendor: Pick<Vendor, 'name'>;
+  totalAmount: Prisma.Decimal;
+  taxAmount: Prisma.Decimal;
+  paymentDate?: Date;
+  paymentMethod?: string;
 }
 
 export function generatePaymentHistoryCSV(invoices: ExportInvoice[]): string {
@@ -29,7 +34,7 @@ export function generatePaymentHistoryCSV(invoices: ExportInvoice[]): string {
     invoice.paymentMethod || '',
     invoice.totalAmount.toString(),
     invoice.taxAmount.toString(),
-    (Number(invoice.totalAmount) + Number(invoice.taxAmount)).toString(),
+    invoice.totalAmount.add(invoice.taxAmount).toString(),
     invoice.status,
   ].join(','));
 

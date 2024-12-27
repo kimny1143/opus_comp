@@ -64,7 +64,7 @@ export const validationMessages = {
       },
       accepted: {
         completed: '発注書を完了しました',
-        rejected: 'ステータスをACCEPTEDからREJECTEDに変更する��とはできません'
+        rejected: 'ステータスをACCEPTEDからREJECTEDに変更することはできません'
       },
       rejected: {
         draft: '発注書を下書きに戻しました',

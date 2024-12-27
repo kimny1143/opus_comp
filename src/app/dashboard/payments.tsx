@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
-import { Invoice, InvoiceStatus, Vendor } from '@prisma/client';
+import { Invoice, InvoiceStatus, InvoiceStatusDisplay } from '@/types/invoice';
+import { Vendor, Prisma } from '@prisma/client';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { RegisterPaymentModal } from '@/components/RegisterPaymentModal';
@@ -10,6 +11,7 @@ import { generatePaymentHistoryCSV, downloadCSV } from '@/lib/export/payment-his
 
 interface ExtendedInvoice extends Omit<Invoice, 'vendor'> {
   vendor: Pick<Vendor, 'name' | 'email'>;
+  totalAmount: Prisma.Decimal;
 }
 
 interface PaymentStats {
@@ -94,14 +96,21 @@ export default function PaymentsDashboard() {
     }
   };
 
-  const getStatusColor = (status: InvoiceStatus) => {
+  const getStatusColor = (status: InvoiceStatus): string => {
     switch (status) {
       case 'PAID':
         return 'bg-green-100 text-green-800';
       case 'OVERDUE':
         return 'bg-red-100 text-red-800';
-      case 'SENT':
+      case 'PENDING':
         return 'bg-blue-100 text-blue-800';
+      case 'REVIEWING':
+        return 'bg-purple-100 text-purple-800';
+      case 'APPROVED':
+        return 'bg-indigo-100 text-indigo-800';
+      case 'REJECTED':
+        return 'bg-red-100 text-red-800';
+      case 'DRAFT':
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -147,7 +156,7 @@ export default function PaymentsDashboard() {
       if (filterOptions.searchQuery) {
         queryParams.append('search', filterOptions.searchQuery);
       }
-      queryParams.append('export', 'true'); // 全件取得フラグ
+      queryParams.append('export', 'true'); // 全て取得フラグ
 
       const response = await fetch(`/api/invoices/summary?${queryParams}`);
       if (!response.ok) throw new Error('データの取得に失敗しました');
@@ -194,10 +203,13 @@ export default function PaymentsDashboard() {
                 className="w-full border rounded-md p-2"
               >
                 <option value="ALL">すべて</option>
-                <option value="SENT">送信済み</option>
+                <option value="DRAFT">下書き</option>
+                <option value="PENDING">保留中</option>
+                <option value="REVIEWING">レビュー中</option>
+                <option value="APPROVED">承認済み</option>
                 <option value="PAID">支払済み</option>
+                <option value="REJECTED">却下</option>
                 <option value="OVERDUE">期限超過</option>
-                <option value="CANCELLED">キャンセル</option>
               </select>
             </div>
 
@@ -243,7 +255,7 @@ export default function PaymentsDashboard() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                検���
+                検索
               </label>
               <input
                 type="text"
@@ -382,7 +394,7 @@ export default function PaymentsDashboard() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <button
                           className="text-indigo-600 hover:text-indigo-900"
-                          onClick={() => {/* 詳細表示処理 */}}
+                          onClick={() => {/* 詳細表示理 */}}
                         >
                           詳細
                         </button>

@@ -1,126 +1,98 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 import { prisma } from '@/lib/prisma'
 import { handleApiError, createApiResponse } from '@/lib/api-utils'
+import { PurchaseOrderStatus } from '@prisma/client'
 import { sendEmail } from '@/lib/mail'
+import { IdRouteContext } from '@/app/api/route-types'
 import { z } from 'zod'
 
+// バリデーションスキーマ
 const statusUpdateSchema = z.object({
-  status: z.enum(['DRAFT', 'PENDING', 'SENT', 'COMPLETED', 'REJECTED', 'OVERDUE']),
+  status: z.nativeEnum(PurchaseOrderStatus),
   comment: z.string().optional()
 })
 
-export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+// POST: 発注書のステータス更新
+export const POST = async (
+  request: NextRequest,
+  context: IdRouteContext
+): Promise<NextResponse> => {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
+      return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
+    }
+
+    const data = await request.json()
+    const { status, comment } = statusUpdateSchema.parse(data)
+
+    // ステータスの型チェック
+    if (!Object.values(PurchaseOrderStatus).includes(status)) {
       return NextResponse.json(
-        { success: false, error: '認証が必要です' },
-        { status: 401 }
+        { success: false, error: '無効なステータスです' },
+        { status: 400 }
       )
     }
 
-    const body = await request.json()
-    const { status, comment } = statusUpdateSchema.parse(body)
+    // 現在の発注書を取得
+    const currentPO = await prisma.purchaseOrder.findUnique({
+      where: { id: context.params.id },
+      include: { vendor: true }
+    })
 
-    // トランザクションでステータス更新を行う
-    const result = await prisma.$transaction(async (prisma) => {
-      // 発注を取得して現在のステータスをチェック
-      const currentOrder = await prisma.purchaseOrder.findUnique({
-        where: { id: params.id },
+    if (!currentPO) {
+      return NextResponse.json(
+        { success: false, error: '発注書が見つかりません' },
+        { status: 404 }
+      )
+    }
+
+    const oldStatus = currentPO.status
+
+    const purchaseOrder = await prisma.$transaction(async (tx) => {
+      // 発注書の更新
+      const updatedPO = await tx.purchaseOrder.update({
+        where: { id: context.params.id },
+        data: { 
+          status,
+          updatedById: session.user.id
+        },
         include: {
           vendor: true
         }
       })
 
-      if (!currentOrder) {
-        throw new Error('発注が見つかりません')
-      }
-
-      // ステータス遷移のバリデーション
-      if (!isValidStatusTransition(currentOrder.status, status)) {
-        throw new Error(`${currentOrder.status}から${status}への変更は許可されていません`)
-      }
-
-      // 発注のステータスを更新
-      const updatedOrder = await prisma.purchaseOrder.update({
-        where: { id: params.id },
+      // ステータス履歴の作成
+      await tx.statusHistory.create({
         data: {
+          purchaseOrderId: context.params.id,
+          userId: session.user.id,
           status,
-          updatedAt: new Date(),
-          updatedById: session.user.id,
-          statusHistory: {
-            create: {
-              status,
-              userId: session.user.id,
-              comment: comment || `ステータスを${status}に変更しました`
-            }
-          }
-        },
-        include: {
-          vendor: true,
-          items: true,
-          statusHistory: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true
-                }
-              }
-            },
-            orderBy: {
-              createdAt: 'desc'
-            },
-            take: 1
-          }
+          comment,
+          type: 'PURCHASE_ORDER'
         }
       })
 
-      // メール送信
-      if (updatedOrder.vendor.email) {
-        await sendEmail(updatedOrder.vendor.email, 'statusUpdated', {
-          orderNumber: updatedOrder.orderNumber,
-          vendorName: updatedOrder.vendor.name,
-          status: getStatusLabel(status)
-        })
-      }
-
-      return updatedOrder
+      return updatedPO
     })
 
-    return createApiResponse(result)
+    // メール通知
+    if (purchaseOrder.vendor.email) {
+      await sendEmail(
+        purchaseOrder.vendor.email,
+        'purchaseOrderStatusUpdated',
+        {
+          purchaseOrder,
+          oldStatus,
+          newStatus: status
+        }
+      )
+    }
+
+    return createApiResponse(purchaseOrder)
   } catch (error) {
     return handleApiError(error)
   }
-}
-
-// ステータス遷移のバリデーション
-function isValidStatusTransition(currentStatus: string, newStatus: string): boolean {
-  const statusTransitions: Record<string, string[]> = {
-    DRAFT: ['SENT'],
-    SENT: ['COMPLETED', 'REJECTED', 'DRAFT', 'PENDING'],
-    COMPLETED: ['REJECTED', 'OVERDUE', 'PENDING'],
-    REJECTED: ['DRAFT', 'PENDING'],
-    OVERDUE: ['PENDING']
-  }
-
-  return statusTransitions[currentStatus]?.includes(newStatus) ?? false
-}
-
-// ステータスラベルの取得関数
-function getStatusLabel(status: string): string {
-  const statusMap: Record<string, string> = {
-    DRAFT: '下書き',
-    PENDING: '保留中',
-    SENT: '送信済み',
-    COMPLETED: '承認済み',
-    REJECTED: '却下',
-    OVERDUE: '期限切れ'
-  }
-  return statusMap[status] || status
 } 

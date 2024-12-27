@@ -1,15 +1,15 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 import { prisma } from '@/lib/prisma'
 import { handleApiError, createApiResponse } from '@/lib/api-utils'
-import { Prisma } from '@prisma/client'
+import { RouteHandler, IdRouteContext, IdParams } from '../../route-types'
 
 // GET: 特定の請求書の取得
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export const GET: RouteHandler<IdParams> = async (
+  request: NextRequest,
+  context: IdRouteContext
+) => {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
@@ -17,38 +17,29 @@ export async function GET(
     }
 
     const invoice = await prisma.invoice.findUnique({
-      where: { id: params.id },
+      where: { id: context.params.id },
       include: {
         template: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            items: true
+          include: {
+            templateItems: true
           }
         },
         purchaseOrder: {
-          select: {
-            id: true,
-            orderNumber: true,
-            orderDate: true,
-            status: true,
-            vendor: {
-              select: {
-                id: true,
-                name: true,
-                code: true,
-                registrationNumber: true,
-                address: true,
-                contactPerson: true,
-                email: true,
-                phone: true
-              }
-            }
+          include: {
+            vendor: true
           }
         },
         items: true,
-        payment: true,
+        vendor: true,
+        statusHistory: {
+          include: {
+            user: {
+              select: {
+                name: true
+              }
+            }
+          }
+        }
       }
     })
 
@@ -66,10 +57,10 @@ export async function GET(
 }
 
 // PATCH: 請求書の更新
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export const PATCH: RouteHandler<IdParams> = async (
+  request: NextRequest,
+  context: IdRouteContext
+) => {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
@@ -82,36 +73,26 @@ export async function PATCH(
     // トランザクションで請求書を更新
     const invoice = await prisma.$transaction(async (tx) => {
       const updatedInvoice = await tx.invoice.update({
-        where: { id: params.id },
+        where: { id: context.params.id },
         data: {
           ...invoiceData,
           status,
           ...(items && {
             items: {
-              deleteMany: {},  // 既存のアイテムを削���
-              create: items    // 新しいアイテムを作成
+              deleteMany: {},
+              create: items
             }
           })
         },
         include: {
           template: {
-            select: {
-              id: true,
-              name: true
+            include: {
+              templateItems: true
             }
           },
           purchaseOrder: {
-            select: {
-              id: true,
-              orderNumber: true,
-              vendor: {
-                select: {
-                  id: true,
-                  name: true,
-                  code: true,
-                  registrationNumber: true
-                }
-              }
+            include: {
+              vendor: true
             }
           },
           items: true
@@ -127,11 +108,11 @@ export async function PATCH(
   }
 }
 
-// DELETE: 請求書の削除（ドラフトのみ）
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+// DELETE: 請求書の削除
+export const DELETE: RouteHandler<IdParams> = async (
+  request: NextRequest,
+  context: IdRouteContext
+) => {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
@@ -139,7 +120,7 @@ export async function DELETE(
     }
 
     const invoice = await prisma.invoice.findUnique({
-      where: { id: params.id }
+      where: { id: context.params.id }
     })
 
     if (!invoice) {
@@ -157,7 +138,7 @@ export async function DELETE(
     }
 
     await prisma.invoice.delete({
-      where: { id: params.id }
+      where: { id: context.params.id }
     })
 
     return createApiResponse({ success: true })

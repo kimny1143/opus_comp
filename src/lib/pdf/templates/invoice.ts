@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { Invoice, InvoiceItem, Vendor } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import path from 'path';
 import { promises as fs } from 'fs';
 
@@ -148,13 +149,13 @@ function drawItemsTable(
   const lineHeight = 20;
   items.forEach((item, i) => {
     const y = doc.y + lineHeight;
-    const amount = item.quantity * item.unitPrice;
+    const amount = new Prisma.Decimal(item.quantity).mul(item.unitPrice);
 
     doc
       .text(item.itemName, columns.item.x, y)
       .text(item.quantity.toString(), columns.quantity.x, y)
-      .text(item.unitPrice.toLocaleString(), columns.price.x, y)
-      .text(amount.toLocaleString(), columns.amount.x, y);
+      .text(item.unitPrice.toString(), columns.price.x, y)
+      .text(amount.toString(), columns.amount.x, y);
 
     doc.y = y;
   });
@@ -165,14 +166,14 @@ function drawSummary(
   doc: PDFKit.PDFDocument,
   items: InvoiceItem[]
 ) {
-  let subtotal = 0;
-  let totalTax = 0;
+  let subtotal = new Prisma.Decimal(0);
+  let totalTax = new Prisma.Decimal(0);
 
   items.forEach(item => {
-    const amount = item.quantity * item.unitPrice;
-    const tax = Math.floor(amount * (item.taxRate / 100));
-    subtotal += amount;
-    totalTax += tax;
+    const amount = new Prisma.Decimal(item.quantity).mul(item.unitPrice);
+    const tax = amount.mul(item.taxRate);
+    subtotal = subtotal.add(amount);
+    totalTax = totalTax.add(tax);
   });
 
   const summaryX = 350;
@@ -181,16 +182,16 @@ function drawSummary(
   doc.moveDown(2);
   doc.fontSize(12)
      .text('小計:', summaryX)
-     .text(`¥${subtotal.toLocaleString()}`, amountX)
+     .text(`¥${subtotal.toFixed(0)}`, amountX)
      .moveDown(0.5);
 
   doc.text('消費税:', summaryX)
-     .text(`¥${totalTax.toLocaleString()}`, amountX)
+     .text(`¥${totalTax.toFixed(0)}`, amountX)
      .moveDown(0.5);
 
   doc.fontSize(14)
      .text('合計金額:', summaryX)
-     .text(`¥${(subtotal + totalTax).toLocaleString()}`, amountX);
+     .text(`¥${subtotal.add(totalTax).toFixed(0)}`, amountX);
 }
 
 // 備考欄の描画

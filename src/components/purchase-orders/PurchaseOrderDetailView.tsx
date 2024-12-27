@@ -1,11 +1,16 @@
+'use client'
+
 import { PurchaseOrderStatus } from '@prisma/client'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import { ArrowLeft, Pencil } from 'lucide-react'
+import { ArrowLeft, Pencil, Check } from 'lucide-react'
 import Link from 'next/link'
 import { StatusBadge } from './StatusBadge'
 import { ItemsTable } from './ItemsTable'
 import { OrderSummary } from './OrderSummary'
+import { Button } from '@/components/ui/button'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 
 interface Props {
   purchaseOrder: {
@@ -55,7 +60,35 @@ interface Props {
 }
 
 export function PurchaseOrderDetailView({ purchaseOrder }: Props) {
+  const router = useRouter()
+  const [isUpdating, setIsUpdating] = useState(false)
   const currentStatus = purchaseOrder.statusHistory[0]?.status || purchaseOrder.status
+
+  const handleStatusUpdate = async (newStatus: PurchaseOrderStatus) => {
+    if (isUpdating) return
+    setIsUpdating(true)
+
+    try {
+      const response = await fetch(`/api/purchase-orders/${purchaseOrder.id}/status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: newStatus }),
+      })
+
+      if (!response.ok) {
+        throw new Error('ステータスの更新に失敗しました')
+      }
+
+      router.refresh()
+    } catch (error) {
+      console.error('Error updating status:', error)
+      alert('ステータスの更新に失敗しました')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -72,15 +105,28 @@ export function PurchaseOrderDetailView({ purchaseOrder }: Props) {
             <h1 className="text-2xl font-bold">発注書詳細</h1>
           </div>
           
-          {currentStatus === PurchaseOrderStatus.DRAFT && (
-            <Link
-              href={`/purchase-orders/${purchaseOrder.id}/edit`}
-              className="flex items-center px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-md"
-            >
-              <Pencil className="w-4 h-4 mr-1" />
-              編集
-            </Link>
-          )}
+          <div className="flex gap-2">
+            {currentStatus === PurchaseOrderStatus.DRAFT && (
+              <Link
+                href={`/purchase-orders/${purchaseOrder.id}/edit`}
+                className="flex items-center px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-md"
+              >
+                <Pencil className="w-4 h-4 mr-1" />
+                編集
+              </Link>
+            )}
+            {currentStatus === PurchaseOrderStatus.SENT && (
+              <Button
+                variant="outline"
+                onClick={() => handleStatusUpdate(PurchaseOrderStatus.COMPLETED)}
+                disabled={isUpdating}
+                className="flex items-center"
+              >
+                <Check className="w-4 h-4 mr-1" />
+                納品完了
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* メインコンテンツ */}

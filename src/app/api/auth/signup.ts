@@ -32,7 +32,7 @@ export default async function handler(
       data: {
         name,
         email,
-        password: hashedPassword,
+        hashedPassword,
         role: 'user', // デフォルトロールを設定
       },
     })

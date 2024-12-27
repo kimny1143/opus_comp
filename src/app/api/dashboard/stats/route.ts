@@ -1,65 +1,56 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 import { prisma } from '@/lib/prisma'
-import { PurchaseOrderStatus } from '@prisma/client'
+import { handleApiError, createApiResponse } from '@/lib/api-utils'
+import { InvoiceStatus, PurchaseOrderStatus } from '@prisma/client'
 
-export async function GET() {
+// GET: ダッシュボード統計情報の取得
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: '認証が必要です' }, { status: 401 })
+    if (!session) {
+      return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
 
-    const stats = await prisma.purchaseOrder.groupBy({
+    // 請求書の統計
+    const invoiceStats = await prisma.invoice.groupBy({
       by: ['status'],
-      _count: {
-        _all: true
-      },
-      where: {
-        createdById: session.user.id
+      _count: true,
+      _sum: {
+        totalAmount: true
       }
     })
 
-    console.log('Raw stats:', stats)
+    // 発注書の統計
+    const purchaseOrderStats = await prisma.purchaseOrder.groupBy({
+      by: ['status'],
+      _count: true,
+      _sum: {
+        totalAmount: true
+      }
+    })
 
-    const summary = {
-      draft: 0,
-      pending: 0,
-      inProgress: 0,
-      completed: 0,
-      issues: 0
+    // 統計情報をフォーマット
+    const stats = {
+      invoices: {
+        total: invoiceStats.reduce((sum, stat) => sum + stat._count, 0),
+        totalAmount: invoiceStats.reduce((sum, stat) => sum + (stat._sum.totalAmount?.toNumber() || 0), 0),
+        byStatus: Object.fromEntries(
+          invoiceStats.map(stat => [stat.status, stat._count])
+        )
+      },
+      purchaseOrders: {
+        total: purchaseOrderStats.reduce((sum, stat) => sum + stat._count, 0),
+        totalAmount: purchaseOrderStats.reduce((sum, stat) => sum + (stat._sum.totalAmount?.toNumber() || 0), 0),
+        byStatus: Object.fromEntries(
+          purchaseOrderStats.map(stat => [stat.status, stat._count])
+        )
+      }
     }
 
-    stats.forEach(stat => {
-      switch (stat.status) {
-        case PurchaseOrderStatus.DRAFT:
-          summary.draft = stat._count._all
-          break
-        case PurchaseOrderStatus.PENDING:
-          summary.pending = stat._count._all
-          break
-        case PurchaseOrderStatus.SENT:
-          summary.inProgress = stat._count._all
-          break
-        case PurchaseOrderStatus.COMPLETED:
-          summary.completed = stat._count._all
-          break
-        case PurchaseOrderStatus.REJECTED:
-        case PurchaseOrderStatus.OVERDUE:
-          summary.issues += stat._count._all
-          break
-      }
-    })
-
-    console.log('Calculated summary:', summary)
-
-    return NextResponse.json(summary)
+    return createApiResponse(stats)
   } catch (error) {
-    console.error('Error:', error)
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 } 

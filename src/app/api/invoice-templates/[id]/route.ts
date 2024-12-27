@@ -1,14 +1,15 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 import { prisma } from '@/lib/prisma'
 import { handleApiError, createApiResponse } from '@/lib/api-utils'
+import { RouteHandler, IdRouteContext, IdParams } from '../../route-types'
 
 // GET: 特定のテンプレートの取得
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export const GET: RouteHandler<IdParams> = async (
+  request: NextRequest,
+  context: IdRouteContext
+) => {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
@@ -17,11 +18,11 @@ export async function GET(
 
     const template = await prisma.invoiceTemplate.findUnique({
       where: { 
-        id: params.id,
-        userId: session.user.id  // ユーザー所有のテンプレートのみアクセス可能
+        id: context.params.id,
+        userId: session.user.id
       },
       include: {
-        items: true,
+        templateItems: true,
         _count: {
           select: { invoices: true }
         }
@@ -42,10 +43,10 @@ export async function GET(
 }
 
 // PATCH: テンプレートの更新
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export const PATCH: RouteHandler<IdParams> = async (
+  request: NextRequest,
+  context: IdRouteContext
+) => {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
@@ -57,7 +58,7 @@ export async function PATCH(
 
     // テンプレートの所有者チェック
     const existingTemplate = await prisma.invoiceTemplate.findUnique({
-      where: { id: params.id }
+      where: { id: context.params.id }
     })
 
     if (!existingTemplate || existingTemplate.userId !== session.user.id) {
@@ -70,16 +71,16 @@ export async function PATCH(
     // トランザクションでテンプレートを更新
     const template = await prisma.$transaction(async (tx) => {
       const updatedTemplate = await tx.invoiceTemplate.update({
-        where: { id: params.id },
+        where: { id: context.params.id },
         data: {
           ...templateData,
-          items: {
-            deleteMany: {},  // 既存のアイテムを削除
-            create: items    // 新しいアイテムを作成
+          templateItems: {
+            deleteMany: {},
+            create: items
           }
         },
         include: {
-          items: true
+          templateItems: true
         }
       })
 
@@ -93,10 +94,10 @@ export async function PATCH(
 }
 
 // DELETE: テンプレートの削除
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export const DELETE: RouteHandler<IdParams> = async (
+  request: NextRequest,
+  context: IdRouteContext
+) => {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
@@ -105,7 +106,7 @@ export async function DELETE(
 
     // テンプレートの所有者チェック
     const template = await prisma.invoiceTemplate.findUnique({
-      where: { id: params.id },
+      where: { id: context.params.id },
       include: {
         _count: {
           select: { invoices: true }
@@ -129,7 +130,7 @@ export async function DELETE(
     }
 
     await prisma.invoiceTemplate.delete({
-      where: { id: params.id }
+      where: { id: context.params.id }
     })
 
     return createApiResponse({ success: true })

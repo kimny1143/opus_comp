@@ -3,16 +3,24 @@ import PDFDocument from 'pdfkit'
 
 type InvoiceWithRelations = {
   id: string
-  purchaseOrder: {
-    vendor: Pick<Vendor, 'name' | 'address'>
-  }
-  items: {
+  purchaseOrder?: {
     id: string
+    orderNumber: string
+    status: string
+    vendorId: string
+    vendor?: {
+      name: string
+      address: string | null
+    }
+  } | null
+  items: {
+    id?: string
     itemName: string
     quantity: number
     unitPrice: Prisma.Decimal
     taxRate: Prisma.Decimal
     description: string | null
+    amount?: Prisma.Decimal
   }[]
 }
 
@@ -44,8 +52,8 @@ export async function generateInvoicePDF(invoice: InvoiceWithRelations): Promise
       // 取引先情報
       doc
         .text('請求先:')
-        .text(invoice.purchaseOrder.vendor.name)
-        .text(invoice.purchaseOrder.vendor.address || '')
+        .text(invoice.purchaseOrder?.vendor?.name || '取引先名なし')
+        .text(invoice.purchaseOrder?.vendor?.address || '住所なし')
         .moveDown()
 
       // 明細表のヘッダー

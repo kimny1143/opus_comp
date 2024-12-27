@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const id = await params.id
+export async function GET(request: NextRequest, context: { params: { id: string } }) {
+  const id = await context.params.id
 
   try {
     const vendor = await prisma.vendor.findUnique({
@@ -20,8 +20,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  const { id } = params
+export async function PUT(request: NextRequest, context: { params: { id: string } }) {
+  const { id } = context.params
   const data = await request.json()
 
   try {
@@ -37,8 +37,8 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  const id = await params.id
+export async function DELETE(request: NextRequest, context: { params: { id: string } }) {
+  const id = await context.params.id
 
   try {
     await prisma.vendor.delete({

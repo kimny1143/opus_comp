@@ -108,15 +108,14 @@ export async function sendReminderMail(
 // リマインダー送信履歴を記録する関数
 export async function recordReminderHistory(
   prisma: PrismaClient,
-  reminderId: string,
-  success: boolean,
-  error?: string
+  invoiceId: string,
+  type: 'upcoming' | 'overdue'
 ) {
-  return prisma.reminderHistory.create({
+  return prisma.reminderLog.create({
     data: {
-      reminderId,
-      status: success ? 'SUCCESS' : 'FAILED',
-      error: error || null,
+      invoiceId,
+      type,
+      sentAt: new Date()
     },
   });
 } 

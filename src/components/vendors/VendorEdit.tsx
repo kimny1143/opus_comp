@@ -48,7 +48,7 @@ export default function VendorEdit() {
       const response: ApiResponse<VendorResponse> = await res.json()
       setVendor(response.data.vendor)
     } catch (err) {
-      setError('取引先��取得に失敗しました')
+      setError('取引先取得に失敗しました')
     }
   }
 

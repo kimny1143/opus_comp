@@ -3,12 +3,11 @@ import { useRouter } from 'next/router';
 import { useSession } from 'next-auth/react';
 import Head from 'next/head';
 import { ArrowLeft, Download } from 'lucide-react';
-import { ExtendedInvoice } from '@/types/invoice';
+import { ExtendedInvoice, InvoiceItem } from '@/types/invoice';
 import { getStatusBadgeColor, getStatusLabel } from '@/lib/utils/status';
 import Layout from '@/components/Layout';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { InvoiceItem } from '@prisma/client';
 
 export default function InvoiceDetail() {
   const router = useRouter();
@@ -150,10 +149,10 @@ export default function InvoiceDetail() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.itemName}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">{item.quantity}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                        ¥{item.unitPrice.toLocaleString()}
+                        ¥{Number(item.unitPrice).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                        ¥{Number(item.amount).toLocaleString()}
+                        ¥{(Number(item.unitPrice) * item.quantity).toLocaleString()}
                       </td>
                     </tr>
                   ))}

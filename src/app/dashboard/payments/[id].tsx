@@ -3,7 +3,8 @@ import { useRouter } from 'next/router';
 import Layout from '@/components/Layout';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { Invoice, InvoiceStatus, Vendor, PaymentMethod } from '@prisma/client';
+import { Invoice, InvoiceStatus, Vendor, PaymentMethod, Prisma } from '@prisma/client';
+import { InvoiceStatusDisplay } from '@/types/invoice';
 import { RegisterPaymentModal } from '@/components/RegisterPaymentModal';
 import { ReminderSettings } from '@/components/ReminderSettings';
 
@@ -11,10 +12,10 @@ interface ExtendedInvoice extends Omit<Invoice, 'vendor' | 'items' | 'statusHist
   invoiceNumber: string;
   issueDate: Date;
   dueDate: Date;
-  totalAmount: number;
+  totalAmount: Prisma.Decimal;
   payment?: {
     paymentDate: Date;
-    amount: number;
+    amount: Prisma.Decimal;
     method: PaymentMethod;
     note?: string;
   };
@@ -23,9 +24,9 @@ interface ExtendedInvoice extends Omit<Invoice, 'vendor' | 'items' | 'statusHist
     id: string;
     itemName: string;
     quantity: number;
-    unitPrice: number;
-    taxRate: number;
-    amount: number;
+    unitPrice: Prisma.Decimal;
+    taxRate: Prisma.Decimal;
+    amount: Prisma.Decimal;
   }[];
   statusHistory: {
     id: string;
@@ -181,7 +182,7 @@ export default function InvoiceDetail() {
                     単価
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    金���
+                    金額
                   </th>
                 </tr>
               </thead>
@@ -290,8 +291,15 @@ function getStatusColor(status: InvoiceStatus): string {
       return 'bg-green-100 text-green-800';
     case 'OVERDUE':
       return 'bg-red-100 text-red-800';
-    case 'SENT':
+    case 'PENDING':
       return 'bg-blue-100 text-blue-800';
+    case 'REVIEWING':
+      return 'bg-purple-100 text-purple-800';
+    case 'APPROVED':
+      return 'bg-indigo-100 text-indigo-800';
+    case 'REJECTED':
+      return 'bg-red-100 text-red-800';
+    case 'DRAFT':
     default:
       return 'bg-gray-100 text-gray-800';
   }
@@ -303,26 +311,20 @@ function getStatusIconColor(status: InvoiceStatus): string {
       return 'bg-green-500';
     case 'OVERDUE':
       return 'bg-red-500';
-    case 'SENT':
+    case 'PENDING':
       return 'bg-blue-500';
+    case 'REVIEWING':
+      return 'bg-purple-500';
+    case 'APPROVED':
+      return 'bg-indigo-500';
+    case 'REJECTED':
+      return 'bg-red-500';
+    case 'DRAFT':
     default:
       return 'bg-gray-500';
   }
 }
 
 function getStatusText(status: InvoiceStatus): string {
-  switch (status) {
-    case 'PAID':
-      return '支払い完了';
-    case 'OVERDUE':
-      return '支払期限超過';
-    case 'SENT':
-      return '送信済み';
-    case 'DRAFT':
-      return '下書き';
-    case 'CANCELLED':
-      return 'キャンセル';
-    default:
-      return status;
-  }
+  return InvoiceStatusDisplay[status];
 } 

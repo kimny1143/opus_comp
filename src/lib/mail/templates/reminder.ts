@@ -25,7 +25,7 @@ export function generateReminderMailSubject({ invoice, type }: ReminderMailData)
 
 export function generateReminderMailBody({ invoice, type, daysBeforeOrAfter }: ReminderMailData): string {
   const companyName = process.env.COMPANY_NAME || '当社';
-  const formattedDueDate = format(new Date(invoice.dueDate), 'yyyy年MM��dd日', { locale: ja });
+  const formattedDueDate = format(new Date(invoice.dueDate), 'yyyy年MM月dd日', { locale: ja });
   const formattedAmount = invoice.totalAmount.toLocaleString();
 
   const commonFooter = `
@@ -68,7 +68,7 @@ ${commonFooter}`;
     case 'AFTER_ISSUE':
       return `${invoice.vendor.name} 様
 
-平素より��変お世話になっております。
+平素より大変お世話になっております。
 
 先日送付させていただきました請求書のご確認をお願いいたします。
 

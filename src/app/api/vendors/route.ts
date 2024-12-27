@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
@@ -39,10 +39,18 @@ export async function POST(request: Request) {
     })
 
   } catch (error) {
-    console.error('Vendor creation error:', error)
+    if (error instanceof Error) {
+      console.error('Vendor creation error:', {
+          message: error.message,
+          stack: error.stack,
+          cause: error.cause
+      })
+    } else {
+      console.error('Unknown vendor creation error:', error)
+    }
     return NextResponse.json(
-      { error: '取引先の作成に失敗しました' },
-      { status: 500 }
+        { error: '取引先の作成に失敗しました' },
+        { status: 500 }
     )
   }
 }
@@ -64,7 +72,15 @@ export async function GET() {
     })
 
   } catch (error) {
-    console.error('Vendor fetch error:', error)
+    if (error instanceof Error) {
+      console.error('Vendor fetch error:', {
+          message: error.message,
+          stack: error.stack,
+          cause: error.cause
+      })
+    } else {
+      console.error('Unknown vendor fetch error:', error)
+    }
     return NextResponse.json(
       { error: '取引先の取得に失敗しました' },
       { status: 500 }

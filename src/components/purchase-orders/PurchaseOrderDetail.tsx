@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { PurchaseOrder, Vendor, PurchaseOrderItem, PurchaseOrderStatusHistory, Prisma } from '@prisma/client'
+import { PurchaseOrder, Vendor, PurchaseOrderItem, StatusHistory, Prisma } from '@prisma/client'
 import { ArrowLeft, Edit2, Send } from 'lucide-react'
 import { StatusBadge } from './StatusBadge'
 import { ItemsTable } from './ItemsTable'
@@ -12,8 +12,12 @@ import { ja } from 'date-fns/locale'
 
 type ExtendedPurchaseOrder = PurchaseOrder & {
   vendor: Vendor
-  items: PurchaseOrderItem[]
-  statusHistory: (PurchaseOrderStatusHistory & {
+  items: (PurchaseOrderItem & {
+    unitPrice: Prisma.Decimal
+    taxRate: Prisma.Decimal
+    amount: Prisma.Decimal
+  })[]
+  statusHistory: (StatusHistory & {
     user: {
       id: string
       name: string | null
@@ -129,11 +133,19 @@ export function PurchaseOrderDetail({ id }: PurchaseOrderDetailProps) {
           {/* 明細 */}
           <div className="mb-8">
             <h3 className="text-lg font-medium mb-4">明細</h3>
-            <ItemsTable items={order.items} />
+            <ItemsTable 
+              items={order.items.map(item => ({
+                ...item,
+                unitPrice: item.unitPrice.toNumber(),
+                taxRate: item.taxRate.toNumber(),
+                amount: item.amount.toNumber()
+              }))}
+              editable={false}
+            />
             <OrderSummary
               className="mt-4"
               subtotal={order.totalAmount.toNumber()}
-              taxAmount={taxAmount}
+              taxAmount={order.taxAmount?.toNumber() || 0}
             />
           </div>
         </div>

@@ -37,7 +37,7 @@ export default async function handler(
       return res.status(400).json({ message: '必須項目が入力されていません' });
     }
 
-    // メールアドレスの形式チェック
+    // メールアドレスの形式チェ��ク
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ message: 'メールアドレスの形式が正しくありません' });
@@ -65,7 +65,7 @@ export default async function handler(
       data: {
         name: name?.trim() || email.split('@')[0],
         email: email.toLowerCase().trim(),
-        password: hashedPassword,
+        hashedPassword,
         role: 'user',
       },
     });

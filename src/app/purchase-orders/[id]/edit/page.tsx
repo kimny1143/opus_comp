@@ -4,7 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 import { redirect } from 'next/navigation'
 
 interface Props {
-  params: { id: string }
+  params: Promise<{ id: string }> | { id: string }
   searchParams?: { [key: string]: string | string[] | undefined }
 }
 
@@ -14,7 +14,8 @@ export default async function PurchaseOrderEditPage({ params }: Props) {
     redirect('/auth/signin')
   }
 
-  const { id } = params
+  const resolvedParams = await Promise.resolve(params)
+  const { id } = resolvedParams
 
   return (
     <div className="container mx-auto px-4 py-8">

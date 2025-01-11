@@ -1,4 +1,5 @@
-import { Invoice, InvoiceStatus, InvoiceStatusDisplay } from '@/types/invoice'
+import { Invoice, InvoiceStatus } from '@prisma/client';
+import { InvoiceStatusDisplay } from '@/types/enums';
 
 // ステータス遷移のバリデーション
 export function isValidInvoiceStatusTransition(
@@ -47,7 +48,7 @@ export function canUpdateInvoiceStatus(
   invoice: Invoice,
   newStatus: InvoiceStatus
 ): boolean {
-  // 基本的な遷���チェック
+  // 基本的な遷移チェック
   if (!isValidInvoiceStatusTransition(invoice.status, newStatus)) {
     return false
   }

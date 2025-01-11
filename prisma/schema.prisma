@@ -26,7 +26,8 @@ model User {
   createdVendors        Vendor[]                     @relation("VendorCreatedBy")
   updatedVendors        Vendor[]                     @relation("VendorUpdatedBy")
   createdPayments       Payment[]                    @relation("CreatedPayments")
-  projectMemberships    ProjectMember[]             @relation("UserProjectMembers")
+  projectMemberships    ProjectMember[]              @relation("UserProjectMembers")
+  notifications         Notification[]               @relation("UserNotifications")
 }
 
 model Account {
@@ -195,7 +196,7 @@ model InvoiceTemplateItem {
 
 model Invoice {
   id              String        @id @default(uuid())
-  templateId      String
+  templateId      String?
   purchaseOrderId String
   status          InvoiceStatus @default(DRAFT)
   createdAt       DateTime      @default(now())
@@ -208,7 +209,7 @@ model Invoice {
   bankInfo        Json
   notes           String?
 
-  template        InvoiceTemplate @relation(fields: [templateId], references: [id])
+  template        InvoiceTemplate? @relation(fields: [templateId], references: [id])
   purchaseOrder   PurchaseOrder   @relation(fields: [purchaseOrderId], references: [id])
   vendor          Vendor          @relation(fields: [vendorId], references: [id])
   items           InvoiceItem[]
@@ -220,6 +221,7 @@ model Invoice {
   reminderLogs    ReminderLog[]
   reminderSettings ReminderSetting[]
   statusHistory   StatusHistory[]
+  notifications   Notification[]  @relation("InvoiceNotifications")
 
   @@index([purchaseOrderId])
   @@index([vendorId])
@@ -347,4 +349,35 @@ model StatusHistory {
   @@index([invoiceId])
   @@index([purchaseOrderId])
   @@index([userId])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  type        String
+  recipientId String
+  invoiceId   String?
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  recipient   User     @relation("UserNotifications", fields: [recipientId], references: [id])
+  invoice     Invoice? @relation("InvoiceNotifications", fields: [invoiceId], references: [id])
+
+  @@index([recipientId])
+  @@index([invoiceId])
+}
+
+model TestLog {
+  id            String   @id @default(cuid())
+  testId        String
+  context       String
+  error         String
+  htmlSnapshot  String   @db.Text
+  networkLogs   String?  @db.Text
+  screenshotPath String?
+  timestamp     DateTime @default(now())
+
+  @@index([testId])
 }

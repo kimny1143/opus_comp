@@ -10,25 +10,16 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
 
-    const searchParams = request.nextUrl.searchParams
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '10')
-    const status = searchParams.get('status')
-    const vendorId = searchParams.get('vendorId')
-    const search = searchParams.get('search')
+    const { searchParams } = new URL(request.url)
+    const status = searchParams.get('status') as PurchaseOrderStatus | null
+    const page = Number(searchParams.get('page')) || 1
+    const limit = Number(searchParams.get('limit')) || 10
 
     const where = {
       ...(status && { status: status as PurchaseOrderStatus }),
-      ...(vendorId && { vendorId }),
-      ...(search && {
-        OR: [
-          { orderNumber: { contains: search } },
-          { description: { contains: search } }
-        ]
-      })
     }
 
     const [total, purchaseOrders] = await Promise.all([
@@ -36,7 +27,13 @@ export async function GET(request: NextRequest) {
       prisma.purchaseOrder.findMany({
         where,
         include: {
-          vendor: true,
+          vendor: {
+            select: {
+              id: true,
+              name: true,
+              code: true
+            }
+          },
           items: true,
           statusHistory: {
             include: {
@@ -60,27 +57,21 @@ export async function GET(request: NextRequest) {
       })
     ])
 
-    // Decimal値を数値に変換
-    const formattedPurchaseOrders = purchaseOrders.map(po => ({
-      ...po,
-      totalAmount: po.totalAmount.toNumber(),
-      taxAmount: po.taxAmount?.toNumber() ?? 0,
-      items: po.items.map(item => ({
-        ...item,
-        unitPrice: item.unitPrice.toNumber(),
-        taxRate: item.taxRate.toNumber(),
-        amount: item.amount?.toNumber() ?? 0
-      }))
-    }))
-
     return NextResponse.json({
-      items: formattedPurchaseOrders,
-      total,
-      page,
-      limit
+      success: true,
+      purchaseOrders,
+      metadata: {
+        total,
+        page,
+        limit
+      }
     })
   } catch (error) {
-    return handleApiError(error)
+    console.error('Error fetching purchase orders:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to fetch purchase orders' },
+      { status: 500 }
+    )
   }
 }
 
@@ -88,7 +79,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
 
     const body = await request.json()
@@ -97,76 +88,109 @@ export async function POST(request: NextRequest) {
     // データの検証を追加
     if (!body.vendorId || !body.items || !Array.isArray(body.items)) {
       return NextResponse.json(
-        { error: 'Invalid request data', details: { 
-          vendorId: !body.vendorId ? 'Required' : undefined,
-          items: !body.items ? 'Required' : !Array.isArray(body.items) ? 'Must be an array' : undefined
-        }},
+        { 
+          success: false, 
+          error: 'Invalid request data', 
+          details: { 
+            vendorId: !body.vendorId ? 'Required' : undefined,
+            items: !body.items ? 'Required' : !Array.isArray(body.items) ? 'Must be an array' : undefined
+          }
+        },
         { status: 400 }
       )
     }
 
     const { items, ...data } = body
 
-    // 数値型のフィールドをDecimalに変換
-    const purchaseOrder = await prisma.purchaseOrder.create({
-      data: {
-        ...data,
-        totalAmount: new Prisma.Decimal(data.totalAmount),
-        taxAmount: new Prisma.Decimal(data.taxAmount),
-        createdById: session.user.id,
-        items: {
-          create: items.map((item: any) => ({
-            itemName: item.itemName,
-            description: item.description,
-            quantity: item.quantity,
-            unitPrice: new Prisma.Decimal(item.unitPrice),
-            taxRate: new Prisma.Decimal(item.taxRate),
-            amount: new Prisma.Decimal(item.amount)
-          }))
-        },
-        statusHistory: {
-          create: {
-            type: 'PURCHASE_ORDER',
-            status: data.status,
-            userId: session.user.id
-          }
-        }
-      },
-      include: {
-        vendor: true,
-        items: true,
-        statusHistory: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true
-              }
-            }
-          },
-          orderBy: {
-            createdAt: 'desc'
-          }
-        }
+    // 発注書番号を生成
+    const latestPurchaseOrder = await prisma.purchaseOrder.findFirst({
+      orderBy: {
+        createdAt: 'desc'
       }
     })
 
-    // レスポンスデータの数値型を変換
-    const formattedPurchaseOrder = {
-      ...purchaseOrder,
-      totalAmount: purchaseOrder.totalAmount.toNumber(),
-      taxAmount: purchaseOrder.taxAmount?.toNumber() ?? 0,
-      items: purchaseOrder.items.map(item => ({
-        ...item,
-        unitPrice: item.unitPrice.toNumber(),
-        taxRate: item.taxRate.toNumber(),
-        amount: item.amount?.toNumber() ?? 0
-      }))
+    const currentDate = new Date()
+    const year = currentDate.getFullYear()
+    const month = String(currentDate.getMonth() + 1).padStart(2, '0')
+    const sequence = latestPurchaseOrder 
+      ? (parseInt(latestPurchaseOrder.orderNumber.slice(-4)) + 1).toString().padStart(4, '0')
+      : '0001'
+    const orderNumber = `PO${year}${month}${sequence}`
+
+    // 数値型のフィールドをDecimalに変換
+    const purchaseOrderData = {
+      ...data,
+      orderNumber,
+      totalAmount: new Prisma.Decimal(data.totalAmount || 0),
+      taxAmount: new Prisma.Decimal(data.taxAmount || 0),
+      createdById: session.user.id,
+      items: {
+        create: items.map((item: any) => ({
+          itemName: item.itemName || '',
+          description: item.description || '',
+          quantity: item.quantity || 0,
+          unitPrice: new Prisma.Decimal(item.unitPrice || 0),
+          taxRate: new Prisma.Decimal(item.taxRate || 0),
+          amount: new Prisma.Decimal(item.amount || 0)
+        }))
+      },
+      statusHistory: {
+        create: {
+          type: 'PURCHASE_ORDER',
+          status: data.status || PurchaseOrderStatus.DRAFT,
+          userId: session.user.id
+        }
+      }
     }
 
-    return NextResponse.json({ success: true, data: formattedPurchaseOrder })
+    try {
+      const purchaseOrder = await prisma.purchaseOrder.create({
+        data: purchaseOrderData,
+        include: {
+          vendor: true,
+          items: true,
+          statusHistory: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
+            },
+            orderBy: {
+              createdAt: 'desc'
+            }
+          }
+        }
+      })
+
+      // レスポンスデータの数値型を変換
+      const formattedPurchaseOrder = {
+        ...purchaseOrder,
+        totalAmount: purchaseOrder.totalAmount.toNumber(),
+        taxAmount: purchaseOrder.taxAmount?.toNumber() ?? 0,
+        items: purchaseOrder.items.map(item => ({
+          ...item,
+          unitPrice: item.unitPrice.toNumber(),
+          taxRate: item.taxRate.toNumber(),
+          amount: item.amount?.toNumber() ?? 0
+        }))
+      }
+
+      return NextResponse.json({ success: true, data: formattedPurchaseOrder })
+    } catch (error) {
+      console.error('Purchase order creation error:', {
+        message: error instanceof Error ? error.message : '不明なエラー',
+        details: error instanceof Error ? error.stack : String(error)
+      })
+      return handleApiError(error)
+    }
   } catch (error) {
-    console.error('Purchase order creation error:', error)
+    console.error('Request processing error:', {
+      message: error instanceof Error ? error.message : '不明なエラー',
+      details: error instanceof Error ? error.stack : String(error)
+    })
     return handleApiError(error)
   }
 } 

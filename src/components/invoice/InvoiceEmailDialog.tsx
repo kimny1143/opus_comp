@@ -1,110 +1,94 @@
 'use client'
 
-import { useState } from 'react';
-import { Invoice } from '@/types/invoice';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { BlobProvider } from '@react-pdf/renderer';
-import { InvoicePDF } from './InvoicePDF';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useState } from "react"
+import { Invoice } from "@/types/invoice"
 
 interface InvoiceEmailDialogProps {
-  invoice: Invoice;
+  invoice: Invoice
 }
 
-export const InvoiceEmailDialog: React.FC<InvoiceEmailDialogProps> = ({ invoice }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [recipientEmail, setRecipientEmail] = useState('');
-  const [message, setMessage] = useState(
-    `${invoice.template.contractorName} 様\n\n` +
-    `請求書（${invoice.invoiceNumber}）を送付いたします。\n` +
-    `ご確認のほど、よろしくお願いいたします。\n\n` +
-    `支払期限: ${invoice.dueDate.toLocaleDateString()}\n` +
-    `請求金額: ¥${invoice.totalAmount.toLocaleString()}`
-  );
-  const [isSending, setIsSending] = useState(false);
+export function InvoiceEmailDialog({ invoice }: InvoiceEmailDialogProps) {
+  const [open, setOpen] = useState(false)
+  const [email, setEmail] = useState("")
+  const [sending, setSending] = useState(false)
 
-  const handleSendEmail = async (pdfBlob: Blob) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSending(true)
+
     try {
-      setIsSending(true);
-      const response = await fetch('/api/invoice/send-email', {
+      const response = await fetch('/api/invoices/send-email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          invoice: {
-            ...invoice,
-            pdfBlob: await pdfBlob.arrayBuffer()
-          },
-          recipientEmail,
-          message
-        })
-      });
+          invoiceId: invoice.id,
+          email: email,
+        }),
+      })
 
-      const data = await response.json();
-      if (data.success) {
-        alert('メールを送信しました');
-        setIsOpen(false);
-      } else {
-        throw new Error(data.error);
+      if (!response.ok) {
+        throw new Error('メールの送信に失敗しました')
       }
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました';
-      alert('メール送信に失敗しました: ' + errorMessage);
+
+      setOpen(false)
+      setEmail("")
+    } catch (error) {
+      console.error('メール送信エラー:', error)
     } finally {
-      setIsSending(false);
+      setSending(false)
     }
-  };
+  }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" type="button">
-          メール送信
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>請求書をメールで送信</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              送信先メールアドレス
-            </label>
-            <Input
-              type="email"
-              value={recipientEmail}
-              onChange={(e) => setRecipientEmail(e.target.value)}
-              placeholder="example@example.com"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              メッセージ
-            </label>
-            <Textarea
-              value={message}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(e.target.value)}
-              rows={6}
-            />
-          </div>
-          <BlobProvider document={<InvoicePDF invoice={invoice} />}>
-            {({ blob, loading }) => (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => setOpen(true)}
+      >
+        メール送信
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="bg-white">
+          <DialogHeader>
+            <DialogTitle>請求書をメールで送信</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="email">送信先メールアドレス</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="example@example.com"
+                required
+              />
+            </div>
+            <div className="flex justify-end space-x-2">
               <Button
-                className="w-full"
-                onClick={() => blob && handleSendEmail(blob)}
-                disabled={loading || isSending || !recipientEmail}
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
               >
-                {isSending ? '送信中...' : '送信'}
+                キャンセル
               </Button>
-            )}
-          </BlobProvider>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}; 
+              <Button
+                type="submit"
+                disabled={sending}
+              >
+                {sending ? '送信中...' : '送信'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+} 

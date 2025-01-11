@@ -11,13 +11,12 @@ export function createApiResponse<T>(data: T): NextResponse {
 export function handleApiError(error: unknown): NextResponse {
   // エラーオブジェクトをより安全に処理
   const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました'
-  const errorDetails = error instanceof Error ? error.stack : null
+  const errorDetails = error instanceof Error ? error.stack : String(error)
 
-  // デバッグ用のログ出力
+  // デバッグ用のログ出力（エラーオブジェクトを直接渡さない）
   console.error('API Error:', {
     message: errorMessage,
-    details: errorDetails,
-    error
+    details: errorDetails
   })
 
   if (error instanceof ZodError) {

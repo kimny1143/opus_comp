@@ -9,7 +9,10 @@
     "lint": "next lint",
     "test": "jest",
     "test:watch": "jest --watch",
-    "type-check": "echo '# TypeScript型チェック結果 - '$(date '+%Y-%m-%d %H:%M:%S') > dev_docs/type-check-result.txt && tsc --noEmit >> dev_docs/type-check-result.txt 2>&1 || true"
+    "type-check": "echo '# TypeScript型チェック結果 - '$(date '+%Y-%m-%d %H:%M:%S') > dev_docs/type-check-result.txt && tsc --noEmit >> dev_docs/type-check-result.txt 2>&1 || true",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -26,6 +29,9 @@
     "@radix-ui/react-slot": "^1.1.0",
     "@radix-ui/react-switch": "^1.1.2",
     "@radix-ui/react-toast": "^1.2.4",
+    "@react-email/components": "^0.0.31",
+    "@react-email/render": "^1.0.3",
+    "@react-pdf/font": "^3.0.1",
     "@react-pdf/renderer": "^4.1.6",
     "@tanstack/react-query": "^5.62.7",
     "@types/nodemailer": "^6.4.17",
@@ -49,6 +55,7 @@
     "nodemailer": "^6.9.16",
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.15.1",
+    "puppeteer": "^23.11.1",
     "react": "^18.2.0",
     "react-beautiful-dnd": "^13.1.1",
     "react-day-picker": "^9.4.4",
@@ -59,6 +66,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.1",
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^13.4.0",
     "@types/bcrypt": "^5.0.2",
@@ -66,7 +74,7 @@
     "@types/jest": "^29.5.3",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/lodash": "^4.17.13",
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.17.12",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@types/testing-library__jest-dom": "^5.14.9",

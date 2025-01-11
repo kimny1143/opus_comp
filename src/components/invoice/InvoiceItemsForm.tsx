@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Plus, Trash2 } from 'lucide-react'
 import { InvoiceUploadFormData } from './InvoiceUploadForm'
+import { convertTaxRateToDecimal, convertTaxRateToPercent } from '@/domains/invoice/tax'
 
 interface InvoiceItemsFormProps {
   control: Control<InvoiceUploadFormData>
@@ -75,7 +76,10 @@ export function InvoiceItemsForm({
                 <Label>税率 (%)</Label>
                 <Input
                   type="number"
-                  {...register(`items.${index}.taxRate`, { valueAsNumber: true })}
+                  {...register(`items.${index}.taxRate`, { 
+                    valueAsNumber: true,
+                    setValueAs: (value: number) => convertTaxRateToDecimal(value)
+                  })}
                   placeholder="税率"
                   className={errors.items?.[index]?.taxRate ? 'border-red-500' : ''}
                 />

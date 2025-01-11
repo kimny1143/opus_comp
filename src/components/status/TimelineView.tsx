@@ -13,7 +13,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ history }) => {
           <div className="text-sm">
             <span className="font-medium">{entry.status}</span>
             <span className="text-gray-500">
-              {` - ${entry.timestamp.toLocaleString()}`}
+              {` - ${new Date(entry.createdAt).toLocaleString()}`}
             </span>
           </div>
         </div>

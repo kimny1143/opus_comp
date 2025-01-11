@@ -4,12 +4,13 @@ import { notFound } from 'next/navigation'
 import { PurchaseOrderStatus } from '@prisma/client'
 
 interface Props {
-  params: { id: string }
+  params: Promise<{ id: string }> | { id: string }
   searchParams?: { [key: string]: string | string[] | undefined }
 }
 
 export default async function PurchaseOrderPage({ params }: Props) {
-  const { id } = params
+  const resolvedParams = await Promise.resolve(params)
+  const { id } = resolvedParams
 
   const purchaseOrder = await prisma.purchaseOrder.findUnique({
     where: { id },

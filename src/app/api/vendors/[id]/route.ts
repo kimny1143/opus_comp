@@ -1,22 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 import { prisma } from '@/lib/prisma'
+import { handleApiError, createApiResponse } from '@/lib/api-utils'
 
-export async function GET(request: NextRequest, context: { params: { id: string } }) {
-  const id = await context.params.id
+interface IdRouteContext {
+  params: { id: string }
+}
 
+export const GET = async (
+  request: NextRequest,
+  context: IdRouteContext
+) => {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
+    }
+
     const vendor = await prisma.vendor.findUnique({
-      where: { id },
+      where: { id: context.params.id },
+      select: {
+        id: true,
+        name: true,
+        tradingName: true,
+        code: true,
+        registrationNumber: true,
+        status: true,
+        contactPerson: true,
+        email: true,
+        phone: true,
+        address: true,
+        category: true,
+        businessType: true,
+        createdAt: true,
+        updatedAt: true
+      }
     })
 
     if (!vendor) {
-      return NextResponse.json({ success: false, error: '取引先が見つかりません' }, { status: 404 })
+      return NextResponse.json(
+        { success: false, error: '取引先が見つかりません' },
+        { status: 404 }
+      )
     }
 
-    return NextResponse.json({ success: true, data: { vendor } })
+    return createApiResponse(vendor)
   } catch (error) {
-    console.error('Vendor fetch error:', error)
-    return NextResponse.json({ success: false, error: 'サーバーエラーが発生しました' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 

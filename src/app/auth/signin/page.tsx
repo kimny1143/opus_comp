@@ -56,6 +56,7 @@ export default function SignInPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                data-testid="email-input"
               />
             </div>
             <div>
@@ -66,10 +67,13 @@ export default function SignInPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                data-testid="password-input"
               />
             </div>
             {error && <p className="text-red-500 text-sm">{error}</p>}
-            <Button type="submit" className="w-full">メールアドレスでサインイン</Button>
+            <Button type="submit" className="w-full" data-testid="signin-button">
+              メールアドレスでサインイン
+            </Button>
           </form>
 
           <div className="text-sm text-center">

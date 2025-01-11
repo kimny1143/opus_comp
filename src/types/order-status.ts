@@ -1,41 +1,28 @@
-export enum OrderStatus {
-  DRAFT = 'DRAFT',
-  PENDING = 'PENDING',
-  IN_PROGRESS = 'IN_PROGRESS',
-  SENT = 'SENT',
-  COMPLETED = 'COMPLETED',
-  REJECTED = 'REJECTED',
-  EXPIRED = 'EXPIRED',
-  OVERDUE = 'OVERDUE'
-}
+import { PurchaseOrderStatus } from '@prisma/client'
 
 export interface StatusTransition {
-  from: OrderStatus;
-  to: OrderStatus;
+  from: PurchaseOrderStatus;
+  to: PurchaseOrderStatus;
   requiredRole: string[];
   conditions?: () => boolean;
 }
 
 // PurchaseOrderStatus から OrderStatus への変換マッピング
-export const mapPurchaseOrderStatusToOrderStatus = (status: string): OrderStatus => {
+export const mapPurchaseOrderStatusToOrderStatus = (status: string): PurchaseOrderStatus => {
   switch (status) {
     case 'DRAFT':
-      return OrderStatus.DRAFT;
+      return 'DRAFT';
     case 'PENDING':
-      return OrderStatus.PENDING;
-    case 'IN_PROGRESS':
-      return OrderStatus.IN_PROGRESS;
+      return 'PENDING';
     case 'SENT':
-      return OrderStatus.SENT;
+      return 'SENT';
     case 'COMPLETED':
-      return OrderStatus.COMPLETED;
+      return 'COMPLETED';
     case 'REJECTED':
-      return OrderStatus.REJECTED;
-    case 'EXPIRED':
-      return OrderStatus.EXPIRED;
+      return 'REJECTED';
     case 'OVERDUE':
-      return OrderStatus.OVERDUE;
+      return 'OVERDUE';
     default:
-      return OrderStatus.DRAFT;
+      return 'DRAFT';
   }
 }; 

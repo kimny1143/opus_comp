@@ -18,7 +18,7 @@ interface CompanyInfo {
   logoPath?: string;
 }
 
-// カスタムエラー定�
+// カスタムエラー定義
 export class PDFGenerationError extends Error {
   constructor(message: string, public readonly cause?: unknown) {
     super(message);

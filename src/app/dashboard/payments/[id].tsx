@@ -4,7 +4,7 @@ import Layout from '@/components/Layout';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { Invoice, InvoiceStatus, Vendor, PaymentMethod, Prisma } from '@prisma/client';
-import { InvoiceStatusDisplay } from '@/types/invoice';
+import { InvoiceStatusDisplay, InvoiceStatusStyles } from '@/types/enums';
 import { RegisterPaymentModal } from '@/components/RegisterPaymentModal';
 import { ReminderSettings } from '@/components/ReminderSettings';
 
@@ -286,23 +286,7 @@ export default function InvoiceDetail() {
 }
 
 function getStatusColor(status: InvoiceStatus): string {
-  switch (status) {
-    case 'PAID':
-      return 'bg-green-100 text-green-800';
-    case 'OVERDUE':
-      return 'bg-red-100 text-red-800';
-    case 'PENDING':
-      return 'bg-blue-100 text-blue-800';
-    case 'REVIEWING':
-      return 'bg-purple-100 text-purple-800';
-    case 'APPROVED':
-      return 'bg-indigo-100 text-indigo-800';
-    case 'REJECTED':
-      return 'bg-red-100 text-red-800';
-    case 'DRAFT':
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
+  return InvoiceStatusStyles[status];
 }
 
 function getStatusIconColor(status: InvoiceStatus): string {

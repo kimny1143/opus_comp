@@ -1,6 +1,7 @@
 import React from 'react';
 import { UseFormRegister, Control, UseFormSetValue } from 'react-hook-form';
 import { PurchaseOrderForm } from '@/types/purchaseOrder';
+import { validateTaxRate } from '@/domains/invoice/tax';
 
 interface Props {
   register: UseFormRegister<PurchaseOrderForm>;
@@ -17,6 +18,10 @@ export const TaxCalculator: React.FC<Props> = ({ register, amount, setValue }) =
   ];
 
   const handleTaxRateChange = (rate: number) => {
+    if (!validateTaxRate(rate)) {
+      console.warn('Invalid tax rate:', rate);
+      return;
+    }
     const taxAmount = Math.floor(amount * rate);
     setValue('taxRate', rate);
     setValue('taxAmount', taxAmount);

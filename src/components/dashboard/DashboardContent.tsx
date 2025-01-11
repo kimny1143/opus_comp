@@ -82,7 +82,7 @@ export const DashboardContent: React.FC = () => {
               key={order.id}
               orderId={order.id}
               currentStatus={order.status}
-              history={order.history}
+              history={order.statusHistory || []}
             />
           ))
         ) : (
@@ -91,4 +91,4 @@ export const DashboardContent: React.FC = () => {
       </div>
     </div>
   );
-}; 
+};

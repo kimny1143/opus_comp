@@ -1,49 +1,32 @@
-import { Prisma, InvoiceStatus, Invoice as PrismaInvoice, Vendor } from '@prisma/client'
+import { Prisma, Invoice as PrismaInvoice, Vendor } from '@prisma/client'
+import { InvoiceStatus } from './enums'
 
-export { InvoiceStatus }
-
-export const InvoiceStatusValues = [
-  'DRAFT',
-  'PENDING',
-  'REVIEWING',
-  'APPROVED',
-  'PAID',
-  'OVERDUE',
-  'REJECTED'
-] as const
-
-export const InvoiceStatusDisplay: Record<InvoiceStatus, string> = {
-  DRAFT: '下書き',
-  PENDING: '保留中',
-  REVIEWING: '確認中',
-  APPROVED: '承認済み',
-  PAID: '支払済み',
-  OVERDUE: '期限超過',
-  REJECTED: '却下'
-}
+export type InvoiceStatusType = InvoiceStatus;
 
 export type BankInfo = {
-  bankName: string
-  branchName: string
-  accountType: 'ordinary' | 'current'
-  accountNumber: string
-  accountHolder: string
-}
+  bankName: string;
+  branchName: string;
+  accountType: 'ordinary' | 'current';
+  accountNumber: string;
+  accountHolder: string;
+};
+
+export type BankInfoNullable = BankInfo | null;
 
 export interface InvoiceItem {
-  id?: string
-  itemName: string
-  quantity: number
-  unitPrice: Prisma.Decimal
-  taxRate: Prisma.Decimal
-  description: string | null
-  amount?: Prisma.Decimal
+  id?: string;
+  invoiceId?: string;
+  itemName: string;
+  description?: string | null;
+  quantity: number;
+  unitPrice: string;
+  taxRate: string;
 }
 
 export interface InvoiceCreateInput {
   vendorId: string
   purchaseOrderId?: string
-  status: InvoiceStatus
+  status: InvoiceStatusType
   issueDate: Date
   dueDate: Date
   items: InvoiceItem[]
@@ -63,15 +46,13 @@ export interface InvoiceTemplateItem {
 }
 
 export interface InvoiceTemplate {
-  id: string
-  name: string
-  description?: string
-  bankInfo: BankInfo
-  defaultItems?: InvoiceTemplateItem[]
-  contractorName: string
-  contractorAddress: string
-  registrationNumber: string
-  paymentTerms?: string
+  id: string;
+  name?: string;
+  bankInfo: BankInfo;
+  contractorName: string;
+  contractorAddress: string;
+  registrationNumber: string;
+  paymentTerms?: string;
 }
 
 export interface ExtendedInvoice extends Invoice {
@@ -111,7 +92,7 @@ export type InvoiceWithRelations = ExtendedInvoice;
 export interface Invoice extends PrismaInvoice {
   vendor: Vendor
   items: InvoiceItem[]
-  bankInfo: BankInfo
+  bankInfo: BankInfoNullable
   notes: string | null
   purchaseOrder?: {
     id: string
@@ -138,4 +119,24 @@ export interface Invoice extends PrismaInvoice {
   contractorName?: string
   contractorAddress?: string
   registrationNumber?: string
-} 
+}
+
+export interface TaxCalculation {
+  taxRate: number;
+  taxableAmount: number;
+  taxAmount: number;
+}
+
+export interface InvoiceTaxSummary {
+  byRate: TaxCalculation[];
+  totalTaxableAmount: number;
+  totalTaxAmount: number;
+}
+
+export interface InvoiceIssuer {
+  name: string;
+  registrationNumber: string;
+  address: string;
+  tel?: string;
+  email?: string;
+}

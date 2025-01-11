@@ -8,5 +8,6 @@ export interface Order {
   updatedAt: Date;
   createdBy: string;
   history: StatusHistory[];
+  statusHistory: StatusHistory[];
   // その他の注文関連フィールド
 } 

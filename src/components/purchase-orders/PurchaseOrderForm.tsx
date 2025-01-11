@@ -9,6 +9,7 @@ import { ItemsTable } from './ItemsTable'
 import { OrderSummary } from './OrderSummary'
 import { VendorBasic } from '@/types/vendor'
 import { Button } from "@/components/ui/button"
+import { calculateItemTax, TaxableItem } from '@/domains/invoice/tax'
 
 interface FormData {
   vendorId: string
@@ -157,10 +158,15 @@ export function PurchaseOrderForm({ mode, id }: Props) {
   // 税額計算用のヘルパー関数
   const calculateTaxAmount = (items: FormData['items']): number => {
     return items.reduce((sum, item) => {
-      const amount = calculateItemAmount(item)
-      return sum + Math.floor(amount * item.taxRate)  // 税額は切り捨て
-    }, 0)
-  }
+      const taxableItem: TaxableItem = {
+        unitPrice: item.unitPrice.toString(),
+        quantity: item.quantity,
+        taxRate: item.taxRate
+      };
+      const { taxAmount } = calculateItemTax(taxableItem);
+      return sum + taxAmount;
+    }, 0);
+  };
 
   // 小計計算用のヘルパー関数
   const calculateSubtotal = (items: FormData['items']): number => {
@@ -224,7 +230,6 @@ export function PurchaseOrderForm({ mode, id }: Props) {
       setSaving(true)
       setError('')
 
-      // デバッグ用のログを追加
       console.log('Submitting with status:', status)
 
       const submitData = {
@@ -248,28 +253,74 @@ export function PurchaseOrderForm({ mode, id }: Props) {
 
       console.log('Submit data:', submitData)
 
-      const url = mode === 'edit' && id 
-        ? `/api/purchase-orders/${id}`
-        : '/api/purchase-orders'
+      const response = await fetch(
+        mode === 'create' 
+          ? '/api/purchase-orders'
+          : `/api/purchase-orders/${id}`,
+        {
+          method: mode === 'create' ? 'POST' : 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(submitData),
+        }
+      )
 
-      const response = await fetch(url, {
-        method: mode === 'edit' ? 'PUT' : 'POST',
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || '保存に失敗しました')
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || '保存に失敗しました')
+      }
+
+      // ステータス更新が成功した場合、一覧画面に戻る
+      router.push('/purchase-orders')
+      router.refresh()
+    } catch (err) {
+      console.error('Submit error:', err)
+      setError(err instanceof Error ? err.message : '保存に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ステータス更新の処理
+  const handleStatusUpdate = async (newStatus: PurchaseOrderStatus) => {
+    if (!id) return
+
+    try {
+      setSaving(true)
+      setError('')
+
+      const response = await fetch(`/api/purchase-orders/${id}/status`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(submitData)
+        body: JSON.stringify({
+          status: newStatus,
+        }),
       })
 
+      const result = await response.json()
+
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error('Server response:', errorData)  // デバッグログ追加
-        throw new Error(errorData.error || '保存に失敗しました')
+        throw new Error(result.error || 'ステータスの更新に失敗しました')
       }
 
+      if (!result.success) {
+        throw new Error(result.error || 'ステータスの更新に失敗しました')
+      }
+
+      // ステータス更新が成功した場合、一覧画面に戻る
       router.push('/purchase-orders')
+      router.refresh()
     } catch (err) {
-      console.error('Submit error:', err)
-      setError(err instanceof Error ? err.message : '予期せぬエラーが発生しました')
+      console.error('Status update error:', err)
+      setError(err instanceof Error ? err.message : 'ステータスの更新に失敗しました')
     } finally {
       setSaving(false)
     }

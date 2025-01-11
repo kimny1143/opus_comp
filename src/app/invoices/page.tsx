@@ -1,92 +1,131 @@
 import { Suspense } from 'react';
-import { InvoiceList } from '@/components/invoice/InvoiceList';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options';
 import { prisma } from '@/lib/prisma';
-import { Invoice, InvoiceStatus, BankInfo } from '@/types/invoice';
-import { OrderStatus, mapPurchaseOrderStatusToOrderStatus } from '@/types/order-status';
-import { Prisma } from '@prisma/client';
-
-async function getInvoices(): Promise<Invoice[]> {
-  const invoices = await prisma.invoice.findMany({
-    include: {
-      vendor: true,
-      items: true,
-      payment: true,
-      template: true,
-      purchaseOrder: true,
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-  });
-
-  return invoices.map(invoice => {
-    const defaultBankInfo: BankInfo = {
-      bankName: '',
-      branchName: '',
-      accountType: 'ordinary',
-      accountNumber: '',
-      accountHolder: ''
-    };
-
-    return {
-      id: invoice.id,
-      invoiceNumber: invoice.id,
-      issueDate: invoice.issueDate,
-      dueDate: invoice.dueDate,
-      purchaseOrderId: invoice.purchaseOrderId,
-      purchaseOrder: invoice.purchaseOrder,
-      status: invoice.status,
-      vendor: invoice.vendor,
-      vendorId: invoice.vendorId,
-      template: {
-        ...invoice.template,
-        bankInfo: invoice.template?.bankInfo as BankInfo || defaultBankInfo,
-        contractorName: invoice.vendor.name,
-        contractorAddress: invoice.vendor.address || '',
-        registrationNumber: invoice.vendor.registrationNumber || '',
-        paymentTerms: invoice.template?.paymentTerms || '請求書発行から30日以内'
-      },
-      templateId: invoice.templateId,
-      bankInfo: invoice.template?.bankInfo as BankInfo || defaultBankInfo,
-      items: invoice.items.map(item => ({
-        id: item.id,
-        description: item.description || '',
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        taxRate: item.taxRate,
-        invoiceId: item.invoiceId,
-        itemName: item.itemName
-      })),
-      totalAmount: invoice.totalAmount,
-      taxAmount: Number(invoice.totalAmount.mul(new Prisma.Decimal(0.1))),
-      notes: invoice.notes,
-      createdAt: invoice.createdAt,
-      updatedAt: invoice.updatedAt,
-      createdById: invoice.createdById,
-      updatedById: invoice.updatedById
-    };
-  });
-}
+import { InvoiceListWrapper } from '@/components/invoice/InvoiceListWrapper';
+import { redirect } from 'next/navigation';
+import { serializeDecimal } from '@/lib/utils/decimal-serializer';
+import { BankInfo, ExtendedInvoice } from '@/types/invoice';
 
 export default async function InvoicesPage() {
-  const invoices = await getInvoices();
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    redirect('/auth/signin');
+  }
 
-  const handleStatusChange = async (invoiceId: string, newStatus: InvoiceStatus) => {
-    'use server';
-    await prisma.invoice.update({
-      where: { id: invoiceId },
-      data: { status: newStatus as unknown as InvoiceStatus }
-    });
+  // 完了済みの発注書を取得
+  const completedPurchaseOrders = await prisma.purchaseOrder.findMany({
+    where: {
+      status: 'COMPLETED',
+      invoices: {
+        none: {}
+      }
+    },
+    include: {
+      vendor: true
+    }
+  });
+
+  const serializedCompletedPurchaseOrders = completedPurchaseOrders.map(order => ({
+    ...serializeDecimal(order),
+    vendor: order.vendor
+  }));
+
+  const rawInvoices = await prisma.invoice.findMany({
+    orderBy: {
+      createdAt: 'desc'
+    },
+    include: {
+      vendor: true,
+      purchaseOrder: {
+        include: {
+          vendor: true
+        }
+      },
+      items: true,
+      template: true,
+      statusHistory: {
+        include: {
+          user: {
+            select: {
+              name: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      }
+    }
+  });
+
+  const defaultBankInfo: BankInfo = {
+    bankName: '',
+    branchName: '',
+    accountType: 'ordinary',
+    accountNumber: '',
+    accountHolder: ''
   };
 
+  const serializedInvoices = rawInvoices.map(invoice => {
+    const serialized = serializeDecimal(invoice);
+    const bankInfo = typeof serialized.template?.bankInfo === 'object' 
+      ? serialized.template.bankInfo as BankInfo 
+      : defaultBankInfo;
+
+    const template = serialized.template ? {
+      id: serialized.template.id,
+      bankInfo: bankInfo,
+      contractorName: serialized.template.contractorName,
+      contractorAddress: serialized.template.contractorAddress,
+      registrationNumber: serialized.template.registrationNumber,
+      paymentTerms: serialized.template.paymentTerms
+    } : {
+      id: '',
+      bankInfo: defaultBankInfo,
+      contractorName: '',
+      contractorAddress: '',
+      registrationNumber: '',
+      paymentTerms: ''
+    };
+
+    const result: ExtendedInvoice = {
+      ...serialized,
+      items: serialized.items.map(item => ({
+        ...item,
+        unitPrice: String(item.unitPrice),
+        taxRate: String(item.taxRate)
+      })),
+      purchaseOrder: serialized.purchaseOrder ? {
+        id: serialized.purchaseOrder.id,
+        orderNumber: serialized.purchaseOrder.orderNumber,
+        status: serialized.purchaseOrder.status,
+        vendorId: serialized.purchaseOrder.vendorId,
+        vendor: serialized.purchaseOrder.vendor ? {
+          name: serialized.purchaseOrder.vendor.name,
+          address: serialized.purchaseOrder.vendor.address
+        } : undefined
+      } : null,
+      totalAmount: serialized.totalAmount,
+      bankInfo,
+      template,
+      total: Number(serialized.totalAmount),
+      taxAmount: Number(serialized.totalAmount) * 0.1, // 仮の計算
+      vendor: serialized.vendor,
+      notes: serialized.notes
+    };
+
+    return result;
+  });
+
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto py-6">
       <Suspense fallback={<div>Loading...</div>}>
-        <InvoiceList
-          invoices={invoices}
-          onStatusChange={handleStatusChange}
+        <InvoiceListWrapper 
+          invoices={serializedInvoices} 
+          completedPurchaseOrders={serializedCompletedPurchaseOrders}
         />
       </Suspense>
     </div>
   );
-} 
+}

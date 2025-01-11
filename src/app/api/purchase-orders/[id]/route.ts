@@ -6,7 +6,7 @@ import { handleApiError } from '@/lib/api-utils'
 import { PurchaseOrderStatus } from '@prisma/client'
 
 interface Props {
-  params: { id: string }
+  params: Promise<{ id: string }> | { id: string }
 }
 
 export async function GET(request: NextRequest, { params }: Props) {
@@ -16,8 +16,11 @@ export async function GET(request: NextRequest, { params }: Props) {
       return new NextResponse('Unauthorized', { status: 401 })
     }
 
+    const resolvedParams = await Promise.resolve(params)
+    const { id } = resolvedParams
+
     const purchaseOrder = await prisma.purchaseOrder.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         vendor: true,
         items: true,
@@ -70,6 +73,9 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const resolvedParams = await Promise.resolve(params)
+    const { id } = resolvedParams
+
     const body = await request.json()
     console.log('Received data in API:', body)
     console.log('Status from request:', body.status)
@@ -86,7 +92,7 @@ export async function PUT(
 
     // ステータス履歴も更新
     const updatedPO = await prisma.purchaseOrder.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...data,
         status: status as PurchaseOrderStatus || PurchaseOrderStatus.DRAFT,

@@ -1,13 +1,4 @@
-// ステータス定義
-export const InvoiceStatus = {
-  DRAFT: 'DRAFT',
-  SENT: 'SENT',
-  PAID: 'PAID',
-  OVERDUE: 'OVERDUE',
-  CANCELLED: 'CANCELLED'
-} as const
-
-export type InvoiceStatus = typeof InvoiceStatus[keyof typeof InvoiceStatus]
+import { InvoiceStatus, VendorStatus } from './enums'
 
 // 一括操作の入力型
 export interface BulkActionBase {
@@ -51,15 +42,6 @@ export interface PaginationParams {
 }
 
 export type ApiErrorResponse = ApiResponse<never>
-
-// ステータス定義
-export const VendorStatus = {
-  ACTIVE: 'ACTIVE',
-  INACTIVE: 'INACTIVE',
-  BLOCKED: 'BLOCKED'
-} as const
-
-export type VendorStatus = typeof VendorStatus[keyof typeof VendorStatus]
 
 // 共通の一括操作型
 export interface BulkOperationParams {

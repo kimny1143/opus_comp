@@ -1,12 +1,16 @@
 import { MailTemplate } from '../types'
 import { formatDate, formatCurrency } from '@/lib/utils/format'
-import { InvoiceStatusDisplay } from '@/types/invoice'
+import { InvoiceStatus, InvoiceStatusDisplay } from '@/types/enums'
 import { prisma } from '@/lib/prisma'
 
 export const invoiceStatusUpdated: MailTemplate<'invoiceStatusUpdated'> = async ({ 
   invoice, 
   oldStatus, 
   newStatus 
+}: {
+  invoice: any,
+  oldStatus: InvoiceStatus,
+  newStatus: InvoiceStatus
 }) => {
   // Vendorの情報を取得
   const vendor = await prisma.vendor.findUnique({

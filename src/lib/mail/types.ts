@@ -1,5 +1,4 @@
-import { Invoice, InvoiceStatus } from '@/types/invoice'
-import { PurchaseOrder, PurchaseOrderStatus } from '@prisma/client'
+import { Invoice, InvoiceStatus, PurchaseOrder, PurchaseOrderStatus } from '@prisma/client'
 
 // メールテンプレートの種類を定義
 export type MailTemplateType = 

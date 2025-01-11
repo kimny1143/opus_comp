@@ -2,8 +2,11 @@ import { OrderStatus } from './order-status';
 
 export interface StatusHistory {
   id: string;
+  type: string;
   status: OrderStatus;
-  timestamp: Date;
-  updatedBy: string;
   comment?: string;
+  createdAt: string;
+  userId: string;
+  invoiceId?: string;
+  purchaseOrderId?: string;
 } 

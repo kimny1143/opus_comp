@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react';
-import { InvoiceStatus, InvoiceStatusValues, InvoiceStatusDisplay } from '@/types/invoice';
+import { InvoiceStatus } from '@prisma/client';
+import { InvoiceStatusDisplay } from '@/types/enums';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +15,11 @@ import {
 } 
 from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
+
+// InvoiceStatusの値を配列として取得
+const InvoiceStatusValues = Object.values(InvoiceStatus).filter(
+  (value): value is InvoiceStatus => typeof value === 'string'
+);
 
 interface InvoiceFiltersProps {
   onFilterChange: (filters: InvoiceFilters) => void;
@@ -73,9 +79,9 @@ export const InvoiceFilters: React.FC<InvoiceFiltersProps> = ({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">全て</SelectItem>
-              {InvoiceStatusValues.map((status) => (
+              {InvoiceStatusValues.map((status: InvoiceStatus) => (
                 <SelectItem key={status} value={status}>
-                  {InvoiceStatusDisplay[status as InvoiceStatus]}
+                  {InvoiceStatusDisplay[status]}
                 </SelectItem>
               ))}
             </SelectContent>

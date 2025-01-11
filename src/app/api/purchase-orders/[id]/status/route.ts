@@ -25,6 +25,9 @@ export const POST = async (
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
 
+    const resolvedParams = await Promise.resolve(context.params)
+    const { id } = resolvedParams
+
     const data = await request.json()
     const { status, comment } = statusUpdateSchema.parse(data)
 
@@ -38,7 +41,7 @@ export const POST = async (
 
     // 現在の発注書を取得
     const currentPO = await prisma.purchaseOrder.findUnique({
-      where: { id: context.params.id },
+      where: { id },
       include: { vendor: true }
     })
 
@@ -51,48 +54,65 @@ export const POST = async (
 
     const oldStatus = currentPO.status
 
-    const purchaseOrder = await prisma.$transaction(async (tx) => {
-      // 発注書の更新
-      const updatedPO = await tx.purchaseOrder.update({
-        where: { id: context.params.id },
-        data: { 
-          status,
-          updatedById: session.user.id
-        },
-        include: {
-          vendor: true
-        }
+    try {
+      const purchaseOrder = await prisma.$transaction(async (tx) => {
+        // 発注書の更新
+        const updatedPO = await tx.purchaseOrder.update({
+          where: { id },
+          data: { 
+            status,
+            updatedById: session.user.id
+          },
+          include: {
+            vendor: true
+          }
+        })
+
+        // ステータス履歴の作成
+        await tx.statusHistory.create({
+          data: {
+            purchaseOrderId: id,
+            userId: session.user.id,
+            status,
+            comment,
+            type: 'PURCHASE_ORDER'
+          }
+        })
+
+        return updatedPO
       })
 
-      // ステータス履歴の作成
-      await tx.statusHistory.create({
-        data: {
-          purchaseOrderId: context.params.id,
-          userId: session.user.id,
-          status,
-          comment,
-          type: 'PURCHASE_ORDER'
+      // メール通知
+      if (purchaseOrder.vendor.email) {
+        try {
+          await sendEmail(
+            purchaseOrder.vendor.email,
+            'purchaseOrderStatusUpdated',
+            {
+              purchaseOrder,
+              oldStatus,
+              newStatus: status
+            }
+          )
+        } catch (emailError) {
+          console.error('メール送信エラー:', emailError)
+          // メール送信エラーは処理を中断しない
         }
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: purchaseOrder
       })
-
-      return updatedPO
-    })
-
-    // メール通知
-    if (purchaseOrder.vendor.email) {
-      await sendEmail(
-        purchaseOrder.vendor.email,
-        'purchaseOrderStatusUpdated',
-        {
-          purchaseOrder,
-          oldStatus,
-          newStatus: status
-        }
-      )
+    } catch (dbError) {
+      console.error('データベース更新エラー:', dbError)
+      return NextResponse.json({
+        success: false,
+        error: 'ステータスの更新に失敗しました'
+      }, { status: 500 })
     }
-
-    return createApiResponse(purchaseOrder)
   } catch (error) {
+    console.error('API処理エラー:', error)
     return handleApiError(error)
   }
 } 

@@ -1,4 +1,5 @@
 import { PlusIcon, TrashIcon } from 'lucide-react'
+import { convertTaxRateToPercent } from '@/domains/invoice/tax'
 
 interface Item {
   id: string
@@ -102,7 +103,7 @@ export function ItemsTable({ items, editable, onItemChange, onItemRemove }: Prop
                     <option value={0}>0%</option>
                   </select>
                 ) : (
-                  `${(item.taxRate * 100)}%`
+                  `${convertTaxRateToPercent(item.taxRate)}%`
                 )}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-right">

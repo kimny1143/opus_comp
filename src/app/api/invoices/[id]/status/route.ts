@@ -31,7 +31,7 @@ export const POST = async (
 
     // 現在の請求書を取得
     const currentInvoice = await prisma.invoice.findUnique({
-      where: { id: context.params.id },
+      where: { id: (await context.params).id },
       include: { 
         vendor: true,
         template: true
@@ -50,7 +50,7 @@ export const POST = async (
     const invoice = await prisma.$transaction(async (tx) => {
       // 請求書の更新
       const updatedInvoice = await tx.invoice.update({
-        where: { id: context.params.id },
+        where: { id: (await context.params).id },
         data: { 
           status,
           updatedById: session.user.id
@@ -66,7 +66,7 @@ export const POST = async (
       // ステータス履歴の作成
       await tx.statusHistory.create({
         data: {
-          invoiceId: context.params.id,
+          invoiceId: (await context.params).id,
           userId: session.user.id,
           status,
           comment,
@@ -83,22 +83,12 @@ export const POST = async (
         invoice.vendor.email,
         'invoiceStatusUpdated',
         {
-          invoice: {
-            ...invoice,
-            bankInfo: invoice.bankInfo as BankInfo,
-            template: {
-              id: invoice.template.id,
-              bankInfo: invoice.template.bankInfo as BankInfo,
-              contractorName: invoice.template.contractorName,
-              contractorAddress: invoice.template.contractorAddress,
-              registrationNumber: invoice.template.registrationNumber,
-              paymentTerms: invoice.template.paymentTerms
-            }
-          },
+          invoiceNumber: invoice.invoiceNumber,
+          vendorName: invoice.vendor.name,
           oldStatus,
           newStatus: status
         }
-      )
+      );
     }
 
     return createApiResponse(invoice)

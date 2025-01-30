@@ -166,7 +166,7 @@ export default function Dashboard() {
               <h1 className="text-xl font-semibold">OPUS</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-gray-700">{session?.user?.name || session?.user?.email}</span>
+              <span className="text-gray-700">{session?.user?.email}</span>
               <button
                 onClick={() => signOut({ callbackUrl: '/auth/signin' })}
                 className="text-sm text-red-600 hover:text-red-500"

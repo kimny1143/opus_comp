@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ReminderType } from '@prisma/client';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { invoiceId: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ invoiceId: string }> }) {
+  const params = await props.params;
   try {
     const settings = await prisma.reminderSetting.findMany({
       where: {
@@ -26,10 +24,8 @@ export async function GET(
   }
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { invoiceId: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ invoiceId: string }> }) {
+  const params = await props.params;
   try {
     const body = await request.json();
     const { type, daysBeforeOrAfter } = body;
@@ -52,10 +48,8 @@ export async function POST(
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { invoiceId: string } }
-) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ invoiceId: string }> }) {
+  const params = await props.params;
   try {
     const body = await request.json();
     const { reminderId, ...data } = body;
@@ -78,10 +72,8 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { invoiceId: string } }
-) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ invoiceId: string }> }) {
+  const params = await props.params;
   try {
     const body = await request.json();
     const { reminderId } = body;

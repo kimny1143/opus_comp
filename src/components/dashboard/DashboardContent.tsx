@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react';
 import { Order } from '@/types/order';
 import { StatusSummary } from './status-summary';
 import { ProgressTracker } from './progress-tracker';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/components/ui/toast/use-toast';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 interface PurchaseOrdersResponse {
   purchaseOrders: Order[];
@@ -21,6 +23,14 @@ export const DashboardContent: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/signin');
+    }
+  }, [status, router]);
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -50,6 +60,14 @@ export const DashboardContent: React.FC = () => {
     fetchOrders();
   }, [toast]);
 
+  if (status === 'loading') {
+    return <div>Loading...</div>;
+  }
+
+  if (!session) {
+    return null;
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -72,6 +90,7 @@ export const DashboardContent: React.FC = () => {
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-6">ダッシュボード</h1>
+      <p>ようこそ {session.user.name || session.user.email} さん</p>
       <StatusSummary orders={orders} />
       
       <h2 className="text-xl font-semibold mb-4">最近の発注</h2>

@@ -4,11 +4,12 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 import { redirect } from 'next/navigation'
 
 interface Props {
-  params: Promise<{ id: string }> | { id: string }
-  searchParams?: { [key: string]: string | string[] | undefined }
+  params: Promise<Promise<{ id: string }> | { id: string }>
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
-export default async function PurchaseOrderEditPage({ params }: Props) {
+export default async function PurchaseOrderEditPage(props: Props) {
+  const params = await props.params;
   const session = await getServerSession(authOptions)
   if (!session) {
     redirect('/auth/signin')

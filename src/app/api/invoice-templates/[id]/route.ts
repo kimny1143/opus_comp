@@ -18,7 +18,7 @@ export const GET: RouteHandler<IdParams> = async (
 
     const template = await prisma.invoiceTemplate.findUnique({
       where: { 
-        id: context.params.id,
+        id: (await context.params).id,
         userId: session.user.id
       },
       include: {
@@ -58,7 +58,7 @@ export const PATCH: RouteHandler<IdParams> = async (
 
     // テンプレートの所有者チェック
     const existingTemplate = await prisma.invoiceTemplate.findUnique({
-      where: { id: context.params.id }
+      where: { id: (await context.params).id }
     })
 
     if (!existingTemplate || existingTemplate.userId !== session.user.id) {
@@ -71,7 +71,7 @@ export const PATCH: RouteHandler<IdParams> = async (
     // トランザクションでテンプレートを更新
     const template = await prisma.$transaction(async (tx) => {
       const updatedTemplate = await tx.invoiceTemplate.update({
-        where: { id: context.params.id },
+        where: { id: (await context.params).id },
         data: {
           ...templateData,
           templateItems: {
@@ -106,7 +106,7 @@ export const DELETE: RouteHandler<IdParams> = async (
 
     // テンプレートの所有者チェック
     const template = await prisma.invoiceTemplate.findUnique({
-      where: { id: context.params.id },
+      where: { id: (await context.params).id },
       include: {
         _count: {
           select: { invoices: true }
@@ -130,7 +130,7 @@ export const DELETE: RouteHandler<IdParams> = async (
     }
 
     await prisma.invoiceTemplate.delete({
-      where: { id: context.params.id }
+      where: { id: (await context.params).id }
     })
 
     return createApiResponse({ success: true })

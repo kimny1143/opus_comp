@@ -1,108 +1,198 @@
-import { PrismaClient, InvoiceStatus, Vendor, VendorCategory, PurchaseOrderStatus } from '@prisma/client';
-import { hash } from 'bcryptjs';
+import { PrismaClient, InvoiceStatus, Vendor, VendorCategory, User, PurchaseOrderStatus, Prisma } from '@prisma/client';
+import bcryptjs from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
+import { vi } from 'vitest';
 
-const prisma = new PrismaClient();
+// モックPrismaクライアントの作成
+export const mockPrisma = vi.mocked({
+  user: {
+    findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  },
+  vendor: {
+    findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  },
+  purchaseOrder: {
+    findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  },
+  invoice: {
+    findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  },
+  $transaction: vi.fn((callback) => callback(mockPrisma)),
+  $connect: vi.fn(),
+  $disconnect: vi.fn(),
+  $on: vi.fn(),
+}) as unknown as PrismaClient;
 
-interface MockInvoiceParams {
-  status?: InvoiceStatus;
-  dueDate?: Date;
-  vendorId?: string;
-  invoiceNumber?: string;
-  totalAmount?: number;
-}
+// インターフェース定義
+type MockInvoiceParams = Partial<{
+  status: InvoiceStatus;
+  issueDate: Date;
+  dueDate: Date;
+  vendorId: string;
+  invoiceNumber: string;
+  totalAmount: number;
+  bankInfo: {
+    bankName: string;
+    branchName: string;
+    accountType: string;
+    accountNumber: string;
+    accountName: string;
+  };
+  items: Array<{
+    itemName: string;
+    quantity: number;
+    unitPrice: number;
+    taxRate: number;
+    description?: string;
+  }>;
+}>;
 
-interface MockVendorParams {
-  name?: string;
-  category?: VendorCategory;
-}
+type MockVendorParams = Partial<{
+  name: string;
+  category: VendorCategory;
+  email: string;
+  phone: string;
+  address: string;
+}> & Required<Pick<Vendor, 'name' | 'category'>>;
 
-export const createTestUser = async (email: string = 'test@example.com') => {
-  const hashedPassword = await hash('password123', 10);
-  return prisma.user.upsert({
-    where: { email },
-    update: {
-      hashedPassword
+// モックデータ作成関数
+export const createTestUser = async (email: string): Promise<User> => {
+  const hashedPassword = await bcryptjs.hash('testpassword', 10);
+  const data: Prisma.UserUncheckedCreateInput = {
+    id: uuidv4(),
+    email,
+    name: 'Test User',
+    hashedPassword,
+    role: 'USER',
+  };
+
+  return mockPrisma.user.create({ data });
+};
+
+export const createMockVendor = async (
+  params: MockVendorParams = {
+    name: 'Test Vendor',
+    category: VendorCategory.CORPORATION,
+  },
+  userId?: string
+): Promise<Vendor> => {
+  const defaultParams: MockVendorParams = {
+    name: 'Test Vendor',
+    category: VendorCategory.CORPORATION,
+    email: 'test@example.com',
+    phone: '0123456789',
+    address: 'Test Address',
+  };
+
+  const mergedParams = { ...defaultParams, ...params };
+  const createdById = userId || (await createTestUser('vendor-creator@example.com')).id;
+  
+  const data: Prisma.VendorUncheckedCreateInput = {
+    id: uuidv4(),
+    ...mergedParams,
+    createdById,
+  };
+
+  return mockPrisma.vendor.create({ data });
+};
+
+export const createMockInvoice = async (
+  params: MockInvoiceParams = {},
+  userId?: string
+) => {
+  const createdById = userId || (await createTestUser('invoice-creator@example.com')).id;
+  const vendor = await createMockVendor(undefined, createdById);
+  
+  const purchaseOrderData: Prisma.PurchaseOrderUncheckedCreateInput = {
+    id: uuidv4(),
+    orderNumber: `PO-${Date.now()}`,
+    status: PurchaseOrderStatus.COMPLETED,
+    totalAmount: new Prisma.Decimal(10000),
+    taxAmount: new Prisma.Decimal(1000),
+    orderDate: new Date(),
+    vendorId: vendor.id,
+    createdById,
+  };
+
+  const purchaseOrder = await mockPrisma.purchaseOrder.create({
+    data: purchaseOrderData,
+  });
+
+  const defaultParams: MockInvoiceParams = {
+    status: InvoiceStatus.DRAFT,
+    issueDate: new Date(),
+    dueDate: new Date(),
+    invoiceNumber: 'INV-TEST-001',
+    totalAmount: 10000,
+    bankInfo: {
+      bankName: 'Test Bank',
+      branchName: 'Test Branch',
+      accountType: '普通',
+      accountNumber: '1234567',
+      accountName: 'Test Account',
     },
-    create: {
-      email,
-      hashedPassword,
-      name: 'Test User',
-      role: 'USER'
-    }
-  });
-};
+    items: [
+      {
+        itemName: 'Test Item',
+        quantity: 1,
+        unitPrice: 1000,
+        taxRate: 0.1,
+        description: 'Test Description',
+      },
+    ],
+  };
 
-export const createMockVendor = async (params: MockVendorParams = {}): Promise<Vendor> => {
-  const { 
-    name = `TestVendor-${Date.now()}`,
-    category = VendorCategory.CORPORATION
-  } = params;
+  const mergedParams = { ...defaultParams, ...params };
 
-  const user = await createTestUser();
-  
-  return prisma.vendor.create({
-    data: {
-      name,
-      email: `${name.toLowerCase().replace(/\s+/g, '-')}@example.com`,
-      phone: '123-456-7890',
-      address: '123 Test St, Test City, TS 12345',
-      category,
-      createdById: user.id
-    }
-  });
-};
+  const data: Prisma.InvoiceUncheckedCreateInput = {
+    id: uuidv4(),
+    status: mergedParams.status || InvoiceStatus.DRAFT,
+    issueDate: mergedParams.issueDate || new Date(),
+    dueDate: mergedParams.dueDate || new Date(),
+    invoiceNumber: mergedParams.invoiceNumber || `INV-${Date.now()}`,
+    vendorId: vendor.id,
+    purchaseOrderId: purchaseOrder.id,
+    createdById,
+    bankInfo: mergedParams.bankInfo as any,
+    totalAmount: new Prisma.Decimal(mergedParams.totalAmount || 0),
+  };
 
-export const createMockInvoice = async (params: MockInvoiceParams = {}) => {
-  const {
-    status = InvoiceStatus.DRAFT,
-    dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    vendorId,
-    invoiceNumber = `TEST-${Date.now()}`,
-    totalAmount = 100000
-  } = params;
-
-  // ベンダーが指定されていない場合は新規作成
-  const vendor = vendorId ? await prisma.vendor.findUnique({ where: { id: vendorId } })
-                         : await createMockVendor();
-  
-  if (!vendor) {
-    throw new Error('Vendor not found');
+  if (mergedParams.items) {
+    (data as any).items = {
+      create: mergedParams.items.map(item => ({
+        ...item,
+        createdById,
+      })),
+    };
   }
 
-  const user = await createTestUser();
-
-  // 発注書の作成
-  const purchaseOrder = await prisma.purchaseOrder.create({
-    data: {
-      orderNumber: `PO-${Date.now()}`,
-      vendorId: vendor.id,
-      status: PurchaseOrderStatus.COMPLETED,
-      totalAmount,
-      taxAmount: totalAmount * 0.1,
-      orderDate: new Date(),
-      createdById: user.id
-    }
-  });
-
-  return prisma.invoice.create({
-    data: {
-      invoiceNumber,
-      status,
-      dueDate,
-      totalAmount,
-      issueDate: new Date(),
-      bankInfo: {
-        bankName: 'Test Bank',
-        accountNumber: '1234567890',
-        accountType: 'Savings'
-      },
-      purchaseOrderId: purchaseOrder.id,
-      vendorId: vendor.id,
-      createdById: user.id
-    },
+  return mockPrisma.invoice.create({
+    data,
     include: {
+      items: true,
       vendor: true,
-      purchaseOrder: true
+      purchaseOrder: true,
     }
   });
+};
+
+// モックのリセット
+export const resetMocks = () => {
+  vi.clearAllMocks();
 }; 

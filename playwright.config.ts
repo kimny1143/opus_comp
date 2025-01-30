@@ -1,39 +1,50 @@
-import { PlaywrightTestConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test';
+import dotenv from 'dotenv';
+import path from 'path';
 
-const config: PlaywrightTestConfig = {
-  testDir: './src/e2e',
-  timeout: 120000,
-  retries: process.env.CI ? 2 : 1,
+// テスト環境の環境変数を読み込む
+dotenv.config({ path: '.env.test' });
+
+const PORT = process.env.PORT || 3000;
+const baseURL = `http://localhost:${PORT}`;
+
+export default defineConfig({
+  testDir: './e2e',
+  timeout: 30000,
+  retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
+  reporter: [
+    ['html'],
+    ['json', { outputFile: 'test-results/test-results.json' }],
+    process.env.CI ? ['github'] : ['list']
+  ],
+  outputDir: 'dev_docs/e2e_results',
   use: {
-    baseURL: process.env.TEST_BASE_URL || 'http://localhost:3000',
-    trace: 'on-first-retry',
+    baseURL,
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    actionTimeout: 30000,
-    navigationTimeout: 30000,
-    video: 'on-first-retry',
+    video: 'retain-on-failure',
+    headless: false,
+    launchOptions: {
+      devtools: true,
+      slowMo: 100,
+    }
   },
   projects: [
     {
+      name: 'setup',
+      testMatch: /.*\.setup\.ts/
+    },
+    {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-    },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
+      dependencies: ['setup']
+    }
   ],
   webServer: {
     command: 'npm run dev',
-    url: 'http://localhost:3000',
-    timeout: 120000,
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
-  },
-};
-
-export default config; 
+    timeout: 120 * 1000
+  }
+}); 

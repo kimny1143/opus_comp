@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma'
 import { handleApiError, createApiResponse } from '@/lib/api-utils'
 import { InvoiceStatus } from '@prisma/client'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 // GET: アラート情報の取得
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {

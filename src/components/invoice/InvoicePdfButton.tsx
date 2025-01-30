@@ -1,7 +1,7 @@
 'use client'
 
 import { Button } from "@/components/ui/button"
-import { Invoice } from "@/types/invoice"
+import { Invoice, SerializedInvoice } from "@/types/invoice"
 import { formatDate } from "@/lib/utils/date"
 import { Document, Page, Text, View, StyleSheet, PDFDownloadLink, Font } from '@react-pdf/renderer'
 import { BlobProvider } from '@react-pdf/renderer'
@@ -11,17 +11,17 @@ import { calculateTaxByRate, TaxableItem } from '@/domains/invoice/tax'
 // 日本語フォントの登録
 Font.register({
   family: 'NotoSansJP',
-  src: '/fonts/NotoSansJP-Regular.ttf',
+  src: 'https://fonts.gstatic.com/ea/notosansjp/v5/NotoSansJP-Regular.ttf',
 })
 
 Font.register({
   family: 'NotoSansJP-Bold',
-  src: '/fonts/NotoSansJP-Bold.ttf',
+  src: 'https://fonts.gstatic.com/ea/notosansjp/v5/NotoSansJP-Bold.ttf',
 })
 
 interface InvoicePdfButtonProps {
-  invoice: Invoice
-  onGeneratePdf?: (invoice: Invoice) => void
+  invoice: SerializedInvoice
+  onGeneratePdf?: (invoice: SerializedInvoice) => void
 }
 
 // スタイルの定義
@@ -144,7 +144,7 @@ const InvoicePDF = ({ invoice }: InvoicePdfButtonProps) => {
   const calculateTaxTotal = (items: typeof invoice.items) => {
     const taxableItems: TaxableItem[] = items.map(item => ({
       taxRate: Number(item.taxRate),
-      unitPrice: item.unitPrice,
+      unitPrice: item.unitPrice.toString(),
       quantity: item.quantity
     }));
     const { totalTaxAmount } = calculateTaxByRate(taxableItems);
@@ -165,11 +165,13 @@ const InvoicePDF = ({ invoice }: InvoicePdfButtonProps) => {
             <Text style={styles.headerInfo}>発行日: {formatDate(invoice.issueDate)}</Text>
             <Text style={styles.headerInfo}>支払期限: {formatDate(invoice.dueDate)}</Text>
           </View>
-          <View>
-            <Text style={styles.contractorInfo}>{invoice.template.contractorName}</Text>
-            <Text style={styles.contractorInfo}>{invoice.template.contractorAddress}</Text>
-            <Text style={styles.contractorInfo}>登録番号: {invoice.template.registrationNumber}</Text>
-          </View>
+          {invoice.template && (
+            <View>
+              <Text style={styles.contractorInfo}>{invoice.template.contractorName}</Text>
+              <Text style={styles.contractorInfo}>{invoice.template.contractorAddress}</Text>
+              <Text style={styles.contractorInfo}>登録番号: {invoice.template.registrationNumber}</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.vendorInfo}>
@@ -236,6 +238,14 @@ const InvoicePDF = ({ invoice }: InvoicePdfButtonProps) => {
 }
 
 export function InvoicePdfButton({ invoice, onGeneratePdf }: InvoicePdfButtonProps) {
+  if (!invoice.bankInfo) {
+    return (
+      <Button disabled title="銀行情報が設定されていません">
+        PDF出力
+      </Button>
+    )
+  }
+
   return (
     <BlobProvider document={<InvoicePDF invoice={invoice} />}>
       {({ blob, url, loading, error }) => {
@@ -248,24 +258,21 @@ export function InvoicePdfButton({ invoice, onGeneratePdf }: InvoicePdfButtonPro
         }
 
         const handleClick = () => {
-          if (onGeneratePdf) {
-            onGeneratePdf(invoice)
-          }
-          // PDFのダウンロード処理
           if (blob) {
             const link = document.createElement('a')
             link.href = window.URL.createObjectURL(blob)
-            link.download = `invoice-${invoice.invoiceNumber}.pdf`
+            link.download = `請求書_${invoice.invoiceNumber || '未設定'}.pdf`
             link.click()
+            onGeneratePdf?.(invoice)
           }
         }
 
         return (
-          <Button onClick={handleClick}>
-            PDFダウンロード
+          <Button onClick={handleClick} disabled={!blob}>
+            PDF出力
           </Button>
         )
       }}
     </BlobProvider>
   )
-} 
+}

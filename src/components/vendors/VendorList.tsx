@@ -1,216 +1,149 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { VendorCategory } from '@prisma/client'
+import { useState } from 'react'
+import { Vendor, VendorCategory, VendorStatus } from '@prisma/client'
 import { Building2, Phone, Mail, Calendar, LayoutGrid, LayoutList } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
 import { VENDOR_CATEGORY_LABELS } from './schemas'
 import { VendorWithRelations } from '@/types/vendor'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { List } from 'lucide-react'
 
 interface VendorListProps {
-  vendors: VendorWithRelations[]
+  vendors: {
+    id: string
+    name: string
+    category: VendorCategory
+    code: string
+    status: VendorStatus
+    email: string
+    phone: string
+    updatedAt: Date
+    tags: string[]
+    createdBy: {
+      name: string | null
+    }
+    updatedBy: {
+      name: string | null
+    }
+  }[]
 }
 
-export function VendorList({ vendors: initialVendors = [] }: VendorListProps) {
-  const [vendors, setVendors] = useState<VendorWithRelations[]>(initialVendors)
-  const [error, setError] = useState('')
-  const [viewMode, setViewMode] = useState<'card' | 'table'>('table')
+type ViewMode = 'list' | 'grid'
 
-  useEffect(() => {
-    const fetchVendors = async () => {
-      try {
-        const res = await fetch('/api/vendors')
-        if (!res.ok) throw new Error('取引先の取得に失敗しました')
-        const data = await res.json()
-        setVendors(data.vendors || [])
-      } catch (err) {
-        setError('取引先の取得に失敗しました')
-        setVendors([])
-      }
-    }
-    fetchVendors()
-  }, [])
-
-  if (error) {
-    return <div className="text-red-500">{error}</div>
-  }
-
-  if (!vendors) {
-    return <div>読み込み中...</div>
-  }
-
-  function handleDelete(id: string) {
-    if (confirm('本当に削除しますか？')) {
-      fetch(`/api/vendors/${id}`, {
-        method: 'DELETE',
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error('削除に失敗しました')
-          setVendors((prevVendors: VendorWithRelations[]) => 
-            prevVendors.filter((vendor: VendorWithRelations) => vendor.id !== id)
-          )
-        })
-        .catch((err) => {
-          console.error(err)
-          alert('削除に失敗しました')
-        })
-    }
-  }
+export function VendorList({ vendors }: VendorListProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>('list')
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold">取引先一覧</h1>
-          <div className="flex items-center gap-2 border rounded-lg p-1">
-            <Button
-              variant={viewMode === 'card' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('card')}
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === 'table' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('table')}
-            >
-              <LayoutList className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
         <Link href="/vendors/new">
-          <Button>新規作成</Button>
+          <Button className="flex items-center gap-2">
+            <span className="hidden md:inline">新規取引先を登録</span>
+            <span className="md:hidden">新規登録</span>
+          </Button>
         </Link>
+        <div className="flex space-x-2">
+          <Button
+            variant={viewMode === 'list' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setViewMode('list')}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === 'grid' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setViewMode('grid')}
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
-      {viewMode === 'card' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {vendors.map((vendor) => (
-            <Card key={vendor.id}>
-              <CardContent className="p-4">
-                <Link href={`/vendors/${vendor.id}`}>
-                  <h3 className="text-lg font-semibold mb-2 hover:text-blue-600">
-                    {vendor.name}
-                    {vendor.category === 'INDIVIDUAL' && vendor.tradingName && (
-                      <span className="text-sm text-gray-500 ml-2">
-                        ({vendor.tradingName})
-                      </span>
-                    )}
-                  </h3>
-                </Link>
-                <p className="text-sm text-gray-600 mb-2">
-                  {vendor.contactPerson || '担当者未設定'}
-                </p>
-                <div className="flex items-center text-sm text-gray-600 mb-1">
-                  <Phone className="w-4 h-4 mr-2" />
-                  {vendor.phone || '未設定'}
-                </div>
-                <div className="flex items-center text-sm text-gray-600 mb-1">
-                  <Mail className="w-4 h-4 mr-2" />
-                  {vendor.email || '未設定'}
-                </div>
-                <div className="flex items-center text-sm text-gray-600 mb-1">
-                  <Building2 className="w-4 h-4 mr-2" />
-                  {VENDOR_CATEGORY_LABELS[vendor.category]}
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  最終更新日: {new Date(vendor.updatedAt).toLocaleDateString()}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
+      {viewMode === 'list' ? (
+        <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>取引先名</TableHead>
                 <TableHead>区分</TableHead>
-                <TableHead>名称</TableHead>
-                <TableHead>担当者</TableHead>
-                <TableHead>連絡先</TableHead>
+                <TableHead>コード</TableHead>
                 <TableHead>ステータス</TableHead>
-                <TableHead>操作</TableHead>
+                <TableHead>タグ</TableHead>
+                <TableHead>更新日時</TableHead>
+                <TableHead>更新者</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {vendors.map((vendor) => (
                 <TableRow key={vendor.id}>
-                  <TableCell>{VENDOR_CATEGORY_LABELS[vendor.category]}</TableCell>
                   <TableCell>
                     <Link
                       href={`/vendors/${vendor.id}`}
-                      className="text-blue-600 hover:underline"
+                      className="text-blue-600 hover:text-blue-800 hover:underline"
                     >
                       {vendor.name}
-                      {vendor.category === 'INDIVIDUAL' && vendor.tradingName && (
-                        <span className="text-gray-500 text-sm ml-2">
-                          ({vendor.tradingName})
-                        </span>
-                      )}
                     </Link>
                   </TableCell>
-                  <TableCell>{vendor.contactPerson || '未設定'}</TableCell>
+                  <TableCell>{vendor.category}</TableCell>
+                  <TableCell>{vendor.code}</TableCell>
+                  <TableCell>{vendor.status}</TableCell>
                   <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center">
-                        <Phone className="w-4 h-4 mr-2" />
-                        {vendor.phone || '未設定'}
-                      </div>
-                      <div className="flex items-center">
-                        <Mail className="w-4 h-4 mr-2" />
-                        {vendor.email || '未設定'}
-                      </div>
+                    <div className="flex flex-wrap gap-1">
+                      {vendor.tags?.map((tag) => (
+                        <Badge key={tag} variant="secondary">
+                          {tag}
+                        </Badge>
+                      ))}
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                        ${
-                          vendor.status === 'ACTIVE'
-                            ? 'bg-green-100 text-green-800'
-                            : vendor.status === 'INACTIVE'
-                            ? 'bg-gray-100 text-gray-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                    >
-                      {vendor.status}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Link
-                        href={`/vendors/${vendor.id}`}
-                        className="text-blue-600 hover:underline"
-                      >
-                        詳細
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(vendor.id)}
-                        className="text-red-600 hover:underline"
-                      >
-                        削除
-                      </button>
-                    </div>
-                  </TableCell>
+                  <TableCell>{vendor.updatedAt.toLocaleDateString()}</TableCell>
+                  <TableCell>{vendor.updatedBy?.name}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {vendors.map((vendor) => (
+            <Card key={vendor.id} className="p-4">
+              <div className="space-y-2">
+                <div>
+                  <Link
+                    href={`/vendors/${vendor.id}`}
+                    className="text-lg font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                  >
+                    {vendor.name}
+                  </Link>
+                </div>
+                <div className="text-sm text-gray-500">
+                  <div>区分: {vendor.category}</div>
+                  <div>コード: {vendor.code}</div>
+                  <div>ステータス: {vendor.status}</div>
+                  {vendor.email && <div>メール: {vendor.email}</div>}
+                  {vendor.phone && <div>電話番号: {vendor.phone}</div>}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {vendor.tags?.map((tag) => (
+                    <Badge key={tag} variant="secondary">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+                <div className="text-sm text-gray-500">
+                  <div>更新日時: {vendor.updatedAt.toLocaleDateString()}</div>
+                  <div>更新者: {vendor.updatedBy?.name}</div>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   )
-} 
+}

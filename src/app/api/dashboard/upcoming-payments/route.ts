@@ -6,6 +6,9 @@ import { handleApiError, createApiResponse } from '@/lib/api-utils'
 import { InvoiceStatus } from '@prisma/client'
 import { addDays } from 'date-fns'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 // GET: 今後の支払い予定を取得
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {

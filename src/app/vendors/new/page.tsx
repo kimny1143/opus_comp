@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
-import { VendorForm } from '@/components/vendors/VendorForm'
+import { VendorManagement } from '@/components/vendors/VendorManagement'
 
 export default async function NewVendorPage() {
   const session = await getServerSession(authOptions)
@@ -12,8 +12,7 @@ export default async function NewVendorPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">取引先の新規作成</h1>
-      <VendorForm />
+      <VendorManagement isNew />
     </div>
   )
-} 
+}

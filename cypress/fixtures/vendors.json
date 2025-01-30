@@ -1,0 +1,58 @@
+{
+  "validVendors": [
+    {
+      "name": "テスト株式会社",
+      "registrationNumber": "T1234567890123",
+      "category": "CORPORATION",
+      "status": "ACTIVE",
+      "email": "test@example.com",
+      "phone": "03-1234-5678",
+      "address": {
+        "postalCode": "100-0001",
+        "prefecture": "東京都",
+        "city": "千代田区",
+        "street": "丸の内1-1-1",
+        "building": "テストビル"
+      },
+      "paymentTerms": {
+        "method": "銀行振込",
+        "dueDate": 30,
+        "notes": "毎月末締め翌月末払い"
+      }
+    }
+  ],
+  "invalidVendors": {
+    "missingRequired": {
+      "email": "test@example.com",
+      "phone": "03-1234-5678"
+    },
+    "invalidRegistrationNumber": {
+      "name": "不正登録番号テスト",
+      "registrationNumber": "12345",
+      "category": "CORPORATION",
+      "status": "ACTIVE",
+      "email": "test@example.com",
+      "phone": "03-1234-5678",
+      "address": {
+        "postalCode": "100-0001",
+        "prefecture": "東京都",
+        "city": "千代田区",
+        "street": "丸の内1-1-1"
+      }
+    },
+    "invalidPhoneFormat": {
+      "name": "不正電話番号テスト",
+      "registrationNumber": "T1234567890123",
+      "category": "CORPORATION",
+      "status": "ACTIVE",
+      "email": "test@example.com",
+      "phone": "1234-5678",
+      "address": {
+        "postalCode": "100-0001",
+        "prefecture": "東京都",
+        "city": "千代田区",
+        "street": "丸の内1-1-1"
+      }
+    }
+  }
+} 

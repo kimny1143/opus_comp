@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { PrismaClient } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
-import { hash } from 'bcrypt';
+import { hash } from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 
 // Prisma Client のインスタンスを作成

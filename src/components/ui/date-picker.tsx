@@ -13,86 +13,83 @@ import {
 } from '@/components/ui/popover';
 import { DayPicker } from 'react-day-picker';
 
-interface BaseDatePickerProps {
+type DatePickerProps = {
   value?: Date | null;
   onChange?: (date: Date | null) => void;
   error?: string;
-}
+  control?: Control<any>;
+  name?: string;
+};
 
-interface FormDatePickerProps<T extends FieldValues> {
-  control: Control<T>;
-  name: Path<T>;
-  error?: string;
-}
-
-type DatePickerProps<T extends FieldValues> = BaseDatePickerProps | FormDatePickerProps<T>;
-
-export function DatePicker<T extends FieldValues>(props: DatePickerProps<T>) {
-  // FormDatePickerPropsの場合
-  if ('control' in props && 'name' in props) {
+export const DatePicker = React.forwardRef<HTMLDivElement, DatePickerProps>(
+  function DatePicker(props, ref) {
     const { control, name, error } = props;
+
+    if (control && name) {
+      return (
+        <div ref={ref}>
+          <Controller
+            control={control}
+            name={name}
+            render={({ field }) => (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={`w-full justify-start text-left font-normal ${
+                      error ? 'border-red-500' : ''
+                    }`}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {field.value ? format(field.value, 'yyyy/MM/dd') : '日付を選択'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <DayPicker
+                    mode="single"
+                    selected={field.value || undefined}
+                    onSelect={field.onChange}
+                    initialFocus
+                    required={false}
+                  />
+                </PopoverContent>
+              </Popover>
+            )}
+          />
+          {error && <p className="mt-1 text-sm text-red-500">{error}</p>}
+        </div>
+      );
+    }
+
+    const { value, onChange } = props;
     return (
-      <div>
-        <Controller
-          control={control}
-          name={name}
-          render={({ field }) => (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={`w-full justify-start text-left font-normal ${
-                    error ? 'border-red-500' : ''
-                  }`}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {field.value ? format(field.value, 'yyyy/MM/dd') : '日付を選択'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <DayPicker
-                  mode="single"
-                  selected={field.value || undefined}
-                  onSelect={field.onChange}
-                  initialFocus
-                  required={false}
-                />
-              </PopoverContent>
-            </Popover>
-          )}
-        />
+      <div ref={ref}>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={`w-full justify-start text-left font-normal ${
+                error ? 'border-red-500' : ''
+              }`}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {value ? format(value, 'yyyy/MM/dd') : '日付を選択'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0">
+            <DayPicker
+              mode="single"
+              selected={value || undefined}
+              onSelect={(date) => onChange?.(date || null)}
+              initialFocus
+              required={false}
+            />
+          </PopoverContent>
+        </Popover>
         {error && <p className="mt-1 text-sm text-red-500">{error}</p>}
       </div>
     );
   }
+);
 
-  // BaseDatePickerPropsの場合
-  const { value, onChange, error } = props;
-  return (
-    <div>
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            className={`w-full justify-start text-left font-normal ${
-              error ? 'border-red-500' : ''
-            }`}
-          >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {value ? format(value, 'yyyy/MM/dd') : '日付を選択'}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0">
-          <DayPicker
-            mode="single"
-            selected={value || undefined}
-            onSelect={(date) => onChange?.(date || null)}
-            initialFocus
-            required={false}
-          />
-        </PopoverContent>
-      </Popover>
-      {error && <p className="mt-1 text-sm text-red-500">{error}</p>}
-    </div>
-  );
-} 
+DatePicker.displayName = 'DatePicker';

@@ -1,21 +1,17 @@
-'use client'
+import { headers } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
+import SignOutForm from '@/components/auth/signout-form'
 
-import { useEffect } from 'react'
-import { signOut } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+export default async function SignOutPage() {
+  const session = await getServerSession(authOptions)
+  const headersList = headers()
+  
+  // ログインしていない場合はサインインページにリダイレクト
+  if (!session) {
+    redirect('/auth/signin')
+  }
 
-export default function SignOutPage() {
-  const router = useRouter()
-
-  useEffect(() => {
-    signOut({ redirect: false }).then(() => {
-      router.push('/auth/signin')
-    })
-  }, [router])
-
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
-      <p className="text-gray-600">サインアウトしています...</p>
-    </div>
-  )
+  return <SignOutForm />
 } 

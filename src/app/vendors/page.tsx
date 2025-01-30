@@ -12,17 +12,27 @@ export default async function VendorsPage() {
   }
 
   const vendors = await prisma.vendor.findMany({
-    include: {
-      tags: true,
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      status: true,
+      code: true,
+      phone: true,
+      email: true,
+      updatedAt: true,
+      tags: {
+        select: {
+          name: true
+        }
+      },
       createdBy: {
         select: {
-          id: true,
           name: true
         }
       },
       updatedBy: {
         select: {
-          id: true,
           name: true
         }
       }
@@ -32,5 +42,28 @@ export default async function VendorsPage() {
     }
   })
 
-  return <VendorList vendors={vendors} />
+  console.log('Vendors from DB:', JSON.stringify(vendors, null, 2))
+
+  // タグをオブジェクトから文字列の配列に変換し、必要なフィールドのみを抽出
+  const formattedVendors = vendors.map(vendor => ({
+    id: vendor.id,
+    name: vendor.name,
+    category: vendor.category,
+    code: vendor.code,
+    status: vendor.status,
+    email: vendor.email,
+    phone: vendor.phone,
+    updatedAt: vendor.updatedAt,
+    tags: vendor.tags.map(tag => tag.name),
+    createdBy: {
+      name: vendor.createdBy?.name || null
+    },
+    updatedBy: {
+      name: vendor.updatedBy?.name || null
+    }
+  }))
+
+  console.log('Formatted vendors:', JSON.stringify(formattedVendors, null, 2))
+
+  return <VendorList vendors={formattedVendors} />
 } 

@@ -1,50 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model User {
-  id                    String                       @id @default(cuid())
+  id                    String            @id @default(cuid())
   name                  String?
-  email                 String?                      @unique
+  email                 String?           @unique
   emailVerified         DateTime?
   image                 String?
-  hashedPassword        String? // passwordをhashedPasswordに変更
-  role                  String                       @default("USER")
+  hashedPassword        String?
+  role                  String            @default("USER")
   accounts              Account[]
+  createdInvoices       Invoice[]         @relation("CreatedInvoices")
+  updatedInvoices       Invoice[]         @relation("UpdatedInvoices")
+  notifications         Notification[]    @relation("UserNotifications")
+  createdPayments       Payment[]         @relation("CreatedPayments")
+  projectMemberships    ProjectMember[]   @relation("UserProjectMembers")
+  createdPurchaseOrders PurchaseOrder[]   @relation("CreatedPurchaseOrders")
+  updatedPurchaseOrders PurchaseOrder[]   @relation("UpdatedPurchaseOrders")
   sessions              Session[]
   statusHistory         StatusHistory[]
-  templates             InvoiceTemplate[]            @relation("UserTemplates")
-  createdInvoices       Invoice[]                    @relation("CreatedInvoices")
-  updatedInvoices       Invoice[]                    @relation("UpdatedInvoices")
-  createdPurchaseOrders PurchaseOrder[]              @relation("CreatedPurchaseOrders")
-  updatedPurchaseOrders PurchaseOrder[]              @relation("UpdatedPurchaseOrders")
-  createdVendors        Vendor[]                     @relation("VendorCreatedBy")
-  updatedVendors        Vendor[]                     @relation("VendorUpdatedBy")
-  createdPayments       Payment[]                    @relation("CreatedPayments")
-  projectMemberships    ProjectMember[]              @relation("UserProjectMembers")
-  notifications         Notification[]               @relation("UserNotifications")
+  createdVendors        Vendor[]          @relation("VendorCreatedBy")
+  updatedVendors        Vendor[]          @relation("VendorUpdatedBy")
+  templates             InvoiceTemplate[] @relation("UserTemplates")
 }
 
 model Account {
   id                String  @id @default(cuid())
   userId            String
-  type              String
+  type              String 
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -58,29 +57,29 @@ model Session {
 }
 
 model PurchaseOrder {
-  id            String      @id @default(uuid())
-  orderNumber   String      @unique
-  vendorId      String
+  id            String              @id @default(uuid())
+  orderNumber   String              @unique
   orderDate     DateTime
+  vendorId      String
   deliveryDate  DateTime?
-  description   String?
-  terms         String?
-  totalAmount   Decimal     @db.Decimal(10, 2)
-  taxAmount     Decimal     @db.Decimal(10, 2)
   status        PurchaseOrderStatus
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  totalAmount   Decimal             @db.Decimal(10, 2)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
   createdById   String
   updatedById   String?
+  description   String?
+  terms         String?
+  taxAmount     Decimal             @db.Decimal(10, 2)
   projectId     String?
-
-  vendor        Vendor      @relation(fields: [vendorId], references: [id])
+  invoices      Invoice[]
+  createdBy     User                @relation("CreatedPurchaseOrders", fields: [createdById], references: [id])
+  project       Project?            @relation(fields: [projectId], references: [id])
+  updatedBy     User?               @relation("UpdatedPurchaseOrders", fields: [updatedById], references: [id])
+  vendor        Vendor              @relation(fields: [vendorId], references: [id])
   items         PurchaseOrderItem[]
   statusHistory StatusHistory[]
-  invoices      Invoice[]
-  createdBy     User        @relation("CreatedPurchaseOrders", fields: [createdById], references: [id])
-  updatedBy     User?       @relation("UpdatedPurchaseOrders", fields: [updatedById], references: [id])
-  project       Project?    @relation(fields: [projectId], references: [id])
+  tags          Tag[]               @relation("TagToPurchaseOrder")
 
   @@index([vendorId])
   @@index([createdById])
@@ -91,93 +90,71 @@ model PurchaseOrderItem {
   id              String        @id @default(cuid())
   purchaseOrderId String
   itemName        String
-  description     String?
   quantity        Int
   unitPrice       Decimal       @db.Decimal(10, 2)
   taxRate         Decimal       @db.Decimal(5, 2)
+  description     String?
   amount          Decimal       @db.Decimal(10, 2)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
-
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
 
   @@index([purchaseOrderId])
 }
 
-enum PurchaseOrderStatus {
-  DRAFT       // 下書き
-  PENDING     // 保留中
-  SENT        // 送信済み
-  COMPLETED   // 納品完了
-  REJECTED    // 却下
-  OVERDUE     // 期限超過
-}
-
-enum VendorCategory {
-  CORPORATION
-  INDIVIDUAL
-}
-
-enum BusinessType {
-  MANUFACTURER      // 製造業
-  WHOLESALER       // 卸売業
-  RETAILER         // 小売業
-  SERVICE_PROVIDER // サービス業
-  OTHER           // その他
-}
-
 model Vendor {
-  id                String         @id @default(cuid())
+  id                String   @id @default(cuid())
   category         VendorCategory
   name             String
   tradingName      String?
   code             String?
   registrationNumber String?
-  status           VendorStatus   @default(ACTIVE)
+  status           VendorStatus @default(ACTIVE)
   contactPerson    String?
   email            String?
   phone            String?
   address          String?
-  tags             Tag[]
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdBy        User     @relation("VendorCreatedBy", fields: [createdById], references: [id])
   createdById      String
+  updatedBy        User?    @relation("VendorUpdatedBy", fields: [updatedById], references: [id])
   updatedById      String?
-  createdBy        User           @relation("VendorCreatedBy", fields: [createdById], references: [id])
-  updatedBy        User?          @relation("VendorUpdatedBy", fields: [updatedById], references: [id])
-  purchaseOrders   PurchaseOrder[]
+  tags             Tag[]    @relation("TagToVendor")
   invoices         Invoice[]
-  businessType     BusinessType?
+  purchaseOrders   PurchaseOrder[]
 
   @@index([createdById])
   @@index([updatedById])
 }
 
 model Tag {
-  id          String    @id @default(cuid())
-  name        String    @unique
-  vendors     Vendor[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id            String          @id @default(cuid())
+  name          String         @unique
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  vendors       Vendor[]       @relation("TagToVendor")
+  invoices      Invoice[]      @relation("TagToInvoice")
+  purchaseOrders PurchaseOrder[] @relation("TagToPurchaseOrder")
 }
 
 model InvoiceTemplate {
-  id                String   @id @default(uuid())
-  name              String
-  description       String?
-  contractorName    String
-  contractorAddress String
+  id                 String                @id @default(uuid())
+  name               String
+  description        String?
+  contractorName     String
+  contractorAddress  String
   registrationNumber String
-  bankInfo         Json
-  defaultItems     Json?
-  paymentTerms     String
-  notes            String
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  userId            String
-  user              User                @relation("UserTemplates", fields: [userId], references: [id])
-  templateItems     InvoiceTemplateItem[]
-  invoices          Invoice[]
+  bankInfo           Json
+  defaultItems       Json?
+  paymentTerms       String
+  notes              String
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  userId             String
+  invoices           Invoice[]
+  templateItems      InvoiceTemplateItem[]
+  user               User                  @relation("UserTemplates", fields: [userId], references: [id])
 
   @@index([userId])
   @@map("invoice_templates")
@@ -195,33 +172,33 @@ model InvoiceTemplateItem {
 }
 
 model Invoice {
-  id              String        @id @default(uuid())
-  templateId      String?
-  purchaseOrderId String
-  status          InvoiceStatus @default(DRAFT)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  issueDate       DateTime
-  dueDate         DateTime
-  vendorId        String
-  totalAmount     Decimal       @db.Decimal(10, 2)
-  invoiceNumber   String
-  bankInfo        Json
-  notes           String?
-
-  template        InvoiceTemplate? @relation(fields: [templateId], references: [id])
-  purchaseOrder   PurchaseOrder   @relation(fields: [purchaseOrderId], references: [id])
-  vendor          Vendor          @relation(fields: [vendorId], references: [id])
-  items           InvoiceItem[]
-  createdBy       User            @relation("CreatedInvoices", fields: [createdById], references: [id])
-  createdById     String
-  updatedBy       User?           @relation("UpdatedInvoices", fields: [updatedById], references: [id])
-  updatedById     String?
-  payment         Payment?
-  reminderLogs    ReminderLog[]
+  id               String            @id @default(uuid())
+  templateId       String?
+  purchaseOrderId  String
+  status           InvoiceStatus     @default(DRAFT)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  issueDate        DateTime
+  dueDate          DateTime
+  vendorId         String
+  createdById      String
+  updatedById      String?
+  bankInfo         Json
+  invoiceNumber    String
+  notes            String?
+  totalAmount      Decimal           @db.Decimal(10, 2)
+  createdBy        User              @relation("CreatedInvoices", fields: [createdById], references: [id])
+  purchaseOrder    PurchaseOrder     @relation(fields: [purchaseOrderId], references: [id])
+  template         InvoiceTemplate?  @relation(fields: [templateId], references: [id])
+  updatedBy        User?             @relation("UpdatedInvoices", fields: [updatedById], references: [id])
+  vendor           Vendor            @relation(fields: [vendorId], references: [id])
+  items            InvoiceItem[]
+  notifications    Notification[]    @relation("InvoiceNotifications")
+  payment          Payment?
+  statusHistory    StatusHistory[]
+  reminderLogs     ReminderLog[]
   reminderSettings ReminderSetting[]
-  statusHistory   StatusHistory[]
-  notifications   Notification[]  @relation("InvoiceNotifications")
+  tags             Tag[]             @relation("TagToInvoice")
 
   @@index([purchaseOrderId])
   @@index([vendorId])
@@ -239,62 +216,35 @@ model InvoiceItem {
   invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 }
 
-enum VendorStatus {
-  ACTIVE
-  INACTIVE
-  BLOCKED
-}
-
-enum InvoiceStatus {
-  DRAFT
-  PENDING
-  REVIEWING
-  APPROVED
-  PAID
-  OVERDUE
-  REJECTED
-}
-
-// 支払い方法の列挙型
-enum PaymentMethod {
-  BANK_TRANSFER
-  DIRECT_DEBIT
-  CREDIT_CARD
-  CASH
-  OTHER
-}
-
-// 支払い情報モデル
 model Payment {
   id          String        @id @default(cuid())
-  invoiceId   String        @unique // 1つの請求書に1つの支払い
-  invoice     Invoice       @relation(fields: [invoiceId], references: [id])
+  invoiceId   String        @unique
   paymentDate DateTime
   amount      Decimal       @db.Decimal(10, 2)
   method      PaymentMethod
   note        String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
-  createdBy   User          @relation("CreatedPayments", fields: [createdById], references: [id])
   createdById String
+  createdBy   User          @relation("CreatedPayments", fields: [createdById], references: [id])
+  invoice     Invoice       @relation(fields: [invoiceId], references: [id])
 }
 
-// 将来的な実装のための参考キーマ
 model Project {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  members     ProjectMember[]
+  id             String          @id @default(cuid())
+  name           String
+  description    String?
+  members        ProjectMember[]
   purchaseOrders PurchaseOrder[]
 }
 
 model ProjectMember {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   projectId String
   userId    String
-  role      String   // ADMIN, MEMBER, VIEWER など
-  project   Project  @relation(fields: [projectId], references: [id])
-  user      User     @relation("UserProjectMembers", fields: [userId], references: [id])
+  role      String
+  project   Project @relation(fields: [projectId], references: [id])
+  user      User    @relation("UserProjectMembers", fields: [userId], references: [id])
 
   @@unique([projectId, userId])
 }
@@ -302,7 +252,7 @@ model ProjectMember {
 model ReminderLog {
   id        String   @id @default(cuid())
   invoiceId String
-  type      String   // 'upcoming' | 'overdue'
+  type      String
   sentAt    DateTime
   invoice   Invoice  @relation(fields: [invoiceId], references: [id])
 
@@ -311,40 +261,32 @@ model ReminderLog {
 }
 
 model ReminderSetting {
-  id                String          @id @default(cuid())
+  id                String       @id @default(cuid())
   invoiceId         String
   type              ReminderType
   daysBeforeOrAfter Int
-  enabled           Boolean         @default(true)
+  enabled           Boolean      @default(true)
   lastSentAt        DateTime?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  invoice           Invoice         @relation(fields: [invoiceId], references: [id])
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  invoice           Invoice      @relation(fields: [invoiceId], references: [id])
 
   @@index([invoiceId])
   @@map("reminder_settings")
 }
 
-enum ReminderType {
-  BEFORE_DUE
-  AFTER_DUE
-  AFTER_ISSUE
-}
-
-// 新しい汎用的なStatusHistory
 model StatusHistory {
-  id              String        @id @default(uuid())
-  type            String        // 'INVOICE' or 'PURCHASE_ORDER'
-  status          String        // InvoiceStatus or PurchaseOrderStatus
+  id              String         @id @default(uuid())
+  type            String
+  status          String
   comment         String?
-  createdAt       DateTime      @default(now())
+  createdAt       DateTime       @default(now())
   userId          String
   invoiceId       String?
   purchaseOrderId String?
-
-  user          User           @relation(fields: [userId], references: [id])
-  invoice       Invoice?       @relation(fields: [invoiceId], references: [id])
-  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  invoice         Invoice?       @relation(fields: [invoiceId], references: [id])
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  user            User           @relation(fields: [userId], references: [id])
 
   @@index([invoiceId])
   @@index([purchaseOrderId])
@@ -361,23 +303,75 @@ model Notification {
   isRead      Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  recipient   User     @relation("UserNotifications", fields: [recipientId], references: [id])
   invoice     Invoice? @relation("InvoiceNotifications", fields: [invoiceId], references: [id])
+  recipient   User     @relation("UserNotifications", fields: [recipientId], references: [id])
 
   @@index([recipientId])
   @@index([invoiceId])
 }
 
 model TestLog {
-  id            String   @id @default(cuid())
-  testId        String
-  context       String
-  error         String
-  htmlSnapshot  String   @db.Text
-  networkLogs   String?  @db.Text
+  id             String   @id @default(cuid())
+  testId         String
+  context        String
+  error          String
+  htmlSnapshot   String
+  timestamp      DateTime @default(now())
+  networkLogs    String?
   screenshotPath String?
-  timestamp     DateTime @default(now())
 
   @@index([testId])
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  PENDING
+  SENT
+  COMPLETED
+  REJECTED
+  OVERDUE
+}
+
+enum VendorCategory {
+  CORPORATION
+  INDIVIDUAL
+}
+
+enum BusinessType {
+  MANUFACTURER
+  WHOLESALER
+  RETAILER
+  SERVICE_PROVIDER
+  OTHER
+}
+
+enum VendorStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+  REVIEWING
+  OVERDUE
+  SENT
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  DIRECT_DEBIT
+  CREDIT_CARD
+  CASH
+  OTHER
+}
+
+enum ReminderType {
+  BEFORE_DUE
+  AFTER_DUE
+  AFTER_ISSUE
 }

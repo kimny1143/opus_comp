@@ -1,51 +1,76 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition, useOptimistic } from 'react';
 import { InvoiceList } from './InvoiceList';
-import { PurchaseOrder, Vendor, InvoiceStatus } from '@prisma/client';
-import { ExtendedInvoice } from '@/types/invoice';
+import { InvoiceStatus } from '@prisma/client';
+import { ExtendedInvoice, SerializedInvoice } from '@/types/invoice';
 import { InvoiceStatusType } from '@/domains/invoice/types';
-
-type ExtendedPurchaseOrder = PurchaseOrder & {
-  vendor: Vendor;
-};
+import { updateInvoiceStatus } from '@/app/actions/invoice';
+import { useToast } from '@/components/ui/use-toast';
+import { SerializedPurchaseOrder } from '@/types/purchase-order';
 
 interface InvoiceListWrapperProps {
-  invoices: ExtendedInvoice[];
-  completedPurchaseOrders: ExtendedPurchaseOrder[];
+  invoices: SerializedInvoice[];
+  completedPurchaseOrders: SerializedPurchaseOrder[];
 }
 
 export function InvoiceListWrapper({ 
-  invoices,
+  invoices: initialInvoices,
   completedPurchaseOrders 
 }: InvoiceListWrapperProps) {
+  const [isPending, startTransition] = useTransition();
+  const { toast } = useToast();
+  const [optimisticInvoices, updateOptimisticInvoices] = useOptimistic(
+    initialInvoices,
+    (state, { id, status }: { id: string, status: InvoiceStatusType }) =>
+      state.map(invoice =>
+        invoice.id === id ? { ...invoice, status } : invoice
+      )
+  );
+
   const handleStatusChange = async (invoiceId: string, newStatus: InvoiceStatusType) => {
     try {
-      const response = await fetch(`/api/invoices/${invoiceId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: newStatus }),
+      // 楽観的更新
+      updateOptimisticInvoices({ id: invoiceId, status: newStatus });
+
+      // Server Actionを使用したステータス更新
+      startTransition(async () => {
+        const result = await updateInvoiceStatus(invoiceId, newStatus);
+        
+        if (result.error) {
+          toast({
+            title: 'エラー',
+            description: '請求書のステータス更新に失敗しました。',
+            variant: 'destructive',
+          });
+          // 楽観的更新を元に戻す
+          updateOptimisticInvoices({ 
+            id: invoiceId, 
+            status: result.previousStatus 
+          });
+        } else {
+          toast({
+            title: '成功',
+            description: '請求書のステータスを更新しました。',
+          });
+        }
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to update invoice status');
-      }
-
-      // ページをリフレッシュして最新のデータを表示
-      window.location.reload();
     } catch (error) {
       console.error('Error updating invoice status:', error);
-      alert('請求書のステータス更新に失敗しました。');
+      toast({
+        title: 'エラー',
+        description: '請求書のステータス更新に失敗しました。',
+        variant: 'destructive',
+      });
     }
   };
 
   return (
-    <InvoiceList 
-      invoices={invoices} 
+    <InvoiceList
+      invoices={optimisticInvoices}
       completedPurchaseOrders={completedPurchaseOrders}
       onStatusChange={handleStatusChange}
+      isUpdating={isPending}
     />
   );
 }

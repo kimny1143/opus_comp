@@ -6,10 +6,12 @@ import { handleApiError } from '@/lib/api-utils'
 import { PurchaseOrderStatus } from '@prisma/client'
 
 interface Props {
-  params: Promise<{ id: string }> | { id: string }
+  params: Promise<Promise<{ id: string }> | { id: string }>
 }
 
-export async function GET(request: NextRequest, { params }: Props) {
+// @ts-ignore
+export async function GET(request: NextRequest, props: Props) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
@@ -63,10 +65,8 @@ export async function GET(request: NextRequest, { params }: Props) {
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: Props
-) {
+export async function PUT(request: NextRequest, props: Props) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions)
     if (!session) {

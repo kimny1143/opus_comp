@@ -1,47 +1,65 @@
 import { NextRequest } from 'next/server'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { POST } from '../[id]/status/route'
 import { prisma } from '@/lib/prisma'
-import { InvoiceStatus } from '@prisma/client'
+import { InvoiceStatus, Prisma } from '@prisma/client'
 import { InvoiceStatusTransitions } from '@/types/enums'
 
 // Prismaのモック
-jest.mock('@/lib/prisma', () => ({
+vi.mock('@/lib/prisma', () => ({
   prisma: {
     invoice: {
-      findUnique: jest.fn(),
-      update: jest.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
     },
     statusHistory: {
-      create: jest.fn(),
+      create: vi.fn(),
     },
-    $transaction: jest.fn((callback) => callback(prisma)),
+    $transaction: vi.fn((callback) => callback(prisma)),
   },
 }))
 
 describe('Invoice Status API', () => {
   const mockInvoice = {
     id: '1',
+    templateId: '',
+    purchaseOrderId: '',
     status: InvoiceStatus.DRAFT,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    issueDate: new Date(),
+    dueDate: new Date(),
+    description: '',
     vendorId: '1',
-    // ... その他の必要なフィールド
-  }
+    items: [],
+    bankInfo: null,
+    totalAmount: new Prisma.Decimal(0),
+    createdById: '1',
+    updatedById: '1',
+    invoiceNumber: '0000000001',
+    notes: '',
+  } as const
 
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   it('正常なステータス更新が処理される', async () => {
     // モックの設定
-    ;(prisma.invoice.findUnique as jest.Mock).mockResolvedValue(mockInvoice)
-    ;(prisma.invoice.update as jest.Mock).mockResolvedValue({
+    vi.mocked(prisma.invoice.findUnique).mockResolvedValue(mockInvoice)
+    vi.mocked(prisma.invoice.update).mockResolvedValue({
       ...mockInvoice,
       status: InvoiceStatus.PENDING,
     })
-    ;(prisma.statusHistory.create as jest.Mock).mockResolvedValue({
+    vi.mocked(prisma.statusHistory.create).mockResolvedValue({
       id: '1',
-      invoiceId: '1',
-      status: InvoiceStatus.PENDING,
+      purchaseOrderId: '',
+      status: 'PENDING',
       createdAt: new Date(),
+      userId: '1',
+      type: 'STATUS_CHANGE',
+      invoiceId: '1',
+      comment: '',
     })
 
     const request = new NextRequest('http://localhost:3000/api/invoices/1/status', {
@@ -52,36 +70,51 @@ describe('Invoice Status API', () => {
     })
 
     const response = await POST(request, { params: { id: '1' } })
-    const data = await response.json()
-
     expect(response.status).toBe(200)
-    expect(data.success).toBe(true)
-    expect(data.data.status).toBe(InvoiceStatus.PENDING)
+
+    const responseData = await response.json()
+    expect(responseData.status).toBe(InvoiceStatus.PENDING)
+
+    // モックの呼び出しを検証
+    expect(prisma.invoice.findUnique).toHaveBeenCalledWith({
+      where: { id: '1' },
+    })
+    expect(prisma.invoice.update).toHaveBeenCalledWith({
+      where: { id: '1' },
+      data: { status: InvoiceStatus.PENDING },
+    })
+    expect(prisma.statusHistory.create).toHaveBeenCalledWith({
+      data: {
+        invoiceId: '1',
+        status: InvoiceStatus.PENDING,
+        type: 'STATUS_CHANGE',
+        userId: expect.any(String),
+      },
+    })
   })
 
-  it('無効なステータス遷移がエラーを返す', async () => {
-    ;(prisma.invoice.findUnique as jest.Mock).mockResolvedValue({
+  it('無効なステータス遷移がエラーになる', async () => {
+    vi.mocked(prisma.invoice.findUnique).mockResolvedValue({
       ...mockInvoice,
-      status: InvoiceStatus.PAID,
+      status: InvoiceStatus.APPROVED,
     })
 
     const request = new NextRequest('http://localhost:3000/api/invoices/1/status', {
       method: 'POST',
       body: JSON.stringify({
-        status: InvoiceStatus.PENDING,
+        status: InvoiceStatus.DRAFT,
       }),
     })
 
     const response = await POST(request, { params: { id: '1' } })
-    const data = await response.json()
-
     expect(response.status).toBe(400)
-    expect(data.success).toBe(false)
-    expect(data.error).toContain('無効なステータス遷移')
+
+    const responseData = await response.json()
+    expect(responseData.error).toBe('Invalid status transition')
   })
 
-  it('存在しない請求書IDに対してエラーを返す', async () => {
-    ;(prisma.invoice.findUnique as jest.Mock).mockResolvedValue(null)
+  it('存在しない請求書IDの場合エラーになる', async () => {
+    vi.mocked(prisma.invoice.findUnique).mockResolvedValue(null)
 
     const request = new NextRequest('http://localhost:3000/api/invoices/999/status', {
       method: 'POST',
@@ -91,11 +124,10 @@ describe('Invoice Status API', () => {
     })
 
     const response = await POST(request, { params: { id: '999' } })
-    const data = await response.json()
-
     expect(response.status).toBe(404)
-    expect(data.success).toBe(false)
-    expect(data.error).toContain('請求書が見つかりません')
+
+    const responseData = await response.json()
+    expect(responseData.error).toBe('Invoice not found')
   })
 
   it('全てのステータス遷移パターンが正しく定義されている', () => {

@@ -50,14 +50,14 @@ export async function checkPurchaseOrders() {
       })
 
       // メール通知
-      if (updatedOrder.vendor.email) {
+      if (updatedOrder.vendor?.email && updatedOrder.vendor?.name) {
         await sendEmail(
           updatedOrder.vendor.email,
-          'purchaseOrderStatusUpdated',
+          'statusUpdated',
           {
-            purchaseOrder: updatedOrder,
-            oldStatus: PurchaseOrderStatus.PENDING,
-            newStatus: PurchaseOrderStatus.COMPLETED
+            documentNumber: updatedOrder.orderNumber,
+            vendorName: updatedOrder.vendor.name,
+            status: PurchaseOrderStatus.COMPLETED
           }
         )
       }

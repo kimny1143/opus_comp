@@ -1,26 +1,12 @@
+import { validationMessages as commonMessages } from '@/types/validation/commonValidation'
+
 export const validationMessages = {
-  required: {
-    vendor: '取引先の選択は必須です',
-    itemName: '品目名は必須です',
-    quantity: '数量は必須です',
-  },
-  format: {
-    email: '有効なメールアドレスを入力してください',
-    phone: '電話番号は数字とハイフンのみ使用できます',
-    registrationNumber: 'インボイス登録番号の形式が正しくありません',
-    myNumber: 'マイナンバーの形式が正しくありません',
-  },
-  date: {
-    dueDate: '支払期限は発行日以降である必要があります',
-    deliveryDate: '納期は発注日以降である必要があります',
-  },
-  number: {
-    quantity: '数量は1以上である必要があります',
-    unitPrice: '単価は0以上である必要があります',
-    taxRate: '税率は0-100%の範囲で指定してください',
-  },
+  ...commonMessages,
   auth: {
     required: '認証が必要です',
+    invalid: '認証情報が無効です',
+    expired: 'セッションが期限切れです',
+    invalidCredentials: 'メールアドレスまたはパスワードが正しくありません'
   },
   vendor: {
     notFound: '取引先が見つかりません',
@@ -29,6 +15,18 @@ export const validationMessages = {
   },
   validation: {
     invalid: 'バリデーションエラーが発生しました',
+    required: '必須項目です',
+    invalidFormat: '形式が正しくありません',
+    minLength: (min: number) => `${min}文字以上で入力してください`,
+    maxLength: (max: number) => `${max}文字以下で入力してください`,
+    arrayMinLength: '1つ以上の項目を追加してください',
+    arrayMaxLength: (max: number) => `${max}個以下の項目を指定してください`,
+    positiveNumber: '0より大きい数値を入力してください',
+    nonNegativeNumber: '0以上の数値を入力してください',
+    taxRateMin: '税率は0.1以上で入力してください',
+    taxRateMax: '税率は1以下で入力してください',
+    futureDate: '未来の日付を指定してください',
+    pastDate: '過去の日付を指定してください'
   },
   error: {
     deletion: '削除中にエラーが発生しました',

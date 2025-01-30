@@ -5,7 +5,10 @@ import { prisma } from '@/lib/prisma'
 import { handleApiError, createApiResponse } from '@/lib/api-utils'
 import { InvoiceStatus, PurchaseOrderStatus } from '@prisma/client'
 
-// GET: ダッシュボード統計情報の取得
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+// GET: ダッシュボードの統計情報を取得
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const session = await getServerSession(authOptions)
@@ -13,43 +16,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
 
-    // 請求書の統計
-    const invoiceStats = await prisma.invoice.groupBy({
-      by: ['status'],
-      _count: true,
-      _sum: {
-        totalAmount: true
-      }
+    // 統計情報を取得
+    const stats = await prisma.$transaction([
+      prisma.invoice.count(),
+      prisma.purchaseOrder.count(),
+      prisma.vendor.count()
+    ])
+
+    return createApiResponse({
+      totalInvoices: stats[0],
+      totalOrders: stats[1],
+      totalVendors: stats[2]
     })
-
-    // 発注書の統計
-    const purchaseOrderStats = await prisma.purchaseOrder.groupBy({
-      by: ['status'],
-      _count: true,
-      _sum: {
-        totalAmount: true
-      }
-    })
-
-    // 統計情報をフォーマット
-    const stats = {
-      invoices: {
-        total: invoiceStats.reduce((sum, stat) => sum + stat._count, 0),
-        totalAmount: invoiceStats.reduce((sum, stat) => sum + (stat._sum.totalAmount?.toNumber() || 0), 0),
-        byStatus: Object.fromEntries(
-          invoiceStats.map(stat => [stat.status, stat._count])
-        )
-      },
-      purchaseOrders: {
-        total: purchaseOrderStats.reduce((sum, stat) => sum + stat._count, 0),
-        totalAmount: purchaseOrderStats.reduce((sum, stat) => sum + (stat._sum.totalAmount?.toNumber() || 0), 0),
-        byStatus: Object.fromEntries(
-          purchaseOrderStats.map(stat => [stat.status, stat._count])
-        )
-      }
-    }
-
-    return createApiResponse(stats)
   } catch (error) {
     return handleApiError(error)
   }

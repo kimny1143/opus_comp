@@ -1,10 +1,10 @@
 'use client'
 
-import { OrderStatus } from '@/types/order-status';
+import { PurchaseOrderStatus } from '@prisma/client';
 import { Order } from '@/types/order';
 
 interface StatusCount {
-  status: OrderStatus;
+  status: PurchaseOrderStatus;
   count: number;
   label: string;
 }
@@ -15,28 +15,25 @@ interface StatusSummaryProps {
 
 export const StatusSummary: React.FC<StatusSummaryProps> = ({ orders }) => {
   const getStatusCounts = (): StatusCount[] => {
-    const counts = new Map<OrderStatus, number>();
+    const counts = new Map<PurchaseOrderStatus, number>();
     orders.forEach(order => {
       counts.set(order.status, (counts.get(order.status) || 0) + 1);
     });
 
-    const statusLabels: Record<OrderStatus, string> = {
-      [OrderStatus.DRAFT]: '下書き',
-      [OrderStatus.PENDING]: '承認待ち',
-      [OrderStatus.IN_PROGRESS]: '進行中',
-      [OrderStatus.SENT]: '送信済み',
-      [OrderStatus.COMPLETED]: '完了',
-      [OrderStatus.REJECTED]: '却下',
-      [OrderStatus.EXPIRED]: '期限切れ',
-      [OrderStatus.OVERDUE]: '期限超過'
+    const statusLabels: Record<PurchaseOrderStatus, string> = {
+      'DRAFT': '下書き',
+      'PENDING': '承認待ち',
+      'SENT': '送信済み',
+      'COMPLETED': '完了',
+      'REJECTED': '却下',
+      'OVERDUE': '期限超過'
     };
 
-    return (Object.keys(OrderStatus) as Array<keyof typeof OrderStatus>)
-      .filter(key => isNaN(Number(key)))
-      .map(key => ({
-        status: OrderStatus[key],
-        count: counts.get(OrderStatus[key]) || 0,
-        label: statusLabels[OrderStatus[key]]
+    return Object.values(PurchaseOrderStatus)
+      .map(status => ({
+        status,
+        count: counts.get(status) || 0,
+        label: statusLabels[status] || status
       }));
   };
 

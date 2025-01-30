@@ -1,9 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 import { prisma } from '@/lib/prisma'
 import { handleApiError, createApiResponse } from '@/lib/api-utils'
-import { RouteHandler, IdRouteContext } from '@/app/api/route-types'
 import { z } from 'zod'
 import { Prisma, InvoiceStatus } from '@prisma/client'
 
@@ -15,26 +14,27 @@ const createInvoiceSchema = z.object({
   dueDate: z.string().datetime().optional()
 })
 
-// POST: テンプレートから請求書を作成
-export const POST = async (
-  request: NextRequest,
-  context: IdRouteContext
-): Promise<NextResponse> => {
+import { NextRequest } from 'next/server';
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
-      return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
+      return NextResponse.json(
+        { success: false, error: '認証が必要です' },
+        { status: 401 }
+      )
     }
 
-    const body = await request.json()
+    const body = await req.json()
     const validatedData = createInvoiceSchema.parse(body)
 
     // テンプレートの取得
     const template = await prisma.invoiceTemplate.findUnique({
-      where: { id: context.params.id },
-      include: {
-        templateItems: true
-      }
+      where: { id: params.id },
     })
 
     if (!template) {
@@ -61,14 +61,14 @@ export const POST = async (
         notes: '',
         // 合計金額を計算
         totalAmount: new Prisma.Decimal(
-          template.templateItems.reduce((sum: number, item) => {
+          (template.defaultItems as any[]).reduce((sum: number, item) => {
             const subtotal = Number(item.unitPrice) * item.quantity
             const tax = subtotal * Number(item.taxRate)
             return sum + subtotal + tax
           }, 0)
         ),
         items: {
-          create: template.templateItems.map(item => ({
+          create: (template.defaultItems as any[]).map(item => ({
             itemName: item.itemName,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
@@ -85,8 +85,8 @@ export const POST = async (
       }
     })
 
-    return createApiResponse(invoice)
+    return NextResponse.json(createApiResponse(invoice))
   } catch (error) {
     return handleApiError(error)
   }
-} 
+}

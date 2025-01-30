@@ -7,10 +7,11 @@ import { PurchaseOrderStatus } from '@prisma/client'
 import { sendMail } from '@/lib/mail/sendMail'
 
 interface Props {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
-export async function POST(request: NextRequest, { params }: Props) {
+export async function POST(request: NextRequest, props: Props) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions)
     if (!session) {

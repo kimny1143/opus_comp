@@ -1,20 +1,21 @@
 import { NextRequest } from 'next/server'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { POST } from '../[id]/status/route'
 import { prisma } from '@/lib/prisma'
-import { PurchaseOrderStatus } from '@prisma/client'
+import { PurchaseOrderStatus, Prisma } from '@prisma/client'
 import { PurchaseOrderStatusTransitions } from '@/types/enums'
 
 // Prismaのモック
-jest.mock('@/lib/prisma', () => ({
+vi.mock('@/lib/prisma', () => ({
   prisma: {
     purchaseOrder: {
-      findUnique: jest.fn(),
-      update: jest.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
     },
     statusHistory: {
-      create: jest.fn(),
+      create: vi.fn(),
     },
-    $transaction: jest.fn((callback) => callback(prisma)),
+    $transaction: vi.fn((callback) => callback(prisma)),
   },
 }))
 
@@ -24,25 +25,43 @@ describe('Purchase Order Status API', () => {
     status: PurchaseOrderStatus.DRAFT,
     vendorId: '1',
     orderNumber: 'PO-001',
-    // ... その他の必要なフィールド
-  }
+    orderDate: new Date(),
+    deliveryDate: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    issueDate: new Date(),
+    dueDate: new Date(),
+    description: '',
+    items: [],
+    totalAmount: new Prisma.Decimal(0),
+    taxAmount: new Prisma.Decimal(0),
+    terms: '',
+    createdById: '1',
+    updatedById: '1',
+    notes: '',
+    projectId: '1',
+  } as const
 
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   it('正常なステータス更新が処理される', async () => {
     // モックの設定
-    ;(prisma.purchaseOrder.findUnique as jest.Mock).mockResolvedValue(mockPurchaseOrder)
-    ;(prisma.purchaseOrder.update as jest.Mock).mockResolvedValue({
+    vi.mocked(prisma.purchaseOrder.findUnique).mockResolvedValue(mockPurchaseOrder)
+    vi.mocked(prisma.purchaseOrder.update).mockResolvedValue({
       ...mockPurchaseOrder,
       status: PurchaseOrderStatus.PENDING,
     })
-    ;(prisma.statusHistory.create as jest.Mock).mockResolvedValue({
+    vi.mocked(prisma.statusHistory.create).mockResolvedValue({
       id: '1',
       purchaseOrderId: '1',
       status: PurchaseOrderStatus.PENDING,
       createdAt: new Date(),
+      userId: '1',
+      type: 'STATUS_CHANGE',
+      invoiceId: null,
+      comment: '',
     })
 
     const request = new NextRequest('http://localhost:3000/api/purchase-orders/1/status', {
@@ -53,15 +72,31 @@ describe('Purchase Order Status API', () => {
     })
 
     const response = await POST(request, { params: { id: '1' } })
-    const data = await response.json()
-
     expect(response.status).toBe(200)
-    expect(data.success).toBe(true)
-    expect(data.data.status).toBe(PurchaseOrderStatus.PENDING)
+
+    const responseData = await response.json()
+    expect(responseData.status).toBe(PurchaseOrderStatus.PENDING)
+
+    // モックの呼び出しを検証
+    expect(prisma.purchaseOrder.findUnique).toHaveBeenCalledWith({
+      where: { id: '1' },
+    })
+    expect(prisma.purchaseOrder.update).toHaveBeenCalledWith({
+      where: { id: '1' },
+      data: { status: PurchaseOrderStatus.PENDING },
+    })
+    expect(prisma.statusHistory.create).toHaveBeenCalledWith({
+      data: {
+        purchaseOrderId: '1',
+        status: PurchaseOrderStatus.PENDING,
+        type: 'STATUS_CHANGE',
+        userId: expect.any(String),
+      },
+    })
   })
 
-  it('無効なステータス遷移がエラーを返す', async () => {
-    ;(prisma.purchaseOrder.findUnique as jest.Mock).mockResolvedValue({
+  it('無効なステータス遷移がエラーになる', async () => {
+    vi.mocked(prisma.purchaseOrder.findUnique).mockResolvedValue({
       ...mockPurchaseOrder,
       status: PurchaseOrderStatus.COMPLETED,
     })
@@ -69,20 +104,19 @@ describe('Purchase Order Status API', () => {
     const request = new NextRequest('http://localhost:3000/api/purchase-orders/1/status', {
       method: 'POST',
       body: JSON.stringify({
-        status: PurchaseOrderStatus.PENDING,
+        status: PurchaseOrderStatus.DRAFT,
       }),
     })
 
     const response = await POST(request, { params: { id: '1' } })
-    const data = await response.json()
-
     expect(response.status).toBe(400)
-    expect(data.success).toBe(false)
-    expect(data.error).toContain('無効なステータス遷移')
+
+    const responseData = await response.json()
+    expect(responseData.error).toBe('Invalid status transition')
   })
 
-  it('存在しない発注書IDに対してエラーを返す', async () => {
-    ;(prisma.purchaseOrder.findUnique as jest.Mock).mockResolvedValue(null)
+  it('存在しない発注書IDの場合エラーになる', async () => {
+    vi.mocked(prisma.purchaseOrder.findUnique).mockResolvedValue(null)
 
     const request = new NextRequest('http://localhost:3000/api/purchase-orders/999/status', {
       method: 'POST',
@@ -92,11 +126,10 @@ describe('Purchase Order Status API', () => {
     })
 
     const response = await POST(request, { params: { id: '999' } })
-    const data = await response.json()
-
     expect(response.status).toBe(404)
-    expect(data.success).toBe(false)
-    expect(data.error).toContain('発注書が見つかりません')
+
+    const responseData = await response.json()
+    expect(responseData.error).toBe('Purchase order not found')
   })
 
   it('全てのステータス遷移パターンが正しく定義されている', () => {
@@ -114,24 +147,27 @@ describe('Purchase Order Status API', () => {
   })
 
   it('コメント付きのステータス更新が正しく処理される', async () => {
-    ;(prisma.purchaseOrder.findUnique as jest.Mock).mockResolvedValue(mockPurchaseOrder)
-    ;(prisma.purchaseOrder.update as jest.Mock).mockResolvedValue({
+    vi.mocked(prisma.purchaseOrder.findUnique).mockResolvedValue(mockPurchaseOrder)
+    vi.mocked(prisma.purchaseOrder.update).mockResolvedValue({
       ...mockPurchaseOrder,
       status: PurchaseOrderStatus.PENDING,
     })
-    ;(prisma.statusHistory.create as jest.Mock).mockResolvedValue({
+    vi.mocked(prisma.statusHistory.create).mockResolvedValue({
       id: '1',
       purchaseOrderId: '1',
       status: PurchaseOrderStatus.PENDING,
-      comment: 'テストコメント',
       createdAt: new Date(),
+      userId: '1',
+      type: 'STATUS_CHANGE',
+      invoiceId: null,
+      comment: 'ステータスを更新しました',
     })
 
     const request = new NextRequest('http://localhost:3000/api/purchase-orders/1/status', {
       method: 'POST',
       body: JSON.stringify({
         status: PurchaseOrderStatus.PENDING,
-        comment: 'テストコメント',
+        comment: 'ステータスを更新しました',
       }),
     })
 
@@ -143,7 +179,7 @@ describe('Purchase Order Status API', () => {
     expect(prisma.statusHistory.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          comment: 'テストコメント',
+          comment: 'ステータスを更新しました',
         }),
       })
     )

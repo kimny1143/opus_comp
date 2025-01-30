@@ -1,19 +1,35 @@
-import { redirect } from 'next/navigation'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
-import VendorDetail from '@/components/vendors/VendorDetail'
+import { notFound } from 'next/navigation'
+import { VendorManagement } from '@/components/vendors/VendorManagement'
+import { prisma } from '@/lib/prisma'
+import { ExtendedVendor } from '@/types/vendor'
+import { TagFormData } from '@/types/tag'
 
-export default async function VendorDetailPage() {
-  const session = await getServerSession(authOptions)
-  
-  if (!session) {
-    redirect('/auth/signin')
+interface Props {
+  params: {
+    id: string
+  }
+}
+
+export default async function VendorPage({ params }: Props) {
+  const vendor = await prisma.vendor.findUnique({
+    where: { id: params.id },
+    include: {
+      tags: true
+    }
+  })
+
+  if (!vendor) {
+    notFound()
   }
 
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <VendorDetail />
-    </div>
-  )
+  const extendedVendor: Partial<ExtendedVendor> = {
+    ...vendor,
+    bankInfo: null,
+    tags: vendor.tags.map(tag => ({
+      id: tag.id,
+      name: tag.name
+    } satisfies TagFormData))
+  }
+
+  return <VendorManagement initialData={extendedVendor} />
 }
-// Compare this snippet from src/app/vendors/%5Bid%5D/edit/page.tsx:

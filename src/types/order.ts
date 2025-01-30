@@ -1,9 +1,9 @@
-import { OrderStatus } from './order-status';
+import { PurchaseOrderStatus } from '@prisma/client';
 import { StatusHistory } from './status-history';
 
 export interface Order {
   id: string;
-  status: OrderStatus;
+  status: PurchaseOrderStatus;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;

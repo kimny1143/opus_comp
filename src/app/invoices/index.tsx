@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { Invoice, InvoiceStatus, InvoiceStatusDisplay } from '@/types/invoice'
+import { Invoice } from '@/types/invoice'
 import { InvoiceList } from '@/components/invoice/InvoiceList'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
+import { InvoiceStatus } from '@prisma/client'
+import { InvoiceStatusDisplay } from '@/types/enums'
 
 interface InvoicesPageProps {
   invoices: Invoice[]
@@ -46,6 +48,7 @@ export default function InvoicesPage({ invoices }: InvoicesPageProps) {
       <InvoiceList
         invoices={invoices}
         onStatusChange={handleStatusChange}
+        completedPurchaseOrders={[]}
       />
     </div>
   )

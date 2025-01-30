@@ -152,24 +152,19 @@ export const POST: RouteHandler = async (request) => {
 
     for (const admin of admins) {
       if (admin.email) {
+        if (!updatedInvoice.vendor?.name) {
+          console.error('Vendor name is missing for invoice:', updatedInvoice.invoiceNumber);
+          continue;
+        }
+
         await sendEmail(
           admin.email,
           'invoiceCreated',
-          { 
-            invoice: {
-              ...updatedInvoice,
-              bankInfo: updatedInvoice.bankInfo as BankInfo,
-              template: {
-                id: updatedInvoice.template.id,
-                bankInfo: updatedInvoice.template.bankInfo as BankInfo,
-                contractorName: updatedInvoice.template.contractorName,
-                contractorAddress: updatedInvoice.template.contractorAddress,
-                registrationNumber: updatedInvoice.template.registrationNumber,
-                paymentTerms: updatedInvoice.template.paymentTerms
-              }
-            }
+          {
+            invoiceNumber: updatedInvoice.invoiceNumber,
+            vendorName: updatedInvoice.vendor.name
           }
-        )
+        );
       }
     }
 

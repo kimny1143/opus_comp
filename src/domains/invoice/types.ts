@@ -20,7 +20,8 @@ export const InvoiceStatusDisplay: Record<InvoiceStatus, string> = {
   [InvoiceStatus.APPROVED]: '承認済み',
   [InvoiceStatus.PAID]: '支払済み',
   [InvoiceStatus.OVERDUE]: '支払期限超過',
-  [InvoiceStatus.REJECTED]: '却下'
+  [InvoiceStatus.REJECTED]: '却下',
+  [InvoiceStatus.SENT]: '送信済み'
 };
 
 export type BankInfo = Prisma.JsonObject & {
@@ -50,6 +51,12 @@ export interface QualifiedInvoiceItem {
   taxRate: number;
   taxAmount: number;
   taxableAmount: number;
+}
+
+export interface TaxableItem {
+  quantity: number;
+  unitPrice: Prisma.Decimal;
+  taxRate: number;
 }
 
 export interface TaxCalculation {

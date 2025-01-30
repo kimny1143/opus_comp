@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { InvoiceStatus } from '@/types/invoice';
+import { InvoiceStatusType } from '@/types/invoice';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
             }
           },
           data: {
-            status: status as unknown as InvoiceStatus
+            status: status as unknown as InvoiceStatusType
           }
         });
         break;

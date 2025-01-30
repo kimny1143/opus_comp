@@ -1,55 +1,80 @@
 import { useMemo } from 'react'
-import { TaxCalculation, InvoiceTaxSummary } from './types'
+import { TaxCalculation, InvoiceTaxSummary, TaxableItem } from './types'
 
-export interface TaxableItem {
-  unitPrice: string
-  quantity: number
-  taxRate: number
-}
-
-export const calculateItemTax = (item: TaxableItem) => {
-  const taxableAmount = Math.floor(Number(item.unitPrice)) * item.quantity
+/**
+ * 商品1つあたりの税額を計算する
+ */
+export const calculateItemTax = (item: TaxableItem): TaxCalculation => {
+  const taxableAmount = Math.floor(item.unitPrice.toNumber() * item.quantity)
   const taxAmount = Math.floor(taxableAmount * item.taxRate)
-  return { taxableAmount, taxAmount }
+  return {
+    taxRate: item.taxRate,
+    taxableAmount,
+    taxAmount
+  }
 }
 
-export const calculateTaxByRate = (items: TaxableItem[]): InvoiceTaxSummary => {
-  // 税率ごとにグループ化
-  const groupedByRate = items.reduce<Record<string, TaxableItem[]>>((acc, item) => {
-    const rate = item.taxRate.toString()
-    if (!acc[rate]) {
-      acc[rate] = []
+/**
+ * 商品の税抜小計を計算する
+ */
+export const calculateSubtotal = (items: TaxableItem[]): number => {
+  return items.reduce((acc, item) => {
+    if (item.quantity === 0) return acc
+    const itemSubtotal = Math.floor(item.unitPrice.toNumber() * item.quantity)
+    return acc + itemSubtotal
+  }, 0)
+}
+
+/**
+ * 商品の合計税額を計算する
+ */
+export const calculateTotalTax = (items: TaxableItem[]): number => {
+  return items.reduce((acc, item) => {
+    if (item.quantity === 0) return acc
+    const { taxAmount } = calculateItemTax(item)
+    return acc + taxAmount
+  }, 0)
+}
+
+/**
+ * 商品の税込合計金額を計算する
+ */
+export const calculateTotal = (items: TaxableItem[]): number => {
+  return calculateSubtotal(items) + calculateTotalTax(items)
+}
+
+/**
+ * 税率ごとの集計を計算する
+ */
+export const calculateTaxSummary = (items: TaxableItem[]): InvoiceTaxSummary => {
+  const taxRates = new Set(items.map(item => item.taxRate))
+  const byRate = Array.from(taxRates).map(rate => {
+    const itemsWithRate = items.filter(item => item.taxRate === rate)
+    const taxableAmount = itemsWithRate.reduce((acc, item) => {
+      if (item.quantity === 0) return acc
+      return acc + Math.floor(item.unitPrice.toNumber() * item.quantity)
+    }, 0)
+    const taxAmount = Math.floor(taxableAmount * rate)
+    return {
+      taxRate: rate,
+      taxableAmount,
+      taxAmount
     }
-    acc[rate].push(item)
-    return acc
-  }, {})
+  }).sort((a, b) => b.taxRate - a.taxRate) // 税率の高い順にソート
 
-  // 税率ごとの集計
-  const byRate = Object.entries(groupedByRate).map(([rate, items]): TaxCalculation => {
-    const rateNumber = Number(rate)
-    const { taxableAmount, taxAmount } = items.reduce(
-      (acc, item) => {
-        const result = calculateItemTax(item)
-        return {
-          taxableAmount: acc.taxableAmount + result.taxableAmount,
-          taxAmount: acc.taxAmount + result.taxAmount
-        }
-      },
-      { taxableAmount: 0, taxAmount: 0 }
-    )
-    return { taxRate: rateNumber, taxableAmount, taxAmount }
-  })
+  const totalTaxableAmount = byRate.reduce((acc, rate) => acc + rate.taxableAmount, 0)
+  const totalTaxAmount = byRate.reduce((acc, rate) => acc + rate.taxAmount, 0)
 
-  // 合計の計算
-  const totalTaxAmount = byRate.reduce((sum, { taxAmount }) => sum + taxAmount, 0)
-  const totalTaxableAmount = byRate.reduce((sum, { taxableAmount }) => sum + taxableAmount, 0)
-
-  return { byRate, totalTaxAmount, totalTaxableAmount }
+  return {
+    byRate,
+    totalTaxableAmount,
+    totalTaxAmount
+  }
 }
 
 // メモ化されたフック
 export const useTaxCalculation = (items: TaxableItem[]) => {
-  return useMemo(() => calculateTaxByRate(items), [items])
+  return useMemo(() => calculateTaxSummary(items), [items])
 }
 
 /**

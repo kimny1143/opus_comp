@@ -1,11 +1,11 @@
-import { OrderStatus } from '@/types/order-status';
+import { PurchaseOrderStatus } from '@prisma/client';
 import { StatusHistory } from '@/types/status-history';
 import { StatusIndicator } from '@/components/status/StatusIndicator';
 import { TimelineView } from '@/components/status/TimelineView';
 
 interface ProgressTrackerProps {
   orderId: string;
-  currentStatus: OrderStatus;
+  currentStatus: PurchaseOrderStatus;
   history: StatusHistory[];
 }
 

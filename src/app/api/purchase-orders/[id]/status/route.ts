@@ -25,7 +25,7 @@ export const POST = async (
       return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
     }
 
-    const resolvedParams = await Promise.resolve(context.params)
+    const resolvedParams = await Promise.resolve((await context.params))
     const { id } = resolvedParams
 
     const data = await request.json()
@@ -83,20 +83,20 @@ export const POST = async (
       })
 
       // メール通知
-      if (purchaseOrder.vendor.email) {
+      if (purchaseOrder.vendor?.email && purchaseOrder.vendor?.name) {
         try {
           await sendEmail(
             purchaseOrder.vendor.email,
-            'purchaseOrderStatusUpdated',
+            'statusUpdated',
             {
-              purchaseOrder,
-              oldStatus,
-              newStatus: status
+              documentNumber: purchaseOrder.orderNumber,
+              vendorName: purchaseOrder.vendor.name,
+              status
             }
-          )
-        } catch (emailError) {
-          console.error('メール送信エラー:', emailError)
-          // メール送信エラーは処理を中断しない
+          );
+        } catch (error) {
+          console.error('Failed to send status update email:', error);
+          // メール送信失敗は全体の処理を失敗とはしない
         }
       }
 

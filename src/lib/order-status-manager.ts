@@ -1,21 +1,36 @@
-import { OrderStatus, StatusTransition } from '@/types/order-status';
+import { PurchaseOrderStatus } from '@prisma/client';
+import { StatusTransition } from '@/types/order-status';
 
 export class OrderStatusManager {
   private static readonly ALLOWED_TRANSITIONS: StatusTransition[] = [
     {
-      from: OrderStatus.DRAFT,
-      to: OrderStatus.PENDING,
+      from: 'DRAFT',
+      to: 'PENDING',
       requiredRole: ['CREATOR', 'MANAGER']
     },
     {
-      from: OrderStatus.PENDING,
-      to: OrderStatus.IN_PROGRESS,
+      from: 'PENDING',
+      to: 'SENT',
       requiredRole: ['MANAGER', 'ADMIN']
     },
-    // その他の遷移ルール...
+    {
+      from: 'SENT',
+      to: 'COMPLETED',
+      requiredRole: ['MANAGER', 'ADMIN']
+    },
+    {
+      from: 'PENDING',
+      to: 'REJECTED',
+      requiredRole: ['MANAGER', 'ADMIN']
+    },
+    {
+      from: 'REJECTED',
+      to: 'DRAFT',
+      requiredRole: ['CREATOR', 'MANAGER']
+    }
   ];
 
-  static canTransition(from: OrderStatus, to: OrderStatus, userRole: string): boolean {
+  static canTransition(from: PurchaseOrderStatus, to: PurchaseOrderStatus, userRole: string): boolean {
     const transition = this.ALLOWED_TRANSITIONS.find(
       t => t.from === from && t.to === to
     );

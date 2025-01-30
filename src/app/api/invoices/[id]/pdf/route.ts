@@ -7,7 +7,7 @@ import { generateInvoiceHtml } from '@/lib/invoice-generator'
 import puppeteer from 'puppeteer'
 
 interface RouteContext {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 interface BankInfo {
@@ -33,7 +33,7 @@ export async function POST(
 
     // 請求書データの取得
     const invoice = await prisma.invoice.findUnique({
-      where: { id: context.params.id },
+      where: { id: (await context.params).id },
       include: {
         items: true,
         vendor: true,

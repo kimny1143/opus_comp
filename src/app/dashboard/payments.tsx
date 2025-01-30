@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
-import { Invoice, InvoiceStatus, InvoiceStatusDisplay } from '@/types/invoice';
-import { Vendor, Prisma } from '@prisma/client';
+import { Invoice } from '@/types/invoice';
+import { Vendor, Prisma, InvoiceStatus } from '@prisma/client';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { RegisterPaymentModal } from '@/components/RegisterPaymentModal';
 import { PaymentData } from '@/components/RegisterPaymentModal';
 import { PaymentMethod } from '@prisma/client';
 import { generatePaymentHistoryCSV, downloadCSV } from '@/lib/export/payment-history';
+import { InvoiceStatusDisplay } from '@/types/enums';
 
 interface ExtendedInvoice extends Omit<Invoice, 'vendor'> {
   vendor: Pick<Vendor, 'name' | 'email'>;

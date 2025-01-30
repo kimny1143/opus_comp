@@ -1,193 +1,193 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { useState, useMemo } from 'react'
-import { FieldErrors } from 'react-hook-form'
-import { BaseForm } from '@/components/shared/forms/BaseForm'
-import { TextField } from '@/components/shared/forms/TextField'
-import { SelectField } from '@/components/shared/forms/SelectField'
-import {
-  vendorSchema,
-  VENDOR_CATEGORY_LABELS,
-  FIELD_LABELS,
-  VendorFormData,
-  VendorCategory,
-  CorporationVendor,
-  IndividualVendor,
-  Tag
-} from './schemas'
-
-// タグ入力用のコンポーネントを追加予定
-import { TagInput } from '@/components/shared/forms/TagInput'
-
-const VENDOR_CATEGORIES = Object.entries(VENDOR_CATEGORY_LABELS).map(([value, label]) => ({
-  value,
-  label
-}))
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { 
+  vendorSchema, 
+  type VendorFormData,
+  VENDOR_CATEGORY_OPTIONS,
+  VENDOR_STATUS_OPTIONS
+} from './schemas/vendorSchema'
+import { BaseFormWrapper } from '@/components/shared/form/BaseFormWrapper'
+import { InputField } from '@/components/shared/form/InputField'
+import { SelectField } from '@/components/shared/form/SelectField'
+import { TagField } from '@/components/shared/form/TagField'
+import { ACCOUNT_TYPE_OPTIONS } from '@/types/bankAccount'
 
 interface VendorFormProps {
-  defaultValues?: Partial<VendorFormData>
+  id?: string
+  initialData?: Partial<VendorFormData>
+  onSubmit: (data: VendorFormData) => Promise<void>
+  isSubmitting?: boolean
+  onCancel?: () => void
+  readOnly?: boolean
 }
 
-interface FormError {
-  message?: string
-  type?: string
-}
-
-export function VendorForm({ defaultValues }: VendorFormProps) {
-  const router = useRouter()
-  const [category, setCategory] = useState<VendorCategory>(
-    defaultValues?.category ?? 'CORPORATION'
-  )
-
-  const formDefaultValues = useMemo(() => {
-    if (category === 'CORPORATION') {
-      return {
-        ...defaultValues,
-        category: 'CORPORATION' as const,
-        status: defaultValues?.status ?? 'ACTIVE',
-        tags: defaultValues?.tags ?? [],
-      } as Partial<CorporationVendor>
-    } else {
-      return {
-        ...defaultValues,
-        category: 'INDIVIDUAL' as const,
-        status: defaultValues?.status ?? 'ACTIVE',
-        tags: defaultValues?.tags ?? [],
-      } as Partial<IndividualVendor>
-    }
-  }, [defaultValues, category])
-
-  const handleSubmit = async (data: VendorFormData) => {
-    try {
-      console.log('Form data:', data)
-      const response = await fetch('/api/vendors', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        console.error('API error:', error)
-        throw new Error(error.message || '登録に失敗しました')
-      }
-
-      router.push('/vendors')
-      router.refresh()
-    } catch (error) {
-      if (error instanceof Error) {
-        console.error('Submit error:', error)
-        alert(error.message)
-      }
-      console.error('Error:', error)
-    }
+export function VendorForm({
+  id,
+  initialData,
+  onSubmit,
+  isSubmitting = false,
+  onCancel,
+  readOnly = false
+}: VendorFormProps) {
+  const defaultValues: VendorFormData = {
+    name: '',
+    category: 'CORPORATION',
+    status: 'ACTIVE',
+    email: '',
+    phone: '',
+    address: '',
+    bankInfo: {
+      bankName: '',
+      branchName: '',
+      accountType: 'ORDINARY',
+      accountNumber: '',
+      accountHolder: ''
+    },
+    notes: '',
+    tags: [],
+    ...initialData
   }
 
+  const form = useForm<VendorFormData>({
+    resolver: zodResolver(vendorSchema),
+    defaultValues
+  })
+
   return (
-    <BaseForm
-      schema={vendorSchema}
-      defaultValues={formDefaultValues}
-      onSubmit={handleSubmit}
-      onCancel={() => router.back()}
+    <BaseFormWrapper
+      form={form}
+      onSubmit={onSubmit}
+      isSubmitting={isSubmitting}
+      onCancel={onCancel}
     >
-      {({ register, watch, setValue, errors }) => {
-        const currentCategory = watch('category') as VendorCategory
-        const formErrors = errors as {
-          [K in keyof VendorFormData]?: FormError
-        }
-
-        return (
-          <>
+      <div className="space-y-6">
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">基本情報</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <SelectField
-              label="区分"
+              name="category"
+              label="取引先区分"
+              control={form.control}
+              options={VENDOR_CATEGORY_OPTIONS}
               required
-              options={VENDOR_CATEGORIES}
-              error={formErrors.category}
-              {...register('category')}
-              onChange={(e) => {
-                register('category').onChange(e)
-                setCategory(e.target.value as VendorCategory)
-              }}
+              disabled={readOnly}
             />
 
-            <TextField
-              label={FIELD_LABELS[currentCategory].name}
+            <SelectField
+              name="status"
+              label="ステータス"
+              control={form.control}
+              options={VENDOR_STATUS_OPTIONS}
               required
-              error={formErrors.name}
-              {...register('name')}
+              disabled={readOnly}
             />
 
-            {currentCategory === 'INDIVIDUAL' && (
-              <TextField
-                label={FIELD_LABELS[currentCategory].tradingName}
-                error={formErrors.tradingName}
-                {...register('tradingName')}
-              />
-            )}
-
-            <TextField
-              label={FIELD_LABELS[currentCategory].code}
-              error={formErrors.code}
-              {...register('code')}
+            <InputField
+              name="name"
+              label="取引先名"
+              control={form.control}
+              placeholder="例: 株式会社〇〇"
+              required
+              disabled={readOnly}
             />
 
-            <TextField
-              label={FIELD_LABELS[currentCategory].registrationNumber}
-              error={formErrors.registrationNumber}
-              {...register('registrationNumber')}
+            <InputField
+              name="email"
+              label="メールアドレス"
+              control={form.control}
+              placeholder="例: contact@example.com"
+              disabled={readOnly}
             />
 
-            {currentCategory === 'CORPORATION' && (
-              <TextField
-                label={FIELD_LABELS[currentCategory].contactPerson}
-                error={formErrors.contactPerson}
-                {...register('contactPerson')}
-              />
-            )}
-
-            <TextField
-              label={FIELD_LABELS[currentCategory].email}
-              type="email"
-              error={formErrors.email}
-              {...register('email')}
+            <InputField
+              name="phone"
+              label="電話番号"
+              control={form.control}
+              placeholder="例: 03-1234-5678"
+              disabled={readOnly}
             />
 
-            <TextField
-              label={FIELD_LABELS[currentCategory].phone}
-              type="tel"
-              error={formErrors.phone}
-              {...register('phone')}
+            <InputField
+              name="address"
+              label="住所"
+              control={form.control}
+              placeholder="例: 東京都千代田区..."
+              required
+              disabled={readOnly}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">銀行情報</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InputField
+              name="bankInfo.bankName"
+              label="銀行名"
+              control={form.control}
+              placeholder="例: 〇〇銀行"
+              required
+              disabled={readOnly}
             />
 
-            <TagInput
-              label={FIELD_LABELS[currentCategory].tags}
-              error={formErrors.tags}
-              value={watch('tags')}
-              onChange={(tags) => setValue('tags', tags)}
-              onBlur={(e) => register('tags').onBlur(e)}
+            <InputField
+              name="bankInfo.branchName"
+              label="支店名"
+              control={form.control}
+              placeholder="例: 〇〇支店"
+              required
+              disabled={readOnly}
             />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                {FIELD_LABELS[currentCategory].address}
-              </label>
-              <textarea
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                rows={3}
-                {...register('address')}
-              />
-              {formErrors.address && (
-                <p className="mt-1 text-sm text-red-600">
-                  {formErrors.address.message}
-                </p>
-              )}
-            </div>
-          </>
-        )
-      }}
-    </BaseForm>
+            <SelectField
+              name="bankInfo.accountType"
+              label="口座種別"
+              control={form.control}
+              options={ACCOUNT_TYPE_OPTIONS}
+              required
+              disabled={readOnly}
+            />
+
+            <InputField
+              name="bankInfo.accountNumber"
+              label="口座番号"
+              control={form.control}
+              placeholder="例: 1234567"
+              required
+              disabled={readOnly}
+            />
+
+            <InputField
+              name="bankInfo.accountHolder"
+              label="口座名義"
+              control={form.control}
+              placeholder="例: カブシキガイシャ〇〇"
+              required
+              disabled={readOnly}
+              className="col-span-2"
+            />
+          </div>
+        </div>
+
+        <TagField
+          name="tags"
+          label="タグ"
+          control={form.control}
+          entityType="vendor"
+          entityId={id || ''}
+          readOnly={readOnly}
+        />
+
+        <InputField
+          name="notes"
+          label="備考"
+          control={form.control}
+          placeholder="備考を入力"
+          disabled={readOnly}
+        />
+      </div>
+    </BaseFormWrapper>
   )
 } 

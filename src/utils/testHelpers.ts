@@ -132,4 +132,109 @@ export const waitForResponseWithRetry = async (
     maxRetries,
     delayMs
   );
-}; 
+};
+
+/**
+ * 認証プロセスを待機する関数（リトライ付き）
+ * @param page - Playwrightのページオブジェクト
+ * @param options - 待機オプション
+ */
+export const waitForAuthentication = async (
+  page: Page,
+  options: {
+    timeout?: number;
+    maxRetries?: number;
+    delayMs?: number;
+  } = {}
+): Promise<void> => {
+  const {
+    timeout = 10000,
+    maxRetries = 5,
+    delayMs = 2000
+  } = options;
+
+  await withRetry(
+    async () => {
+      // セッションクッキーの確認
+      const cookies = await page.context().cookies();
+      const sessionCookie = cookies.find(c => 
+        c.name.includes('next-auth.session-token')
+      );
+
+      if (!sessionCookie) {
+        console.log('セッションクッキーチェック:', {
+          allCookies: cookies.map(c => ({
+            name: c.name,
+            domain: c.domain,
+            path: c.path
+          })),
+          timestamp: new Date().toISOString()
+        });
+        throw new Error('セッションクッキーが見つかりません');
+      }
+
+      // ダッシュボードへのリダイレクトを確認
+      const currentUrl = page.url();
+      if (!currentUrl.includes('/dashboard')) {
+        throw new Error(`予期しないURL: ${currentUrl}`);
+      }
+
+      console.log('認証成功:', {
+        url: currentUrl,
+        sessionCookie: {
+          name: sessionCookie.name,
+          domain: sessionCookie.domain,
+          path: sessionCookie.path,
+          secure: sessionCookie.secure,
+          httpOnly: sessionCookie.httpOnly
+        },
+        timestamp: new Date().toISOString()
+      });
+    },
+    maxRetries,
+    delayMs
+  );
+};
+
+/**
+ * 認証エラー状態をキャプチャする関数
+ * @param page - Playwrightのページオブジェクト
+ * @param error - エラーオブジェクト
+ */
+export const captureAuthError = async (
+  page: Page,
+  error: unknown
+): Promise<void> => {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const errorMessage = error instanceof Error ? error.message : String(error);
+
+  // スクリーンショットの保存
+  await page.screenshot({
+    path: `test-results/auth-error-${timestamp}.png`,
+    fullPage: true
+  });
+
+  // クッキー情報の記録
+  const cookies = await page.context().cookies();
+  console.error('認証エラー:', {
+    message: errorMessage,
+    url: page.url(),
+    cookies: cookies.map(c => ({
+      name: c.name,
+      domain: c.domain,
+      path: c.path
+    })),
+    timestamp: new Date().toISOString()
+  });
+
+  // ブラウザコンソールログの取得
+  const consoleLogs = await page.evaluate(() => {
+    // @ts-ignore
+    return window.consoleLog || [];
+  });
+  
+  console.error('ブラウザコンソールログ:', {
+    logs: consoleLogs,
+    timestamp: new Date().toISOString()
+  });
+};

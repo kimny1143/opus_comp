@@ -3,7 +3,8 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 import { prisma } from '@/lib/prisma'
 import { handleApiError, createApiResponse } from '@/lib/api-utils'
-import { VendorStatus, BULK_OPERATION_PARAMS } from '@/types/api'
+import { BULK_OPERATION_PARAMS } from '@/types/api'
+import { VendorStatus } from '@prisma/client'
 import { z } from 'zod'
 import { Prisma, PurchaseOrder } from '@prisma/client'
 
@@ -56,11 +57,11 @@ type VendorWithPurchaseOrders = {
 }
 
 // POST: 一括操作
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
-      return NextResponse.json(
+      return Response.json(
         { success: false, error: '認証が必要です' },
         { status: 401 }
       )
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     // 一括操作の上限チェック
     if (validatedData.vendorIds.length > BULK_OPERATION_PARAMS.BULK_OPERATION_LIMIT) {
-      return NextResponse.json(
+      return Response.json(
         { 
           success: false,
           error: `一度に処理できる取引先は${BULK_OPERATION_PARAMS.BULK_OPERATION_LIMIT}件までです`
@@ -97,7 +98,7 @@ export async function POST(request: NextRequest) {
     }) as VendorWithPurchaseOrders[]
 
     if (vendors.length !== validatedData.vendorIds.length) {
-      return NextResponse.json(
+      return Response.json(
         { success: false, error: '操作権限がない取引先が含まれています' },
         { status: 403 }
       )
@@ -112,7 +113,7 @@ export async function POST(request: NextRequest) {
           )
         )
         if (activeVendors.length > 0) {
-          return NextResponse.json({
+          return Response.json({
             success: false,
             error: 'アクティブな取引がある取引先は削除できません',
             vendorIds: activeVendors.map(v => v.id)
@@ -126,14 +127,14 @@ export async function POST(request: NextRequest) {
           })
         ])
 
-        return createApiResponse({
+        return Response.json(createApiResponse({
           message: '一括削除が完了しました',
           deletedCount: validatedData.vendorIds.length
-        })
+        }))
 
       case 'updateStatus':
         if (!validatedData.status) {
-          return NextResponse.json({
+          return Response.json({
             success: false,
             error: '更新後のステータスが指定されていません'
           }, { status: 400 })
@@ -171,13 +172,13 @@ export async function POST(request: NextRequest) {
           })
         )
 
-        return createApiResponse({
+        return Response.json(createApiResponse({
           message: 'ステータス更新が完了しました',
           results
-        })
+        }))
 
       default:
-        return NextResponse.json(
+        return Response.json(
           { success: false, error: '不正な操作です' },
           { status: 400 }
         )

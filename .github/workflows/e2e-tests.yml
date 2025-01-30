@@ -1,0 +1,46 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18.x"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Cypress
+        run: npm install cypress
+
+      - name: Run E2E tests
+        uses: cypress-io/github-action@v6
+        with:
+          browser: chrome
+          record: false
+          config-file: cypress.config.ts
+          wait-on: "http://localhost:3000"
+          start: npm run dev
+
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: e2e-test-results
+          path: |
+            dev_docs/e2e_results/screenshots
+            dev_docs/e2e_results/videos
+            dev_docs/e2e_results/downloads
+          retention-days: 14

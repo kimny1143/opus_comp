@@ -26,7 +26,7 @@ export default async function EditPurchaseOrderLayout({
     }
   })
 
-  const headersList = headers()
+  const headersList = await headers()
   
   return (
     <div>

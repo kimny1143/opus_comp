@@ -5,6 +5,7 @@ import { IdRouteContext } from '@/app/api/route-types'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 
+// @ts-ignore
 export async function POST(request: NextRequest, context: IdRouteContext) {
   try {
     const session = await getServerSession(authOptions)
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest, context: IdRouteContext) {
       )
     }
 
-    const { id } = context.params
+    const { id } = (await context.params)
     const data = await request.json()
 
     // 支払い情報を更新

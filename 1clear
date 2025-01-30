@@ -1,0 +1,84 @@
+[1A[2K[1A[2K[firefox] › invoice-flow.test.ts:330:3 › 請求書管理フロー › 請求書の作成から支払いまでの基本フロー
+テストユーザー作成中にエラーが発生: PrismaClientKnownRequestError: 
+Invalid `prisma.user.create()` invocation in
+/Volumes/strage/opus_localdev/opus_comp/src/test/helpers/mockData.ts:29:34
+
+  26 });
+  27 
+  28 // 新しいユーザーを作成
+→ 29 const user = await prisma.user.create(
+Unique constraint failed on the fields: (`email`)
+    at qn.handleRequestError [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4m@prisma[24m/client/runtime/library.js:121:7315[90m)[39m
+    at qn.handleAndLogRequestError [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4m@prisma[24m/client/runtime/library.js:121:6640[90m)[39m
+    at qn.request [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4m@prisma[24m/client/runtime/library.js:121:6347[90m)[39m
+    at l [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4m@prisma[24m/client/runtime/library.js:130:9616[90m)[39m
+    at createTestUser [90m(/Volumes/strage/opus_localdev/opus_comp/[39msrc/test/helpers/mockData.ts:29:16[90m)[39m
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39msrc/e2e/invoice-flow.test.ts:102:20
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:250:7
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:286:11
+    at TimeoutManager.withRunnable [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:64:14[90m)[39m
+    at TestInfoImpl._runAsStage [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:284:7[90m)[39m
+    at FixtureRunner.resolveParametersAndRunFunction [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:246:5[90m)[39m
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:535:13
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:286:11
+    at TimeoutManager.withRunnable [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:52:27[90m)[39m
+    at TestInfoImpl._runAsStage [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:284:7[90m)[39m
+    at WorkerMain._runAllHooksForSuite [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:516:9[90m)[39m
+    at WorkerMain._runBeforeAllHooksForSuite [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:509:5[90m)[39m
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:316:37
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:286:11
+    at TimeoutManager.withRunnable [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:52:27[90m)[39m
+    at TestInfoImpl._runAsStage [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:284:7[90m)[39m
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:309:7
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:286:11
+    at TimeoutManager.withRunnable [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:52:27[90m)[39m
+    at TestInfoImpl._runAsStage [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:284:7[90m)[39m
+    at WorkerMain._run[firefox] › invoice-flow.test.ts:330:3 › 請求書管理フロー › 請求書の作成から支払いまでの基本フロー
+テストユーザー作成中にエラーが発生: PrismaClientKnownRequestError: 
+Invalid `prisma.user.create()` invocation in
+/Volumes/strage/opus_localdev/opus_comp/src/test/helpers/mockData.ts:29:34
+
+  26 });
+  27 
+  28 // 新しいユーザーを作成
+→ 29 const user = await prisma.user.create(
+Unique constraint failed on the fields: (`email`)
+    at qn.handleRequestError [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4m@prisma[24m/client/runtime/library.js:121:7315[90m)[39m
+    at qn.handleAndLogRequestError [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4m@prisma[24m/client/runtime/library.js:121:6640[90m)[39m
+    at qn.request [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4m@prisma[24m/client/runtime/library.js:121:6347[90m)[39m
+    at l [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4m@prisma[24m/client/runtime/library.js:130:9616[90m)[39m
+    at createTestUser [90m(/Volumes/strage/opus_localdev/opus_comp/[39msrc/test/helpers/mockData.ts:29:16[90m)[39m
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39msrc/e2e/invoice-flow.test.ts:102:20
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:250:7
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:286:11
+    at TimeoutManager.withRunnable [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:64:14[90m)[39m
+    at TestInfoImpl._runAsStage [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:284:7[90m)[39m
+    at FixtureRunner.resolveParametersAndRunFunction [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/fixtureRunner.js:246:5[90m)[39m
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:535:13
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:286:11
+    at TimeoutManager.withRunnable [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:52:27[90m)[39m
+    at TestInfoImpl._runAsStage [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:284:7[90m)[39m
+    at WorkerMain._runAllHooksForSuite [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:516:9[90m)[39m
+    at WorkerMain._runBeforeAllHooksForSuite [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:509:5[90m)[39m
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:316:37
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:286:11
+    at TimeoutManager.withRunnable [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:52:27[90m)[39m
+    at TestInfoImpl._runAsStage [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:284:7[90m)[39m
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:309:7
+    at [90m/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:286:11
+    at TimeoutManager.withRunnable [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:52:27[90m)[39m
+    at TestInfoImpl._runAsStage [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:284:7[90m)[39m
+    at WorkerMain._runTest [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:281:5[90m)[39m
+    at WorkerMain.runTestGroup [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:205:11[90m)[39m
+    at process.<anonymous> [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/common/process.js:95:22[90m)[39m {
+  code: [32m'P2002'[39m,
+  clientVersion: [32m'6.1.0'[39m,
+  meta: { modelName: [32m'User'[39m, target: [ [32m'email'[39m ] }
+}
+Test [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:281:5[90m)[39m
+    at WorkerMain.runTestGroup [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:205:11[90m)[39m
+    at process.<anonymous> [90m(/Volumes/strage/opus_localdev/opus_comp/[39mnode_modules/[4mplaywright[24m/lib/common/process.js:95:22[90m)[39m {
+  code: [32m'P2002'[39m,
+  clientVersion: [32m'6.1.0'[39m,
+  meta: { modelName: [32m'User'[39m, target: [ [32m'email'[39m ] }
+}

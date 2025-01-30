@@ -29,7 +29,7 @@ export const EditTemplateModal: React.FC<Props> = ({ isOpen, onClose, onSave, te
   };
 
   const handleAddItem = () => {
-    setItems([...items, { name: '', quantity: 1, unitPrice: 0 }]);
+    setItems([...items, { itemName: '', quantity: 1, unitPrice: 1, taxRate: 10, description: '' }]);
   };
 
   const handleRemoveItem = (index: number) => {
@@ -87,8 +87,8 @@ export const EditTemplateModal: React.FC<Props> = ({ isOpen, onClose, onSave, te
                     <label className="block mb-1">品名</label>
                     <input
                       type="text"
-                      value={item.name}
-                      onChange={(e) => handleItemChange(index, 'name', e.target.value)}
+                      value={item.itemName}
+                      onChange={(e) => handleItemChange(index, 'itemName', e.target.value)}
                       className="w-full border rounded-md p-2"
                       required
                     />
@@ -111,7 +111,7 @@ export const EditTemplateModal: React.FC<Props> = ({ isOpen, onClose, onSave, te
                       value={item.unitPrice}
                       onChange={(e) => handleItemChange(index, 'unitPrice', parseInt(e.target.value))}
                       className="w-full border rounded-md p-2"
-                      min="0"
+                      min="1"
                       required
                     />
                   </div>

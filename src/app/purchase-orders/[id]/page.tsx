@@ -4,11 +4,12 @@ import { notFound } from 'next/navigation'
 import { PurchaseOrderStatus } from '@prisma/client'
 
 interface Props {
-  params: Promise<{ id: string }> | { id: string }
-  searchParams?: { [key: string]: string | string[] | undefined }
+  params: Promise<Promise<{ id: string }> | { id: string }>
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
-export default async function PurchaseOrderPage({ params }: Props) {
+export default async function PurchaseOrderPage(props: Props) {
+  const params = await props.params;
   const resolvedParams = await Promise.resolve(params)
   const { id } = resolvedParams
 

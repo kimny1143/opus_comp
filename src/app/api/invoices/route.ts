@@ -5,37 +5,18 @@ import { prisma } from '@/lib/prisma'
 import { handleApiError } from '@/lib/api-utils'
 import { Prisma, InvoiceStatus } from '@prisma/client'
 import { serializeDecimal } from '@/lib/utils/decimal-serializer'
-
-interface InvoiceItem {
-  itemName: string;
-  quantity: number;
-  unitPrice: number;
-  taxRate: number;
-  description?: string;
-}
-
-interface ProcessedInvoiceItem {
-  itemName: string;
-  description: string | null;
-  quantity: number;
-  unitPrice: number;
-  taxRate: number;
-}
-
-interface CreateInvoiceData {
-  purchaseOrderId: string;
-  vendorId: string;
-  issueDate?: string;
-  dueDate?: string;
-  items: InvoiceItem[];
-}
+import { validationMessages } from '@/lib/validations/messages'
+import { invoiceCreateSchema, type InvoiceCreateInput } from './validation'
 
 // GET: 請求書一覧の取得
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
-      return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
+      return NextResponse.json(
+        { error: validationMessages.auth.required },
+        { status: 401 }
+      )
     }
 
     const { searchParams } = new URL(request.url)
@@ -44,12 +25,11 @@ export async function GET(request: NextRequest) {
     const statusParam = searchParams.get('status')
     const purchaseOrderId = searchParams.get('purchaseOrderId')
 
-    // statusParam を InvoiceStatus 型にキャスト
-    const status = statusParam as InvoiceStatus | undefined;
-    const validStatus = status && Object.values(InvoiceStatus).includes(status) ? status : undefined;
+    const status = statusParam as InvoiceStatus | undefined
+    const validStatus = status && Object.values(InvoiceStatus).includes(status) ? status : undefined
 
     const where: Prisma.InvoiceWhereInput = {
-      ...(status && { status }),
+      ...(validStatus && { status: validStatus }),
       ...(purchaseOrderId && { purchaseOrderId }),
     }
 
@@ -71,28 +51,59 @@ export async function GET(request: NextRequest) {
       prisma.invoice.count({ where }),
       prisma.invoice.findMany({
         where,
-        include: {
-          template: {
-            include: {
-              templateItems: true
+        select: {
+          id: true,
+          invoiceNumber: true,
+          issueDate: true,
+          dueDate: true,
+          status: true,
+          totalAmount: true,
+          createdAt: true,
+          updatedAt: true,
+          vendor: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              registrationNumber: true
+            }
+          },
+          items: {
+            select: {
+              id: true,
+              itemName: true,
+              quantity: true,
+              unitPrice: true,
+              taxRate: true,
+              description: true
             }
           },
           purchaseOrder: {
-            include: {
-              vendor: true
-            }
-          },
-          items: true,
-          vendor: true,
-          statusHistory: {
-            include: {
-              user: {
+            select: {
+              id: true,
+              orderNumber: true,
+              status: true,
+              vendor: {
                 select: {
-                  name: true
+                  id: true,
+                  name: true,
+                  address: true
                 }
               }
             }
-          }
+          },
+          template: {
+            select: {
+              id: true,
+              bankInfo: true,
+              contractorName: true,
+              contractorAddress: true,
+              registrationNumber: true,
+              paymentTerms: true
+            }
+          },
+          bankInfo: true,
+          notes: true
         },
         orderBy: {
           createdAt: 'desc'
@@ -102,14 +113,23 @@ export async function GET(request: NextRequest) {
       })
     ])
 
+    // 日付を適切にフォーマット
+    const formattedInvoices = invoices.map(invoice => ({
+      ...invoice,
+      issueDate: invoice.issueDate?.toISOString(),
+      dueDate: invoice.dueDate?.toISOString(),
+      createdAt: invoice.createdAt.toISOString(),
+      updatedAt: invoice.updatedAt.toISOString()
+    }))
+
     // レスポンスデータをシリアライズ
-    const serializedInvoices = serializeDecimal(invoices);
+    const serializedInvoices = serializeDecimal(formattedInvoices)
     
     return NextResponse.json({
       success: true,
       data: {
         invoices: serializedInvoices,
-        completedPurchaseOrders,
+        completedPurchaseOrders: serializeDecimal(completedPurchaseOrders),
         metadata: {
           total,
           page,
@@ -127,157 +147,100 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
-      return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
+      return NextResponse.json(
+        { error: validationMessages.auth.required },
+        { status: 401 }
+      )
     }
 
-    console.log('リクエストの処理を開始')
-    const rawData = await request.text()
-    console.log('受信したデータ:', rawData)
+    const data = await request.json()
 
-    let data: CreateInvoiceData
-    try {
-      data = JSON.parse(rawData)
-    } catch (parseError) {
-      console.error('JSONパースエラー:', parseError)
-      return NextResponse.json({ 
-        success: false, 
-        error: 'リクエストデータのパースに失敗しました' 
-      }, { status: 400 })
+    // バリデーション
+    const validationResult = invoiceCreateSchema.safeParse(data)
+    if (!validationResult.success) {
+      console.error('バリデーションエラー:', validationResult.error)
+      return NextResponse.json(
+        { 
+          error: validationMessages.validation.invalid,
+          details: validationResult.error.errors 
+        },
+        { status: 400 }
+      )
     }
 
-    // データのバリデーション
-    if (!data || typeof data !== 'object') {
-      console.error('不正なデータ形式:', data)
-      return NextResponse.json({ 
-        success: false, 
-        error: 'リクエストデータが不正です' 
-      }, { status: 400 })
-    }
-
-    if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
-      return NextResponse.json({ 
-        success: false, 
-        error: '請求書の項目が必要です' 
-      }, { status: 400 })
-    }
-
-    if (!data.purchaseOrderId || typeof data.purchaseOrderId !== 'string') {
-      return NextResponse.json({ 
-        success: false, 
-        error: '発注書IDが必要です' 
-      }, { status: 400 })
-    }
-
-    if (!data.vendorId || typeof data.vendorId !== 'string') {
-      return NextResponse.json({ 
-        success: false, 
-        error: '取引先IDが必要です' 
-      }, { status: 400 })
-    }
-
-    // 数値型の変換とバリデーション
-    const items: ProcessedInvoiceItem[] = data.items.map((item: InvoiceItem, index: number) => {
-      if (!item.itemName || typeof item.itemName !== 'string') {
-        throw new Error(`項目${index + 1}の商品名が不正です`)
-      }
-
-      const quantity = Number(item.quantity)
-      const unitPrice = Number(item.unitPrice)
-      const taxRate = Number(item.taxRate)
-
-      if (isNaN(quantity) || quantity <= 0) {
-        throw new Error(`項目${index + 1}の数量が不正です`)
-      }
-      if (isNaN(unitPrice) || unitPrice < 0) {
-        throw new Error(`項目${index + 1}の単価が不正です`)
-      }
-      if (isNaN(taxRate) || taxRate < 0) {
-        throw new Error(`項目${index + 1}の税率が不正です`)
-      }
-
-      return {
-        itemName: item.itemName,
-        description: item.description || null,
-        quantity,
-        unitPrice,
-        taxRate: taxRate / 100, // 10を0.1に変換
-      }
-    })
+    const {
+      items,
+      tags = [],
+      bankInfo,
+      vendorId,
+      purchaseOrderId,
+      issueDate,
+      dueDate,
+      status,
+      ...restData
+    } = validationResult.data
 
     // 合計金額の計算
-    const totalAmount = items.reduce((sum: number, item: ProcessedInvoiceItem) => {
-      return sum + (item.quantity * item.unitPrice * (1 + item.taxRate))
+    const totalAmount = items.reduce((sum, item) => {
+      const amount = item.quantity * item.unitPrice * (1 + item.taxRate)
+      return sum + amount
     }, 0)
 
-    // 請求書の作成
-    const createData = {
-      purchaseOrderId: data.purchaseOrderId,
-      vendorId: data.vendorId,
-      status: 'DRAFT' as const,
-      issueDate: data.issueDate ? new Date(data.issueDate) : new Date(),
-      dueDate: data.dueDate ? new Date(data.dueDate) : new Date(),
-      createdById: session.user.id,
-      updatedById: session.user.id,
-      totalAmount,
-      templateId: null,
+    // Prismaのスキーマに合わせてデータを整形
+    const createData: Prisma.InvoiceCreateInput = {
+      ...restData,
+      issueDate,
+      dueDate,
+      status,
+      bankInfo: bankInfo as Prisma.JsonValue,
+      totalAmount: new Prisma.Decimal(totalAmount),
       invoiceNumber: `INV-${new Date().getTime()}`,
-      bankInfo: Prisma.JsonNull,
+      createdBy: {
+        connect: { id: session.user.id }
+      },
+      updatedBy: {
+        connect: { id: session.user.id }
+      },
+      vendor: {
+        connect: { id: vendorId }
+      },
+      purchaseOrder: {
+        connect: { id: purchaseOrderId }
+      },
       items: {
-        create: items
+        create: items.map(item => ({
+          itemName: item.itemName,
+          quantity: item.quantity,
+          unitPrice: new Prisma.Decimal(item.unitPrice),
+          taxRate: new Prisma.Decimal(item.taxRate),
+          description: item.description || null
+        }))
+      },
+      tags: {
+        create: tags.map(tag => ({ name: tag.name }))
       }
-    } satisfies Prisma.InvoiceUncheckedCreateInput
-
-    console.log('作成するデータ:', createData)
+    }
 
     const invoice = await prisma.invoice.create({
       data: createData,
       include: {
-        template: {
-          include: {
-            templateItems: true
-          }
-        },
+        vendor: true,
+        items: true,
+        tags: true,
         purchaseOrder: {
           include: {
             vendor: true
-          }
-        },
-        items: true,
-        vendor: true,
-        statusHistory: {
-          include: {
-            user: {
-              select: {
-                name: true
-              }
-            }
           }
         }
       }
     })
 
-    // レスポンスデータをシリアライズ
-    const serializedInvoice = serializeDecimal(invoice);
-
     return NextResponse.json({ 
       success: true, 
-      data: serializedInvoice 
+      data: serializeDecimal(invoice)
     })
 
   } catch (error) {
-    // エラーオブジェクトを文字列に変換して出力
-    const errorDetail = error instanceof Error ? error.message : String(error)
-    console.log('Invoice creation error:', errorDetail)
-    
-    const errorMessage = error instanceof Error ? error.message : '請求書の作成に失敗しました'
-    return NextResponse.json({ 
-      success: false, 
-      error: errorMessage
-    }, { 
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
+    return handleApiError(error)
   }
 }

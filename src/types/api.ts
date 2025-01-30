@@ -1,4 +1,6 @@
-import { InvoiceStatus, VendorStatus } from './enums'
+import type { InvoiceStatus, VendorStatus } from './enums'
+
+export type { VendorStatus, InvoiceStatus }
 
 // 一括操作の入力型
 export interface BulkActionBase {

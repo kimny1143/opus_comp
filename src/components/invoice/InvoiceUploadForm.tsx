@@ -7,18 +7,15 @@ import { BaseFormWrapper } from '@/components/shared/form/BaseFormWrapper'
 import { DateField } from '@/components/shared/form/DateField'
 import { useToast } from '@/components/ui/toast/use-toast'
 import { InvoiceItemsForm } from './InvoiceItemsForm'
-import {
-  commonSchemas,
-  dateValidation,
-  type Item
-} from '@/types/validation/commonValidation'
+import { itemSchema } from '@/types/validation/item'
+import { dateValidation } from '@/types/validation/commonValidation'
 
 const invoiceUploadSchema = z.object({
   purchaseOrderId: z.string().uuid('無効な発注書IDです'),
   templateId: z.string().uuid('無効なテンプレートIDです'),
   issueDate: dateValidation.required,
   dueDate: dateValidation.required,
-  items: z.array(commonSchemas.item).min(1, '品目は1つ以上必要です')
+  items: z.array(itemSchema).min(1, '品目は1つ以上必要です')
 })
 
 export type InvoiceUploadFormData = z.infer<typeof invoiceUploadSchema>
@@ -41,6 +38,7 @@ export function InvoiceUploadForm({
     resolver: zodResolver(invoiceUploadSchema),
     defaultValues: {
       purchaseOrderId,
+      templateId: '', // 必要に応じて適切な値を設定
       items: [{
         itemName: '',
         quantity: 1,
@@ -98,6 +96,7 @@ export function InvoiceUploadForm({
           control={form.control}
           register={form.register}
           errors={form.formState.errors}
+          readOnly={isSubmitting}
         />
       </div>
     </BaseFormWrapper>

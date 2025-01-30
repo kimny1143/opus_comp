@@ -81,4 +81,57 @@ test.describe('請求書フォーム', () => {
     await page.getByLabel('登録番号').fill('T1234567890123')
     await expect(page.getByText('登録番号はTで始まる13桁の数字である必要があります')).not.toBeVisible()
   })
-}) 
+})
+
+test.describe('請求書管理', () => {
+  test.use({ storageState: 'playwright/.auth/user.json' });
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/invoices');
+  });
+
+  test('請求書の作成', async ({ page }) => {
+    await page.click('text=新規作成');
+    await page.fill('input[name="invoiceNumber"]', 'INV-2024-001');
+    await page.fill('input[name="issueDate"]', '2024-03-01');
+    await page.fill('input[name="dueDate"]', '2024-03-31');
+    
+    // 明細の追加
+    await page.click('button[aria-label="明細を追加"]');
+    await page.fill('input[name="items.0.itemName"]', 'テスト商品');
+    await page.fill('input[name="items.0.quantity"]', '1');
+    await page.fill('input[name="items.0.unitPrice"]', '10000');
+    
+    await page.click('button[type="submit"]');
+    
+    // 作成完了の確認
+    await expect(page.locator('text=請求書を作成しました')).toBeVisible();
+  });
+
+  test('請求書の編集', async ({ page }) => {
+    await page.click('text=INV-2024-001');
+    await page.click('text=編集');
+    await page.fill('input[name="dueDate"]', '2024-04-30');
+    await page.click('button[type="submit"]');
+    
+    // 更新完了の確認
+    await expect(page.locator('text=請求書を更新しました')).toBeVisible();
+  });
+
+  test('請求書のステータス変更', async ({ page }) => {
+    await page.click('text=INV-2024-001');
+    await page.click('button[aria-label="ステータスを変更"]');
+    await page.click('text=支払済み');
+    
+    // ステータス変更の確認
+    await expect(page.locator('text=支払済み')).toBeVisible();
+  });
+
+  test('請求書の検索とフィルタリング', async ({ page }) => {
+    await page.fill('input[placeholder="検索"]', 'INV-2024');
+    await page.press('input[placeholder="検索"]', 'Enter');
+    
+    // 検索結果の確認
+    await expect(page.locator('text=INV-2024-001')).toBeVisible();
+  });
+}); 

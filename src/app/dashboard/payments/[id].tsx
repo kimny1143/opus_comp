@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
+import { useRouter, useParams } from 'next/navigation';
 import Layout from '@/components/Layout';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -46,23 +46,18 @@ interface PaymentData {
   notes?: string;
 }
 
-export default function InvoiceDetail() {
+export default function PaymentDetail() {
+  const params = useParams();
   const router = useRouter();
-  const { id } = router.query;
+  const paymentId = params.id as string;
   const [invoice, setInvoice] = useState<ExtendedInvoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-  useEffect(() => {
-    if (id) {
-      fetchInvoiceDetails();
-    }
-  }, [id]);
-
   const fetchInvoiceDetails = async () => {
     try {
-      const response = await fetch(`/api/invoices/${id}`);
+      const response = await fetch(`/api/invoices/${paymentId}`);
       if (!response.ok) throw new Error('請求書の取得に失敗しました');
       const data = await response.json();
       setInvoice(data);
@@ -74,9 +69,13 @@ export default function InvoiceDetail() {
     }
   };
 
+  useEffect(() => {
+    fetchInvoiceDetails();
+  }, [paymentId]);
+
   const handleRegisterPayment = async (paymentData: PaymentData) => {
     try {
-      const response = await fetch(`/api/invoices/${id}/status`, {
+      const response = await fetch(`/api/invoices/${paymentId}/status`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

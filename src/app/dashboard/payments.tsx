@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import Layout from '@/components/Layout';
-import { Invoice } from '@/types/invoice';
-import { Vendor, Prisma, InvoiceStatus } from '@prisma/client';
-import { format } from 'date-fns';
-import { ja } from 'date-fns/locale';
+import { useState, useEffect, useCallback } from 'react';
+import { InvoiceStatus } from '@prisma/client';
 import { RegisterPaymentModal } from '@/components/RegisterPaymentModal';
 import { PaymentData } from '@/components/RegisterPaymentModal';
-import { PaymentMethod } from '@prisma/client';
 import { generatePaymentHistoryCSV, downloadCSV } from '@/lib/export/payment-history';
+import Layout from '@/components/Layout';
+import { Invoice } from '@/types/invoice';
+import { Vendor, Prisma } from '@prisma/client';
+import { format } from 'date-fns';
+import { ja } from 'date-fns/locale';
+import { PaymentMethod } from '@prisma/client';
 import { InvoiceStatusDisplay } from '@/types/enums';
 
 interface ExtendedInvoice extends Omit<Invoice, 'vendor'> {
@@ -49,15 +50,7 @@ export default function PaymentsDashboard() {
   const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
   const [isBulkPaymentModalOpen, setIsBulkPaymentModalOpen] = useState(false);
 
-  useEffect(() => {
-    fetchVendors();
-  }, []);
-
-  useEffect(() => {
-    fetchInvoices();
-  }, [filterOptions]);
-
-  const fetchVendors = async () => {
+  const fetchVendors = useCallback(async () => {
     try {
       const response = await fetch('/api/vendors');
       if (!response.ok) throw new Error('取引先の取得に失敗しました');
@@ -66,9 +59,9 @@ export default function PaymentsDashboard() {
     } catch (error) {
       console.error('Error:', error);
     }
-  };
+  }, []);
 
-  const fetchInvoices = async () => {
+  const fetchInvoices = useCallback(async () => {
     try {
       const queryParams = new URLSearchParams();
       if (filterOptions.status !== 'ALL') {
@@ -95,7 +88,15 @@ export default function PaymentsDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterOptions]);
+
+  useEffect(() => {
+    fetchVendors();
+  }, [fetchVendors]);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
 
   const getStatusColor = (status: InvoiceStatus): string => {
     switch (status) {

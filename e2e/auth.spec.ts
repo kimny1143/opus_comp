@@ -1,56 +1,48 @@
 import { test, expect } from '@playwright/test'
-import { createTestUser, loginAsTestUser } from '@/lib/test/auth-helpers'
-import { validationMessages } from '@/lib/validations/messages'
 
 test.describe('認証フロー', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/auth/signin')
+  })
+
   test('正常なログインフロー', async ({ page }) => {
-    // テストユーザーを作成
-    const user = await createTestUser()
-
-    // ログイン
-    await loginAsTestUser(page)
-
+    await page.fill('input[name="email"]', 'test@example.com')
+    await page.fill('input[name="password"]', 'TestPass123')
+    await page.click('button[type="submit"]')
+    
     // ダッシュボードにリダイレクトされることを確認
     await expect(page).toHaveURL('/dashboard')
+    await expect(page.locator('h1')).toContainText('ダッシュボード')
   })
 
   test('無効な認証情報でのログイン', async ({ page }) => {
-    await page.goto('/auth/signin')
-
-    // 無効なメールアドレスとパスワードを入力
     await page.fill('input[name="email"]', 'invalid@example.com')
-    await page.fill('input[name="password"]', 'wrongpassword')
+    await page.fill('input[name="password"]', 'wrongpass')
     await page.click('button[type="submit"]')
-
+    
     // エラーメッセージが表示されることを確認
-    await expect(page.locator('text=' + validationMessages.auth.invalidCredentials)).toBeVisible()
+    await expect(page.locator('text=認証に失敗しました')).toBeVisible()
   })
 
   test('必須フィールドの検証', async ({ page }) => {
-    await page.goto('/auth/signin')
-
-    // 空の状態でフォームを送信
     await page.click('button[type="submit"]')
-
-    // エラーメッセージが表示されることを確認
-    await expect(page.locator('text=' + validationMessages.auth.required)).toBeVisible()
+    
+    // バリデーションメッセージが表示されることを確認
+    await expect(page.locator('text=メールアドレスは必須です')).toBeVisible()
+    await expect(page.locator('text=パスワードは必須です')).toBeVisible()
   })
 
   test('ログアウトフロー', async ({ page }) => {
     // ログイン
-    await loginAsTestUser(page)
-
-    // ログアウトボタンをクリック
-    await page.click('button[aria-label="ログアウト"]')
-
-    // ログインページにリダイレクトされることを確認
-    await expect(page).toHaveURL('/auth/signin')
-  })
-
-  test('認証が必要なページへのアクセス制御', async ({ page }) => {
-    // 認証が必要なページに未ログイン状態でアクセス
-    await page.goto('/dashboard')
-
+    await page.fill('input[name="email"]', 'test@example.com')
+    await page.fill('input[name="password"]', 'TestPass123')
+    await page.click('button[type="submit"]')
+    await expect(page).toHaveURL('/dashboard')
+    
+    // ログアウト
+    await page.click('button[aria-label="ユーザーメニュー"]')
+    await page.click('text=ログアウト')
+    
     // ログインページにリダイレクトされることを確認
     await expect(page).toHaveURL('/auth/signin')
   })

@@ -4,40 +4,55 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { InvoiceStatus, PurchaseOrder, Vendor } from '@prisma/client'
+import { InvoiceStatus } from '@prisma/client'
 import { useToast } from '@/components/ui/use-toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { format } from 'date-fns'
-import { OrderItemsTable } from '@/components/forms/OrderItemsTable'
-import { useItemList } from '@/components/forms/hooks/useItemList'
 import { invoiceSchema, type InvoiceFormData, INVOICE_STATUS_OPTIONS } from '@/components/shared/form/schemas/invoiceSchema'
-import { ExtendedInvoice } from '@/types/invoice'
-import { AccountType, BankInfo, BankInfoNullable, ACCOUNT_TYPE_LABELS } from '@/types/bankAccount'
-import { convertToFormData, convertFromFormData, convertFromPurchaseOrder } from '@/utils/formDataConverter'
+import { AccountType, ACCOUNT_TYPE_LABELS } from '@/types/bankAccount'
+import { convertToFormData, convertFromPurchaseOrder } from '@/utils/formDataConverter'
 import { TagManager } from '@/components/shared/TagManager'
 import { useTags } from '@/hooks/useTags'
 import { TagFormData } from '@/types/tag'
-import { BaseFormWrapper } from '@/components/shared/form/BaseFormWrapper'
 import { SelectField } from '@/components/shared/form/SelectField'
 import { InputField } from '@/components/shared/form/InputField'
 import { DateField } from '@/components/shared/form/DateField'
-import { TagField } from '@/components/shared/form/TagField'
 import { OrderItemsForm } from '@/components/shared/form/OrderItemsForm'
 import { Item } from '@/components/shared/form/schemas/commonSchema'
 
 interface InvoiceManagementProps {
   isNew?: boolean
-  initialData?: any
+  initialData?: {
+    id?: string
+    tags?: Array<{ id: string; name: string }>
+    [key: string]: any
+  }
   purchaseOrder?: any
 }
 
-// InvoiceFormDataを拡張して、itemsをItem[]として定義
 type InvoiceFormDataWithRHF = Omit<InvoiceFormData, 'items'> & {
   items: Item[]
+}
+
+const defaultFormValues: InvoiceFormDataWithRHF = {
+  status: 'DRAFT' as InvoiceStatus,
+  issueDate: new Date(),
+  dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+  items: [],
+  bankInfo: {
+    accountType: 'ORDINARY',
+    bankName: '',
+    branchName: '',
+    accountNumber: '',
+    accountHolder: ''
+  },
+  notes: '',
+  vendorId: '',
+  purchaseOrderId: '',
+  tags: []
 }
 
 export default function InvoiceManagement({ isNew = true, initialData, purchaseOrder }: InvoiceManagementProps) {
@@ -47,47 +62,13 @@ export default function InvoiceManagement({ isNew = true, initialData, purchaseO
 
   const form = useForm<InvoiceFormDataWithRHF>({
     resolver: zodResolver(invoiceSchema),
-    defaultValues: {
-      status: 'DRAFT' as InvoiceStatus,
-      issueDate: new Date(),
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      items: [],
-      bankInfo: {
-        accountType: 'ORDINARY',
-        bankName: '',
-        branchName: '',
-        accountNumber: '',
-        accountHolder: ''
-      },
-      notes: '',
-      vendorId: '',
-      purchaseOrderId: '',
-      tags: [],
-      ...initialData
-    }
+    defaultValues: initialData ? { ...defaultFormValues, ...initialData } : defaultFormValues
   })
 
-  const {
-    items,
-    addItem,
-    removeItem,
-    updateItem,
-    createNewItem,
-    calculateSubtotal,
-    calculateTaxAmount,
-    calculateTotal
-  } = useItemList({
-    initialItems: [],
-    onItemsChange: (newItems) => form.setValue('items', newItems)
-  })
-
-  const { tags, addTag, removeTag, isLoading: isLoadingTags } = useTags({
+  const { tags } = useTags({
     entityType: 'invoice',
     entityId: initialData?.id,
-    initialTags: initialData?.tags?.map(tag => ({
-      id: tag.id || '',
-      name: tag.name || ''
-    })) || []
+    initialTags: initialData?.tags || []
   })
 
   // 初期データの設定
@@ -96,7 +77,7 @@ export default function InvoiceManagement({ isNew = true, initialData, purchaseO
       const formData = convertToFormData(initialData)
       form.reset(formData as InvoiceFormDataWithRHF)
     }
-  }, [initialData, form.reset])
+  }, [initialData, form])
 
   // 発注書情報の反映
   useEffect(() => {
@@ -106,7 +87,7 @@ export default function InvoiceManagement({ isNew = true, initialData, purchaseO
         form.setValue(key as keyof InvoiceFormDataWithRHF, value)
       })
     }
-  }, [purchaseOrder, isNew, form.setValue])
+  }, [purchaseOrder, isNew, form])
 
   const handleSubmit = async (data: InvoiceFormDataWithRHF) => {
     try {

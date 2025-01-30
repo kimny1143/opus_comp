@@ -25,3 +25,6 @@ logo/
 
 # デザイナーから届いたモックUI
 mock_ui/
+
+# カバレッジ
+coverage/

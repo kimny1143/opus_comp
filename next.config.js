@@ -2,26 +2,46 @@ const path = require('path')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: true,
   experimental: {
     // Server Actions設定
-    serverActions: {
-      enabled: true
-    },
-    // Turbopackを無効化（カバレッジ計測のため）
-    turbo: false,
-    // パフォーマンス最適化（一時的に無効化）
-    optimizeCss: false,
-    optimizePackageImports: ['@/components'],
-    instrumentationHook: false
+    serverActions: true,
+    instrumentationHook: false,
+    // パフォーマンス最適化
+    optimizeCss: true,
+    optimizePackageImports: ['@/components']
   },
-  reactStrictMode: true,
+  // SWC設定を最適化
+  swcMinify: true,
+  compiler: {
+    // SWC特有の設定
+    swc: {
+      jsc: {
+        transform: {
+          react: {
+            runtime: 'automatic'
+          }
+        },
+        parser: {
+          syntax: 'typescript',
+          tsx: true,
+          decorators: true
+        },
+        target: 'es2022'
+      }
+    },
+    // 本番環境でのみconsole.logを削除
+    removeConsole: process.env.NODE_ENV === 'production'
+  },
+  // TypeScript設定
+  typescript: {
+    // ビルド時の型チェックを無効化（テスト時は別途実行）
+    ignoreBuildErrors: true
+  },
   images: {
     unoptimized: true
   },
-  compiler: {
-    removeConsole: process.env.NODE_ENV === 'production',
-  },
-  webpack: (config, { dev, isServer }) => {
+  webpack: (config, { isServer, dev }) => {
     if (isServer) {
       config.resolve.alias = {
         ...config.resolve.alias,
@@ -36,27 +56,16 @@ const nextConfig = {
         async_hooks: false,
       }
     }
-    // 開発環境かつクライアントサイドの場合のみカバレッジを有効化
-    if (dev && !isServer) {
-      config.module.rules.push({
-        test: /\.(js|jsx|ts|tsx)$/,
-        exclude: /node_modules/,
-        use: [
-          {
-            loader: '@jsdevtools/coverage-istanbul-loader',
-            options: {
-              // プロダクションコードのみを対象とする
-              exclude: [
-                /node_modules/,
-                /\.test\./,
-                /\.spec\./,
-                /e2e\//,
-                /__tests__/
-              ]
-            }
-          }
-        ]
-      })
+    // テスト環境でのカバレッジ計測はV8カバレッジを使用
+    if (process.env.NODE_ENV === 'test') {
+      config.optimization = {
+        ...config.optimization,
+        minimize: false
+      }
+      // V8カバレッジ設定
+      if (!isServer && !dev) {
+        config.optimization.minimizer = []
+      }
     }
     return config
   }

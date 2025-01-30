@@ -1,3 +1,6 @@
+/// <reference types="cypress" />
+// @ts-check
+
 import { format } from 'date-fns';
 
 describe('請求書フロー', () => {

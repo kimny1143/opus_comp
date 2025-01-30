@@ -1,30 +1,25 @@
 'use client'
 
 import { useState, useEffect } from 'react';
-import { InvoiceTemplate, InvoiceTemplateItem } from '@/types/invoice';
+import { InvoiceTemplate, InvoiceTemplateWithParsedBankInfo, InvoiceTemplateItem } from '@/types/invoice';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { BankInfo, deserializeBankInfo, serializeBankInfo } from '@/types/bankInfo';
 
 interface InvoiceTemplateDialogProps {
   currentData: {
     contractorName: string;
     contractorAddress: string;
     registrationNumber: string;
-    bankInfo: {
-      bankName: string;
-      branchName: string;
-      accountType: 'ordinary' | 'current';
-      accountNumber: string;
-      accountHolder: string;
-    };
+    bankInfo: BankInfo;
     paymentTerms: string;
     notes: string;
   };
   onSaveTemplate: (template: Omit<InvoiceTemplate, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
-  onLoadTemplate: (template: InvoiceTemplate & { defaultItems?: InvoiceTemplateItem[] }) => void;
+  onLoadTemplate: (template: InvoiceTemplateWithParsedBankInfo & { defaultItems?: InvoiceTemplateItem[] }) => void;
 }
 
 export const InvoiceTemplateDialog: React.FC<InvoiceTemplateDialogProps> = ({
@@ -33,7 +28,7 @@ export const InvoiceTemplateDialog: React.FC<InvoiceTemplateDialogProps> = ({
   onLoadTemplate
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [templates, setTemplates] = useState<InvoiceTemplate[]>([]);
+  const [templates, setTemplates] = useState<InvoiceTemplateWithParsedBankInfo[]>([]);
   const [mode, setMode] = useState<'load' | 'save'>('load');
   const [newTemplate, setNewTemplate] = useState({
     name: '',
@@ -49,7 +44,10 @@ export const InvoiceTemplateDialog: React.FC<InvoiceTemplateDialogProps> = ({
       const response = await fetch('/api/invoice/templates');
       const data = await response.json();
       if (data.success) {
-        setTemplates(data.templates);
+        setTemplates(data.templates.map((template: InvoiceTemplate) => ({
+          ...template,
+          bankInfo: deserializeBankInfo(JSON.parse(template.bankInfo))
+        })));
       }
     };
     fetchTemplates();
@@ -57,7 +55,10 @@ export const InvoiceTemplateDialog: React.FC<InvoiceTemplateDialogProps> = ({
 
   const handleSaveTemplate = async () => {
     try {
-      await onSaveTemplate(newTemplate);
+      await onSaveTemplate({
+        ...newTemplate,
+        bankInfo: JSON.stringify(serializeBankInfo(newTemplate.bankInfo))
+      });
       setIsOpen(false);
       setNewTemplate({ name: '', description: '', ...currentData });
     } catch (error) {

@@ -2,7 +2,7 @@ import { Page } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
 
-const AUTH_FILE = path.join(process.cwd(), 'playwright/.auth/user.json');
+const AUTH_FILE = path.join(__dirname, '../.auth/user.json');
 const AUTH_DIR = path.dirname(AUTH_FILE);
 const DEFAULT_TIMEOUT = 30000;  // タイムアウトを30秒に延長
 
@@ -94,23 +94,18 @@ export const login = async (page: Page): Promise<void> => {
   }
 };
 
-export const setupAuthState = async (page: Page): Promise<void> => {
+export async function setupAuthState(page: Page): Promise<void> {
   try {
     console.log('認証状態のセットアップを開始');
     ensureAuthDir();
 
-    // 保存された認証状態の検証
+    // 既存の認証状態をチェック
     if (fs.existsSync(AUTH_FILE)) {
-      await page.context().storageState({ path: AUTH_FILE });
-      const isValid = await verifySession(page);
-      
-      if (isValid) {
-        console.log('既存の認証状態が有効です');
+      const authData = JSON.parse(fs.readFileSync(AUTH_FILE, 'utf-8'));
+      if (authData && authData.cookies) {
+        await page.context().addCookies(authData.cookies);
         return;
       }
-      
-      console.log('保存された認証状態が無効なため、再ログインを実行');
-      fs.unlinkSync(AUTH_FILE);
     }
 
     // 新規ログイン
@@ -127,4 +122,10 @@ export const setupAuthState = async (page: Page): Promise<void> => {
     await page.screenshot({ path: `auth-setup-error-${Date.now()}.png` });
     throw error;
   }
-}; 
+}
+
+export async function clearAuthState() {
+  if (fs.existsSync(AUTH_FILE)) {
+    fs.unlinkSync(AUTH_FILE);
+  }
+} 

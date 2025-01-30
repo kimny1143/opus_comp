@@ -1,5 +1,6 @@
 'use client';
 
+import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { InvoiceForm } from '@/components/invoice/InvoiceForm';
@@ -8,6 +9,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { SerializedPurchaseOrder } from '@/types/purchase-order';
+import { Prisma } from '@prisma/client';
+import type { Item } from '@/types/validation/item';
 
 export default function NewInvoicePage() {
   const router = useRouter();
@@ -105,10 +108,10 @@ export default function NewInvoicePage() {
             items: purchaseOrder.items.map(item => ({
               itemName: item.itemName,
               quantity: item.quantity,
-              unitPrice: Number(item.unitPrice),
-              taxRate: Number(item.taxRate),
+              unitPrice: new Prisma.Decimal(item.unitPrice),
+              taxRate: new Prisma.Decimal(item.taxRate),
               description: item.description || undefined
-            }))
+            } as Item))
           } : undefined}
           onSubmit={handleSubmit}
           isSubmitting={isSubmitting}

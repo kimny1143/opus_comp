@@ -23,10 +23,6 @@ export const ReminderSettings: React.FC<Props> = ({ invoiceId }) => {
   const [settings, setSettings] = useState<ReminderSetting[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchSettings();
-  }, [invoiceId]);
-
   const fetchSettings = async () => {
     try {
       const response = await fetch(`/api/invoices/${invoiceId}/reminders`);
@@ -44,6 +40,10 @@ export const ReminderSettings: React.FC<Props> = ({ invoiceId }) => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchSettings();
+  }, [invoiceId]);
 
   const handleAddReminder = async () => {
     try {

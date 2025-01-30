@@ -1,9 +1,10 @@
 'use client'
 
+import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
 import { Invoice } from '@/types/invoice';
 import { formatCurrency } from '@/lib/utils/format';
-import InvoiceTemplate from '../InvoiceTemplate';
+import { AccountType, deserializeBankInfo } from '@/types/bankInfo';
 
 // 日本語フォントの登録
 Font.register({
@@ -66,6 +67,19 @@ const styles = StyleSheet.create({
   }
 });
 
+const getAccountTypeLabel = (type: AccountType): string => {
+  switch (type) {
+    case AccountType.ORDINARY:
+      return '普通';
+    case AccountType.CURRENT:
+      return '当座';
+    case AccountType.SAVINGS:
+      return '貯蓄';
+    default:
+      return type;
+  }
+};
+
 export const InvoicePDF: React.FC<{ invoice: Invoice }> = ({ invoice }) => {
   // 小計と税額の計算
   const subTotal = invoice.items.reduce((sum, item) => 
@@ -74,6 +88,9 @@ export const InvoicePDF: React.FC<{ invoice: Invoice }> = ({ invoice }) => {
   const taxTotal = invoice.items.reduce((sum, item) => 
     sum + (Number(item.unitPrice) * item.quantity * Number(item.taxRate) / 100), 0
   )
+
+  // bankInfoのデシリアライズ
+  const bankInfo = invoice.bankInfo ? deserializeBankInfo(JSON.parse(invoice.bankInfo as string)) : null;
 
   return (
     <Document>
@@ -133,14 +150,14 @@ export const InvoicePDF: React.FC<{ invoice: Invoice }> = ({ invoice }) => {
         </View>
 
         {/* 銀行情報 */}
-        {invoice.bankInfo && (
+        {bankInfo && (
           <View style={styles.bankInfo}>
             <Text>お振込先</Text>
-            <Text>銀行名: {invoice.bankInfo.bankName}</Text>
-            <Text>支店名: {invoice.bankInfo.branchName}</Text>
-            <Text>口座種別: {invoice.bankInfo.accountType === 'ordinary' ? '普通' : '当座'}</Text>
-            <Text>口座番号: {invoice.bankInfo.accountNumber}</Text>
-            <Text>口座名義: {invoice.bankInfo.accountHolder}</Text>
+            <Text>銀行名: {bankInfo.bankName}</Text>
+            <Text>支店名: {bankInfo.branchName}</Text>
+            <Text>口座種別: {getAccountTypeLabel(bankInfo.accountType)}</Text>
+            <Text>口座番号: {bankInfo.accountNumber}</Text>
+            <Text>口座名義: {bankInfo.accountHolder}</Text>
           </View>
         )}
 

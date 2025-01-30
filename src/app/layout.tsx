@@ -1,11 +1,9 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import { ClientLayout } from '@/components/layouts/ClientLayout'
 import './globals.css'
 import { Toaster } from '@/components/ui/toaster'
 import { SettingsProvider } from '@/contexts/settings-context'
-
-const inter = Inter({ subsets: ['latin'] })
+import React from 'react'
 
 export const metadata: Metadata = {
   title: 'OPUS - 業務管理システム',
@@ -19,7 +17,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ja">
-      <body className={inter.className}>
+      <body className="font-sans">
         <SettingsProvider>
           <ClientLayout>{children}</ClientLayout>
           <Toaster />

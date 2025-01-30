@@ -1,3 +1,6 @@
+/// <reference types="cypress" />
+// @ts-check
+
 import { format } from 'date-fns';
 import { INVOICE_STATUS, TAX_RATES } from '../../src/types/validation/invoiceSchema';
 import {

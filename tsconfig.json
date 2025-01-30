@@ -8,7 +8,7 @@
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
@@ -29,9 +29,20 @@
       "vitest",
       "@testing-library/jest-dom",
       "cypress",
-      "mocha"
-    ]
+      "mocha",
+      "react",
+      "react-dom",
+      "@types/pdfkit"
+    ],
+    "baseUrl": ".",
+    "allowSyntheticDefaultImports": true
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "cypress/**/*.ts"
+  ],
   "exclude": ["node_modules", "mock_ui/**/*"]
 }

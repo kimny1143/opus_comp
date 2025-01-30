@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ExtendedInvoice, SerializedInvoice } from '@/types/invoice';
 import { InvoiceStatusType } from '@/domains/invoice/types';
 import { InvoiceStatusBadge } from './InvoiceStatusBadge';
-import { InvoicePdfButton } from './InvoicePdfButton';
+import InvoicePdfButton from './InvoicePdfButton';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/utils/format';
 

@@ -10,6 +10,16 @@ declare global {
       clock(timestamp: number): Chainable<void>
       logTestInfo(message: string, data?: Record<string, unknown>): Chainable<void>
     }
+
+    interface Interception {
+      response?: {
+        statusCode: number;
+        body: any;
+      };
+      request?: {
+        body: any;
+      };
+    }
   }
 }
 

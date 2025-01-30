@@ -1,12 +1,15 @@
 'use client'
 
+import React, { useCallback } from 'react'
 import { Button } from "@/components/ui/button"
-import { Invoice, SerializedInvoice } from "@/types/invoice"
-import { formatDate } from "@/lib/utils/date"
-import { Document, Page, Text, View, StyleSheet, PDFDownloadLink, Font } from '@react-pdf/renderer'
+import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer'
 import { BlobProvider } from '@react-pdf/renderer'
-import { ReactElement } from 'react'
-import { calculateTaxByRate, TaxableItem } from '@/domains/invoice/tax'
+import { QualifiedInvoice, TaxableItem } from "@/types"
+import { SerializedInvoice } from "@/types/invoice"
+import { formatDate } from "@/lib/utils/date"
+import { calculateTaxSummary } from '@/domains/invoice/tax'
+import { Decimal } from '@prisma/client/runtime/library'
+import { convertBankInfoToString } from '@/lib/utils/bankInfo'
 
 // 日本語フォントの登録
 Font.register({
@@ -20,8 +23,8 @@ Font.register({
 })
 
 interface InvoicePdfButtonProps {
-  invoice: SerializedInvoice
-  onGeneratePdf?: (invoice: SerializedInvoice) => void
+  invoice: QualifiedInvoice | SerializedInvoice
+  onGeneratePdf?: (pdfBlob: Blob) => void
 }
 
 // スタイルの定義
@@ -132,28 +135,36 @@ const styles = StyleSheet.create({
   },
 })
 
-// PDFドキュメントコンポーネント
-const InvoicePDF = ({ invoice }: InvoicePdfButtonProps) => {
-  const calculateSubtotal = (items: typeof invoice.items) => {
+const InvoicePDF = React.memo<{ invoice: QualifiedInvoice | SerializedInvoice }>(({ invoice: rawInvoice }) => {
+  // 日付の型変換
+  const invoice = {
+    ...rawInvoice,
+    issueDate: typeof rawInvoice.issueDate === 'string' ? new Date(rawInvoice.issueDate) : rawInvoice.issueDate,
+    dueDate: typeof rawInvoice.dueDate === 'string' ? new Date(rawInvoice.dueDate) : rawInvoice.dueDate,
+  };
+
+  const calculateSubtotal = useCallback((items: typeof invoice.items) => {
     return items.reduce((sum, item) => {
       const amount = Number(item.unitPrice) * item.quantity
       return sum + amount
     }, 0)
-  }
+  }, [])
 
-  const calculateTaxTotal = (items: typeof invoice.items) => {
+  const calculateTaxTotal = useCallback((items: typeof invoice.items) => {
     const taxableItems: TaxableItem[] = items.map(item => ({
       taxRate: Number(item.taxRate),
-      unitPrice: item.unitPrice.toString(),
+      unitPrice: new Decimal(item.unitPrice),
       quantity: item.quantity
     }));
-    const { totalTaxAmount } = calculateTaxByRate(taxableItems);
+    const { totalTaxAmount } = calculateTaxSummary(taxableItems);
     return totalTaxAmount;
-  }
+  }, [])
 
   if (!invoice.bankInfo) {
     throw new Error('銀行情報が設定されていません');
   }
+
+  const bankInfo = convertBankInfoToString(invoice.bankInfo);
 
   return (
     <Document>
@@ -219,11 +230,11 @@ const InvoicePDF = ({ invoice }: InvoicePdfButtonProps) => {
 
         <View style={styles.bankInfo}>
           <Text style={styles.bankTitle}>お支払い情報</Text>
-          <Text style={styles.bankText}>銀行名: {invoice.bankInfo.bankName}</Text>
-          <Text style={styles.bankText}>支店名: {invoice.bankInfo.branchName}</Text>
-          <Text style={styles.bankText}>口座種別: {invoice.bankInfo.accountType === 'ordinary' ? '普通' : '当座'}</Text>
-          <Text style={styles.bankText}>口座番号: {invoice.bankInfo.accountNumber}</Text>
-          <Text style={styles.bankText}>口座名義: {invoice.bankInfo.accountHolder}</Text>
+          <Text style={styles.bankText}>銀行名: {bankInfo.bankName}</Text>
+          <Text style={styles.bankText}>支店名: {bankInfo.branchName}</Text>
+          <Text style={styles.bankText}>口座種別: {bankInfo.accountType}</Text>
+          <Text style={styles.bankText}>口座番号: {bankInfo.accountNumber}</Text>
+          <Text style={styles.bankText}>口座名義: {bankInfo.accountHolder}</Text>
         </View>
 
         {invoice.notes && (
@@ -235,9 +246,21 @@ const InvoicePDF = ({ invoice }: InvoicePdfButtonProps) => {
       </Page>
     </Document>
   )
-}
+})
 
-export function InvoicePdfButton({ invoice, onGeneratePdf }: InvoicePdfButtonProps) {
+InvoicePDF.displayName = 'InvoicePDF'
+
+const InvoicePdfButton: React.FC<InvoicePdfButtonProps> = ({ invoice, onGeneratePdf }) => {
+  const handleClick = useCallback((url: string) => {
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `invoice_${invoice.invoiceNumber || invoice.id}.pdf`
+    link.click()
+    if (onGeneratePdf) {
+      onGeneratePdf(new Blob())
+    }
+  }, [invoice, onGeneratePdf])
+
   if (!invoice.bankInfo) {
     return (
       <Button disabled title="銀行情報が設定されていません">
@@ -248,31 +271,23 @@ export function InvoicePdfButton({ invoice, onGeneratePdf }: InvoicePdfButtonPro
 
   return (
     <BlobProvider document={<InvoicePDF invoice={invoice} />}>
-      {({ blob, url, loading, error }) => {
+      {({ url, loading, error }) => {
         if (loading) {
           return <Button disabled>PDFを生成中...</Button>
         }
 
-        if (error) {
-          return <Button disabled>エラーが発生しました</Button>
-        }
-
-        const handleClick = () => {
-          if (blob) {
-            const link = document.createElement('a')
-            link.href = window.URL.createObjectURL(blob)
-            link.download = `請求書_${invoice.invoiceNumber || '未設定'}.pdf`
-            link.click()
-            onGeneratePdf?.(invoice)
-          }
+        if (error || !url) {
+          return <Button disabled>PDFの生成に失敗しました</Button>
         }
 
         return (
-          <Button onClick={handleClick} disabled={!blob}>
-            PDF出力
+          <Button onClick={() => handleClick(url)}>
+            PDFをダウンロード
           </Button>
         )
       }}
     </BlobProvider>
   )
 }
+
+export default InvoicePdfButton

@@ -1,12 +1,12 @@
+import { AccountType } from './bankAccount'
+
 /**
  * 口座種別の定義
  */
-export type AccountType = 'ORDINARY' | 'CURRENT' | 'SAVINGS'
-
 export const ACCOUNT_TYPE_OPTIONS = [
-  { value: 'ORDINARY' as AccountType, label: '普通' },
-  { value: 'CURRENT' as AccountType, label: '当座' },
-  { value: 'SAVINGS' as AccountType, label: '貯蓄' }
+  { value: AccountType.ORDINARY, label: '普通' },
+  { value: AccountType.CURRENT, label: '当座' },
+  { value: AccountType.SAVINGS, label: '貯蓄' }
 ] as const
 
 /**

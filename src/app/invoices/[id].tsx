@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
+import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Head from 'next/head';
 import { ArrowLeft, Download } from 'lucide-react';
@@ -10,19 +10,20 @@ import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
 export default function InvoiceDetail() {
+  const params = useParams();
   const router = useRouter();
   const { data: session } = useSession();
   const [invoice, setInvoice] = useState<ExtendedInvoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { id } = router.query;
+  const invoiceId = params.id as string;
 
   useEffect(() => {
     const fetchInvoice = async () => {
-      if (!id || !session) return;
+      if (!invoiceId || !session) return;
 
       try {
-        const response = await fetch(`/api/invoices/${id}`);
+        const response = await fetch(`/api/invoices/${invoiceId}`);
         if (!response.ok) throw new Error('請求書の取得に失敗しました');
         const data = await response.json();
         setInvoice(data);
@@ -34,7 +35,7 @@ export default function InvoiceDetail() {
     };
 
     fetchInvoice();
-  }, [id, session]);
+  }, [invoiceId, session]);
 
   if (loading) {
     return <div className="flex justify-center items-center h-screen">Loading...</div>;

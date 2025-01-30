@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/prisma'
 import { v4 as uuidv4 } from 'uuid'
-import { vi } from 'vitest'
 
 interface Session {
   id: string
@@ -60,9 +59,10 @@ class SessionManager {
 export const session = new SessionManager()
 
 // テスト用のモックセッション
-type MockFunction<T> = {
+interface MockFunction<T> {
   (...args: any[]): T;
-  mockResolvedValue: (value: Awaited<T>) => void;
+  mockResolvedValue: (value: T extends Promise<infer U> ? U : never) => void;
+  mockImplementation: (fn: (...args: any[]) => T) => void;
 }
 
 interface MockedSessionManager {
@@ -71,10 +71,22 @@ interface MockedSessionManager {
   destroy: MockFunction<Promise<boolean>>;
 }
 
-export const mockSession: MockedSessionManager = {
-  create: vi.fn().mockImplementation(async () => ({} as Session)),
-  get: vi.fn().mockImplementation(async () => null),
-  destroy: vi.fn().mockImplementation(async () => true)
+function createMockFunction<T>(): MockFunction<T> {
+  let implementation = (...args: any[]): T => ({} as T);
+  const fn = (...args: any[]): T => implementation(...args);
+  fn.mockResolvedValue = (value: T extends Promise<infer U> ? U : never) => {
+    implementation = (async () => value) as unknown as (...args: any[]) => T;
+  };
+  fn.mockImplementation = (newImpl: (...args: any[]) => T) => {
+    implementation = newImpl;
+  };
+  return fn as MockFunction<T>;
 }
+
+export const mockSession: MockedSessionManager = {
+  create: createMockFunction<Promise<Session>>(),
+  get: createMockFunction<Promise<Session | null>>(),
+  destroy: createMockFunction<Promise<boolean>>()
+};
 
 export type { Session, SessionCreateParams } 

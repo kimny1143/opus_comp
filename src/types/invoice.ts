@@ -1,12 +1,15 @@
-import { Prisma, Invoice as PrismaInvoice, Vendor, PurchaseOrder, Tag } from '@prisma/client'
-import { InvoiceStatus } from './enums'
+import { Prisma, Invoice as PrismaInvoice, Vendor, PurchaseOrder } from '@prisma/client'
+import { InvoiceStatus } from '@/types/enums'
 import { BankInfo } from '@/types/bankAccount'
 import { TagFormData } from '@/types/tag'
+import type { InvoiceFormData, InvoiceFormDataRHF } from '@/types/validation/invoice'
+import { Decimal } from '@prisma/client/runtime/library'
 
+// 基本型定義
 export type InvoiceStatusType = InvoiceStatus;
-
 export type BankInfoNullable = BankInfo | null;
 
+// DBモデル用の型定義
 export interface InvoiceItem {
   id?: string;
   invoiceId?: string;
@@ -18,29 +21,10 @@ export interface InvoiceItem {
   amount?: number;
 }
 
-export interface InvoiceFormItem {
-  id?: string;
-  itemName: string;
-  quantity: number;
-  unitPrice: number;
-  taxRate: number;
-  amount?: number;
-  description?: string;
-}
+// フォーム用の型定義は validation/invoice から再エクスポート
+export { type InvoiceFormData, type InvoiceFormDataRHF };
 
-export interface InvoiceFormData {
-  id?: string;
-  issueDate: Date;
-  dueDate: Date;
-  items: InvoiceFormItem[];
-  bankInfo: BankInfo;
-  status?: InvoiceStatus;
-  vendorId?: string;
-  description?: string;
-  invoiceNumber?: string;
-  tags: TagFormData[];
-}
-
+// API入力用の型定義
 export interface InvoiceCreateInput {
   vendorId?: string
   purchaseOrderId?: string
@@ -61,6 +45,7 @@ export interface InvoiceCreateInput {
   invoiceNumber?: string
 }
 
+// テンプレート関連の型定義
 export interface InvoiceTemplateItem {
   id?: string
   itemName: string
@@ -75,13 +60,18 @@ export interface InvoiceTemplate {
   id: string;
   name?: string;
   description?: string;
-  bankInfo: BankInfo;
+  bankInfo: string;  // JSON文字列として保存
   contractorName: string;
   contractorAddress: string;
   registrationNumber: string;
   paymentTerms?: string;
 }
 
+export interface InvoiceTemplateWithParsedBankInfo extends Omit<InvoiceTemplate, 'bankInfo'> {
+  bankInfo: BankInfo;
+}
+
+// 拡張インボイス型定義
 export interface BaseInvoice extends Omit<PrismaInvoice, 'totalAmount'> {
   totalAmount: Prisma.Decimal;
   vendor: Vendor;
@@ -116,6 +106,7 @@ export interface Invoice extends BaseInvoice {
   tags: TagFormData[];
 }
 
+// ステータス履歴の型定義
 export interface InvoiceStatusHistoryItem {
   id: string;
   status: InvoiceStatus;
@@ -125,7 +116,8 @@ export interface InvoiceStatusHistoryItem {
   } | null;
 }
 
-export interface ExtendedInvoice extends Omit<Invoice, 'bankInfo' | 'issueDate' | 'dueDate' | 'createdAt' | 'updatedAt'> {
+// 拡張インボイスの詳細型定義
+export interface ExtendedInvoice extends Omit<Invoice, 'bankInfo' | 'issueDate' | 'dueDate' | 'createdAt' | 'updatedAt' | 'template'> {
   items: (Omit<InvoiceItem, 'unitPrice' | 'taxRate'> & {
     unitPrice: Prisma.Decimal;
     taxRate: Prisma.Decimal;
@@ -134,7 +126,7 @@ export interface ExtendedInvoice extends Omit<Invoice, 'bankInfo' | 'issueDate' 
   purchaseOrder: (Pick<PurchaseOrder, 'id' | 'orderNumber' | 'status' | 'vendorId'> & {
     vendor?: Pick<Vendor, 'name' | 'address'>;
   }) | null;
-  template: InvoiceTemplate | null;
+  template: InvoiceTemplateWithParsedBankInfo | null;
   bankInfo: BankInfo;
   totalAmount: Prisma.Decimal;
   taxAmount: Prisma.Decimal;
@@ -154,24 +146,45 @@ export interface ExtendedInvoice extends Omit<Invoice, 'bankInfo' | 'issueDate' 
   updatedById: string | null;
 }
 
-export type SerializedInvoice = Omit<ExtendedInvoice, 'totalAmount' | 'taxAmount' | 'total' | 'items' | 'issueDate' | 'dueDate' | 'createdAt' | 'updatedAt' | 'bankInfo'> & {
+// シリアライズ用の型定義
+export type SerializedInvoice = Omit<QualifiedInvoice, 'issueDate' | 'dueDate' | 'createdAt' | 'updatedAt' | 'totalAmount' | 'items' | 'taxSummary' | 'template' | 'vendor'> & {
+  issueDate: string;
+  dueDate: string;
+  createdAt: string;
+  updatedAt: string;
   totalAmount: string;
   taxAmount: string;
   total: string;
-  items: (Omit<InvoiceItem, 'unitPrice' | 'taxRate'> & {
+  items: {
+    id: string;
+    invoiceId: string;
+    itemName: string;
+    description: string | null;
+    quantity: number;
     unitPrice: string;
     taxRate: string;
-  })[];
-  issueDate: string | null;
-  dueDate: string | null;
-  createdAt: string;
-  updatedAt: string;
-  bankInfo: BankInfo;
-  tags: TagFormData[];
+    taxAmount: string;
+    taxableAmount: string;
+  }[];
+  taxSummary: {
+    byRate: {
+      taxRate: number;
+      taxableAmount: string;
+      taxAmount: string;
+    }[];
+    totalTaxableAmount: string;
+    totalTaxAmount: string;
+  };
+  template: Omit<InvoiceTemplate, 'createdAt' | 'updatedAt'> & {
+    createdAt?: string;
+    updatedAt?: string;
+  };
+  vendor: QualifiedVendor;
 }
 
 export type InvoiceWithRelations = ExtendedInvoice;
 
+// 税計算関連の型定義
 export interface TaxCalculation {
   taxRate: number;
   taxableAmount: Prisma.Decimal;
@@ -184,7 +197,58 @@ export interface InvoiceTaxSummary {
   totalTaxAmount: Prisma.Decimal;
 }
 
+// 発行者情報の型定義
 export interface InvoiceIssuer {
+  name: string;
+  registrationNumber: string;
+  address: string;
+  tel?: string;
+  email?: string;
+}
+
+export interface QualifiedInvoiceItem {
+  id: string;
+  invoiceId: string;
+  itemName: string;
+  description: string | null;
+  quantity: number;
+  unitPrice: string;
+  taxRate: number;
+  taxAmount: number;
+  taxableAmount: number;
+}
+
+export interface TaxableItem {
+  quantity: number;
+  unitPrice: Prisma.Decimal;
+  taxRate: number;
+}
+
+export interface QualifiedInvoice {
+  id: string;
+  templateId: string;
+  purchaseOrderId: string;
+  invoiceNumber: string;
+  status: InvoiceStatusType;
+  issueDate: Date;
+  dueDate: Date;
+  notes: string | null;
+  bankInfo: BankInfo;
+  vendor: QualifiedVendor;
+  template: InvoiceTemplate;
+  issuer: InvoiceIssuer;
+  taxSummary: InvoiceTaxSummary;
+  items: QualifiedInvoiceItem[];
+  createdAt: Date;
+  updatedAt: Date;
+  createdById: string;
+  updatedById: string | null;
+  vendorId: string;
+  totalAmount: Decimal;
+}
+
+export interface QualifiedVendor {
+  id: string;
   name: string;
   registrationNumber: string;
   address: string;

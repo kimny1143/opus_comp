@@ -1,20 +1,21 @@
 'use client'
 
-import { Control, useFieldArray, UseFormRegister, FieldErrors } from 'react-hook-form'
+import { Control, UseFormRegister, FieldErrors, useFieldArray } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
-import { Plus, Trash2 } from 'lucide-react'
-import { FormField } from '@/components/shared/form/FormField'
-import { Input } from '@/components/ui/input'
-import {
-  numberValidation,
-  validationMessages,
-  type Item
-} from '@/types/validation/commonValidation'
+import { InputField } from '@/components/shared/form/InputField'
+import { SelectField } from '@/components/shared/form/SelectField'
+import { InvoiceUploadFormData } from './InvoiceUploadForm'
+import { defaultItem } from '@/types/validation/item'
+
+const TAX_RATE_OPTIONS = [
+  { value: '0.08', label: '8%（軽減税率）' },
+  { value: '0.10', label: '10%（標準税率）' }
+] as const
 
 interface InvoiceItemsFormProps {
-  control: Control<any>
-  register: UseFormRegister<any>
-  errors: FieldErrors<any>
+  control: Control<InvoiceUploadFormData>
+  register: UseFormRegister<InvoiceUploadFormData>
+  errors: FieldErrors<InvoiceUploadFormData>
   readOnly?: boolean
 }
 
@@ -32,119 +33,68 @@ export function InvoiceItemsForm({
   return (
     <div className="space-y-4">
       {fields.map((field, index) => (
-        <div key={field.id} className="flex gap-4 items-start">
-          <div className="flex-1 space-y-2">
-            <FormField
+        <div key={field.id} className="grid grid-cols-12 gap-4 p-4 border rounded-lg">
+          <div className="col-span-4">
+            <InputField
               name={`items.${index}.itemName`}
               label="品目名"
               control={control}
               required
-            >
-              <Input 
-                placeholder="品目名を入力" 
-                disabled={readOnly}
-              />
-            </FormField>
-
-            <div className="grid grid-cols-3 gap-4">
-              <FormField
-                name={`items.${index}.quantity`}
-                label="数量"
-                control={control}
-                required
-              >
-                <Input
-                  type="number"
-                  placeholder="数量"
-                  {...register(`items.${index}.quantity`, {
-                    valueAsNumber: true,
-                    min: { value: 1, message: validationMessages.positiveNumber }
-                  })}
-                  disabled={readOnly}
-                  min={1}
-                />
-              </FormField>
-
-              <FormField
-                name={`items.${index}.unitPrice`}
-                label="単価"
-                control={control}
-                required
-              >
-                <Input
-                  type="number"
-                  placeholder="単価"
-                  {...register(`items.${index}.unitPrice`, {
-                    valueAsNumber: true,
-                    min: { value: 0, message: validationMessages.nonNegativeNumber }
-                  })}
-                  disabled={readOnly}
-                  min={0}
-                />
-              </FormField>
-
-              <FormField
-                name={`items.${index}.taxRate`}
-                label="税率"
-                control={control}
-                required
-              >
-                <Input
-                  type="number"
-                  placeholder="税率"
-                  {...register(`items.${index}.taxRate`, {
-                    valueAsNumber: true,
-                    min: { value: 0.1, message: validationMessages.taxRateMin },
-                    max: { value: 1, message: validationMessages.taxRateMax }
-                  })}
-                  disabled={readOnly}
-                  min={0.1}
-                  max={1}
-                  step={0.01}
-                />
-              </FormField>
-            </div>
-
-            <FormField
-              name={`items.${index}.description`}
-              label="説明"
-              control={control}
-            >
-              <Input 
-                placeholder="説明を入力（任意）" 
-                disabled={readOnly}
-              />
-            </FormField>
+              disabled={readOnly}
+            />
           </div>
-
-          {!readOnly && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => remove(index)}
-              disabled={fields.length === 1}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )}
+          <div className="col-span-2">
+            <InputField
+              name={`items.${index}.quantity`}
+              label="数量"
+              control={control}
+              type="number"
+              required
+              disabled={readOnly}
+              min={1}
+            />
+          </div>
+          <div className="col-span-2">
+            <InputField
+              name={`items.${index}.unitPrice`}
+              label="単価"
+              control={control}
+              type="number"
+              required
+              disabled={readOnly}
+              min={0}
+            />
+          </div>
+          <div className="col-span-2">
+            <SelectField
+              name={`items.${index}.taxRate`}
+              label="税率"
+              control={control}
+              options={TAX_RATE_OPTIONS}
+              required
+              disabled={readOnly}
+            />
+          </div>
+          <div className="col-span-2">
+            {!readOnly && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => remove(index)}
+                className="mt-8"
+              >
+                削除
+              </Button>
+            )}
+          </div>
         </div>
       ))}
-
       {!readOnly && (
         <Button
           type="button"
           variant="outline"
-          onClick={() => append({
-            itemName: '',
-            quantity: 1,
-            unitPrice: 0,
-            taxRate: 0.1,
-            description: ''
-          })}
-          className="w-full"
+          onClick={() => append(defaultItem)}
         >
-          <Plus className="mr-2 h-4 w-4" />
           品目を追加
         </Button>
       )}

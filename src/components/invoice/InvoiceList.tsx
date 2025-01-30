@@ -1,34 +1,22 @@
 'use client'
 
 import { useState, useMemo } from 'react';
-import Link from 'next/link';
-import { ExtendedInvoice, SerializedInvoice } from '@/types/invoice';
-import { PurchaseOrder, Vendor, InvoiceStatus } from '@prisma/client';
-import { getStatusBadgeColor } from '@/lib/utils/status';
-import { formatDate, isValidDate } from '@/lib/utils/date';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { SerializedInvoice } from '@/types/invoice';
 import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
 import { InvoicePreview } from './InvoicePreview';
-import { InvoiceEmailDialog } from './InvoiceEmailDialog';
-import { InvoicePdfButton } from './InvoicePdfButton';
-import { InvoiceFilters, type InvoiceFilters as IInvoiceFilters } from './InvoiceFilters';
-import { InvoiceStatusDisplay } from '@/types/enums';
+import { InvoiceFilters } from './InvoiceFilters';
+import type { InvoiceFiltersData } from './InvoiceFilters';
 import { InvoiceStatusType } from '@/domains/invoice/types';
 import { SerializedPurchaseOrder } from '@/types/purchase-order';
 import { InvoiceListItem } from './InvoiceListItem';
 import { CreateInvoiceButton } from './CreateInvoiceButton';
-
-type ExtendedPurchaseOrder = PurchaseOrder & {
-  vendor: Vendor;
-};
+import React from 'react';
 
 interface InvoiceListProps {
   invoices: SerializedInvoice[];
@@ -44,7 +32,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
   isUpdating = false,
 }) => {
   const [selectedInvoice, setSelectedInvoice] = useState<SerializedInvoice | null>(null);
-  const [filters, setFilters] = useState<IInvoiceFilters>({
+  const [filters, setFilters] = useState<InvoiceFiltersData>({
     search: '',
     status: 'ALL',
     dateFrom: null,

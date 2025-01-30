@@ -4,7 +4,7 @@ import { z } from 'zod'
  * 共通のバリデーションメッセージ
  * @note 将来的な多言語対応を考慮し、メッセージを一元管理
  */
-export const validationMessages = {
+const validationMessages = {
   // 基本メッセージ
   required: '必須項目です',
   invalidFormat: '無効な形式です',
@@ -35,7 +35,7 @@ export const validationMessages = {
 /**
  * 数値関連の共通バリデーション
  */
-export const numberValidation = {
+const numberValidation = {
   quantity: z.number()
     .positive(validationMessages.positiveNumber)
     .int(validationMessages.integerNumber),
@@ -57,7 +57,7 @@ export const numberValidation = {
 /**
  * 日付関連の共通バリデーション
  */
-export const dateValidation = {
+const dateValidation = {
   required: z.date({
     required_error: validationMessages.required,
     invalid_type_error: validationMessages.invalidDate
@@ -77,7 +77,7 @@ export const dateValidation = {
 /**
  * 文字列関連の共通バリデーション
  */
-export const stringValidation = {
+const stringValidation = {
   required: z.string().min(1, validationMessages.required),
   optional: z.string().optional(),
   
@@ -109,7 +109,7 @@ export const stringValidation = {
 /**
  * 配列関連の共通バリデーション
  */
-export const arrayValidation = {
+const arrayValidation = {
   nonEmpty: <T extends z.ZodTypeAny>(schema: T) => 
     z.array(schema).min(1, validationMessages.arrayMinLength)
 }
@@ -117,7 +117,7 @@ export const arrayValidation = {
 /**
  * 共通のスキーマ定義
  */
-export const commonSchemas = {
+const commonSchemas = {
   // タグのスキーマ
   tag: z.object({
     id: z.string().optional(),
@@ -144,7 +144,27 @@ export const commonSchemas = {
   })
 }
 
+// メインのエクスポート
+export const commonValidation = {
+  number: numberValidation,
+  date: dateValidation,
+  string: stringValidation,
+  array: arrayValidation,
+  schemas: commonSchemas,
+  messages: validationMessages
+}
+
 // 型定義のエクスポート
 export type Tag = z.infer<typeof commonSchemas.tag>
 export type BankInfo = z.infer<typeof commonSchemas.bankInfo>
-export type Item = z.infer<typeof commonSchemas.item> 
+export type Item = z.infer<typeof commonSchemas.item>
+
+// 個別のエクスポートも維持（後方互換性のため）
+export {
+  numberValidation,
+  dateValidation,
+  stringValidation,
+  arrayValidation,
+  commonSchemas,
+  validationMessages
+} 

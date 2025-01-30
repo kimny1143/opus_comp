@@ -4,8 +4,9 @@ import { AuthProvider } from '@/providers/AuthProvider'
 import { QueryProvider } from '@/providers/QueryProvider'
 import { MainLayout } from '@/components/layouts/MainLayout'
 import { Toaster } from '@/components/ui/toaster'
+import React from 'react'
 
-interface ClientLayoutProps {
+type ClientLayoutProps = {
   children: React.ReactNode
 }
 

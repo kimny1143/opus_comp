@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { PurchaseOrder, Vendor, PurchaseOrderItem, StatusHistory, Prisma } from '@prisma/client'
 import { ArrowLeft, Edit2, Send } from 'lucide-react'
@@ -36,11 +36,7 @@ export function PurchaseOrderDetail({ id }: PurchaseOrderDetailProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    fetchOrder()
-  }, [id])
-
-  const fetchOrder = async () => {
+  const fetchOrder = useCallback(async () => {
     try {
       const response = await fetch(`/api/purchase-orders/${id}`)
       if (!response.ok) throw new Error('発注の取得に失敗しました')
@@ -60,7 +56,11 @@ export function PurchaseOrderDetail({ id }: PurchaseOrderDetailProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [id])
+
+  useEffect(() => {
+    fetchOrder()
+  }, [fetchOrder])
 
   if (loading) return <div>Loading...</div>
   if (error) return <div>Error: {error}</div>

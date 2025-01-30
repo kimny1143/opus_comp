@@ -1,10 +1,10 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Mail, Printer } from 'lucide-react'
+import { ArrowLeft, Printer } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { ExtendedInvoice, SerializedInvoice } from '@/types/invoice'
-import { InvoicePdfButton } from './InvoicePdfButton'
+import InvoicePdfButton from './InvoicePdfButton'
 import { InvoiceEmailDialog } from './InvoiceEmailDialog'
 import { motion } from 'framer-motion'
 import { serializeDecimal } from '@/lib/utils/decimal-serializer'
@@ -85,7 +85,24 @@ export function InvoicePageHeader({
               whileTap="tap"
               transition={{ duration: 0.2, delay: 0.1 }}
             >
-              <InvoicePdfButton invoice={serializeDecimal(invoice) as SerializedInvoice} />
+              <InvoicePdfButton 
+                invoice={{
+                  ...serializeDecimal(invoice),
+                  issuer: {
+                    name: invoice.vendor.name,
+                    registrationNumber: invoice.vendor.registrationNumber || '',
+                    address: invoice.vendor.address || '',
+                    tel: invoice.vendor.phone || undefined,
+                    email: invoice.vendor.email || undefined
+                  },
+                  taxSummary: {
+                    byRate: [],
+                    totalTaxableAmount: invoice.totalAmount.toString(),
+                    totalTaxAmount: invoice.items.reduce((sum, item) => 
+                      sum + (item.quantity * Number(item.unitPrice) * Number(item.taxRate)), 0).toString()
+                  }
+                } as unknown as SerializedInvoice} 
+              />
             </motion.div>
             <motion.div
               variants={buttonVariants}
@@ -95,7 +112,24 @@ export function InvoicePageHeader({
               whileTap="tap"
               transition={{ duration: 0.2, delay: 0.2 }}
             >
-              <InvoiceEmailDialog invoice={serializeDecimal(invoice) as SerializedInvoice} />
+              <InvoiceEmailDialog 
+                invoice={{
+                  ...serializeDecimal(invoice),
+                  issuer: {
+                    name: invoice.vendor.name,
+                    registrationNumber: invoice.vendor.registrationNumber || '',
+                    address: invoice.vendor.address || '',
+                    tel: invoice.vendor.phone || undefined,
+                    email: invoice.vendor.email || undefined
+                  },
+                  taxSummary: {
+                    byRate: [],
+                    totalTaxableAmount: invoice.totalAmount.toString(),
+                    totalTaxAmount: invoice.items.reduce((sum, item) => 
+                      sum + (item.quantity * Number(item.unitPrice) * Number(item.taxRate)), 0).toString()
+                  }
+                } as unknown as SerializedInvoice} 
+              />
             </motion.div>
           </>
         )}

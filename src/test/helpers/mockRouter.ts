@@ -84,7 +84,7 @@ export const resetRouter = () => {
   const router = mockRouter()
   Object.keys(router).forEach((key) => {
     if (typeof router[key as keyof typeof router] === 'function') {
-      ;(router[key as keyof typeof router] as ReturnType<typeof vi.fn>).mockReset()
+      (router[key as keyof typeof router] as ReturnType<typeof vi.fn>).mockReset()
     }
   })
   ;(useRouter as unknown as ReturnType<typeof vi.fn>).mockReset()

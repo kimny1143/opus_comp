@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { InvoiceStatus } from '@prisma/client'
+import { InvoiceStatus, Prisma } from '@prisma/client'
 import { BaseFormWrapper } from '@/components/shared/form/BaseFormWrapper'
 import { SelectField } from '@/components/shared/form/SelectField'
 import { InputField } from '@/components/shared/form/InputField'
@@ -13,11 +13,12 @@ import { OrderItemsForm } from '@/components/shared/form/OrderItemsForm'
 import {
   commonSchemas,
   dateValidation,
-  stringValidation,
-  type Item,
-  type BankInfo,
-  type Tag
+  stringValidation
 } from '@/types/validation/commonValidation'
+import { invoiceItemSchema } from '@/types/validation/invoice'
+import type { Item } from '@/types/validation/item'
+import type { InvoiceCreateInput } from '@/types/invoice'
+import { AccountType } from '@/types/bankAccount'
 
 // 請求書のステータス選択肢
 export const INVOICE_STATUS_OPTIONS = [
@@ -33,7 +34,7 @@ export const invoiceSchema = z.object({
   status: z.nativeEnum(InvoiceStatus),
   issueDate: dateValidation.required,
   dueDate: dateValidation.required,
-  items: z.array(commonSchemas.item).min(1, '品目は1つ以上必要です'),
+  items: z.array(invoiceItemSchema).min(1, '品目は1つ以上必要です'),
   bankInfo: commonSchemas.bankInfo,
   notes: stringValidation.optional,
   vendorId: z.string().optional(),
@@ -47,16 +48,58 @@ export type InvoiceFormData = z.infer<typeof invoiceSchema>
 interface InvoiceFormProps {
   id?: string
   initialData?: Partial<InvoiceFormDataWithRHF>
-  onSubmit: (data: InvoiceFormData) => Promise<void>
+  onSubmit: (data: InvoiceCreateInput) => Promise<void>
   isSubmitting?: boolean
   onCancel?: () => void
   readOnly?: boolean
 }
 
-// InvoiceFormDataを拡張して、itemsをItem[]として定義
-type InvoiceFormDataWithRHF = Omit<InvoiceFormData, 'items'> & {
-  items: Item[]
-}
+// フォームデータの型（すべてオプショナル）
+type InvoiceFormDataWithRHF = {
+  status?: InvoiceStatus;
+  issueDate?: Date;
+  dueDate?: Date;
+  items: Item[];
+  bankInfo: {
+    accountType: AccountType;
+    bankName: string;
+    branchName: string;
+    accountNumber: string;
+    accountHolder: string;
+  };
+  notes?: string;
+  vendorId?: string;
+  purchaseOrderId?: string;
+  tags?: { id?: string; name: string }[];
+  registrationNumber?: string;
+  invoiceNumber?: string;
+};
+
+// フォームデータをAPIの型に変換する関数
+const toInvoiceCreateInput = (data: InvoiceFormDataWithRHF): InvoiceCreateInput => {
+  if (!data.items.length) {
+    throw new Error('品目は1つ以上必要です');
+  }
+
+  return {
+    status: data.status || InvoiceStatus.DRAFT,
+    issueDate: data.issueDate || new Date(),
+    dueDate: data.dueDate || new Date(),
+    items: data.items.map(item => ({
+      id: item.id,
+      itemName: item.itemName,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      taxRate: item.taxRate,
+      description: item.description
+    })),
+    bankInfo: data.bankInfo,
+    notes: data.notes,
+    vendorId: data.vendorId,
+    purchaseOrderId: data.purchaseOrderId,
+    invoiceNumber: data.invoiceNumber
+  };
+};
 
 export function InvoiceForm({
   id,
@@ -72,7 +115,7 @@ export function InvoiceForm({
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     items: [],
     bankInfo: {
-      accountType: 'ORDINARY',
+      accountType: AccountType.ORDINARY,
       bankName: '',
       branchName: '',
       accountNumber: '',
@@ -83,6 +126,7 @@ export function InvoiceForm({
     purchaseOrderId: '',
     tags: [],
     registrationNumber: '',
+    invoiceNumber: '',
     ...initialData
   }
 
@@ -91,8 +135,10 @@ export function InvoiceForm({
     defaultValues
   })
 
-  const handleSubmit = async (data: InvoiceFormDataWithRHF) => {
-    await onSubmit(data)
+  const handleSubmit = async () => {
+    const formData = form.getValues();
+    const apiData = toInvoiceCreateInput(formData);
+    await onSubmit(apiData);
   }
 
   return (

@@ -1,14 +1,8 @@
-import { Invoice, InvoiceStatus, Vendor } from '@prisma/client'
+import { InvoiceStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { sendMail } from '@/lib/mail/sendMail'
-import { BankInfo } from '@/types/invoice'
-
-type InvoiceWithVendor = Invoice & {
-  vendor: Pick<Vendor, 'name' | 'email'>;
-  template: {
-    bankInfo: BankInfo;
-  };
-}
+import { BankInfo } from '@/types'
+import { formatBankInfo } from '@/lib/utils/bankInfo'
 
 // 支払期限が近い請求書のリマインダー送信
 export async function sendPaymentDueReminders() {
@@ -43,7 +37,7 @@ export async function sendPaymentDueReminders() {
     if (!invoice.vendor.email) continue
 
     const bankInfo = invoice.template.bankInfo as unknown as BankInfo
-    if (!isBankInfo(bankInfo)) {
+    if (!validateBankInfo(bankInfo)) {
       console.error(`Invalid bank info for invoice ${invoice.id}`)
       continue
     }
@@ -114,7 +108,7 @@ export async function sendOverdueReminders() {
     if (!invoice.vendor.email) continue
 
     const bankInfo = invoice.template.bankInfo as unknown as BankInfo
-    if (!isBankInfo(bankInfo)) {
+    if (!validateBankInfo(bankInfo)) {
       console.error(`Invalid bank info for invoice ${invoice.id}`)
       continue
     }
@@ -152,26 +146,14 @@ ${formatBankInfo(bankInfo)}
   }
 }
 
-// 銀行情報の型チェック
-function isBankInfo(obj: unknown): obj is BankInfo {
-  if (typeof obj !== 'object' || obj === null) return false
-  const bankInfo = obj as Record<string, unknown>
-  return (
+// 銀行情報の検証
+function validateBankInfo(bankInfo: BankInfo): boolean {
+  return !!(
+    bankInfo &&
     typeof bankInfo.bankName === 'string' &&
     typeof bankInfo.branchName === 'string' &&
-    (bankInfo.accountType === 'ordinary' || bankInfo.accountType === 'current') &&
+    bankInfo.accountType &&
     typeof bankInfo.accountNumber === 'string' &&
     typeof bankInfo.accountHolder === 'string'
   )
-}
-
-// 銀行情報のフォーマット
-function formatBankInfo(bankInfo: BankInfo): string {
-  return `
-銀行名：${bankInfo.bankName}
-支店名：${bankInfo.branchName}
-口座種別：${bankInfo.accountType === 'ordinary' ? '普通' : '当座'}
-口座番号：${bankInfo.accountNumber}
-口座名義：${bankInfo.accountHolder}
-`
 } 

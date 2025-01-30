@@ -1,9 +1,50 @@
 {
   "extends": [
     "next/core-web-vitals",
-    "eslint:recommended"
+    "plugin:@typescript-eslint/recommended",
+    "plugin:cypress/recommended"
   ],
+  "plugins": [
+    "@typescript-eslint",
+    "cypress"
+  ],
+  "env": {
+    "browser": true,
+    "es6": true,
+    "node": true,
+    "cypress/globals": true
+  },
   "rules": {
-    "@next/next/no-html-link-for-pages": "off"
-  }
+    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    "@typescript-eslint/no-explicit-any": "warn",
+    "react/react-in-jsx-scope": "off",
+    "react/jsx-uses-react": "off",
+    "@next/next/no-html-link-for-pages": "off",
+    "no-undef": "error",
+    "no-case-declarations": "warn",
+    "no-mixed-spaces-and-tabs": "error",
+    "react-hooks/exhaustive-deps": "warn",
+    "no-prototype-builtins": "error",
+    "no-cond-assign": ["error", "except-parens"],
+    "no-fallthrough": "error",
+    "@next/next/no-img-element": "warn",
+    "no-useless-catch": "error"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "**/tests/**/*"],
+      "env": {
+        "jest": true
+      },
+      "globals": {
+        "describe": "readonly",
+        "it": "readonly",
+        "expect": "readonly",
+        "beforeEach": "readonly",
+        "afterEach": "readonly",
+        "jest": "readonly",
+        "fail": "readonly"
+      }
+    }
+  ]
 } 

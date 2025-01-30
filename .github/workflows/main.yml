@@ -16,6 +16,7 @@ jobs:
       APP_URL: ${{ vars.APP_URL }}
       NEXTAUTH_URL: ${{ vars.APP_URL }}
       NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+      NODE_ENV: test
 
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +53,11 @@ jobs:
 
       - name: Run E2E Tests
         run: npm run test
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          APP_URL: ${{ vars.APP_URL }}
+          NEXTAUTH_URL: ${{ vars.APP_URL }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
 
       - name: Generate Coverage Report
         run: npm run test:coverage
@@ -74,7 +80,13 @@ jobs:
     needs: test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    environment: production
+    environment: test
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      APP_URL: ${{ vars.APP_URL }}
+      NEXTAUTH_URL: ${{ vars.APP_URL }}
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+      NODE_ENV: production
     steps:
       - uses: actions/checkout@v4
 
@@ -89,9 +101,5 @@ jobs:
 
       - name: Build
         run: npm run build
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          NEXTAUTH_URL: ${{ vars.APP_URL }}
-          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
 
       # デプロイ手順は環境に応じて追加

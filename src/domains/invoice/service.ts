@@ -3,7 +3,8 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { prisma } from '@/lib/prisma';
 import { generateInvoicePDF } from '@/infrastructure/pdf/invoice';
 import { sendInvoiceEmail, SendInvoiceEmailParams } from '@/infrastructure/mail/invoice';
-import { calculateTaxByRate, TaxableItem } from './tax';
+import { calculateTaxSummary } from './tax';
+import type { TaxableItem } from './tax';
 import { 
   QualifiedInvoice, 
   InvoiceStatusType, 
@@ -11,7 +12,6 @@ import {
   QualifiedInvoiceItem,
   BankInfo,
   QualifiedVendor,
-  InvoiceItem,
   InvoiceTaxSummary
 } from './types';
 import { InvoiceItem as PrismaInvoiceItem } from '@prisma/client';
@@ -178,10 +178,10 @@ export class InvoiceService {
 
   private static calculateInvoiceTax(items: PrismaInvoiceItem[]): InvoiceTaxSummary {
     const taxableItems: TaxableItem[] = items.map(item => ({
-      unitPrice: item.unitPrice.toString(),
+      unitPrice: item.unitPrice,
       quantity: item.quantity,
       taxRate: Number(item.taxRate)
     }));
-    return calculateTaxByRate(taxableItems);
+    return calculateTaxSummary(taxableItems);
   }
 } 

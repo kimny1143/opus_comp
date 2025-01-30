@@ -1,9 +1,7 @@
 'use client'
 
-import { useState } from 'react';
 import { InvoiceStatus } from '@prisma/client';
 import { InvoiceStatusDisplay } from '@/types/enums';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -15,18 +13,14 @@ import {
 } 
 from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
+import React, { useCallback } from 'react';
 
 // InvoiceStatusの値を配列として取得
 const InvoiceStatusValues = Object.values(InvoiceStatus).filter(
   (value): value is InvoiceStatus => typeof value === 'string'
 );
 
-interface InvoiceFiltersProps {
-  filters: InvoiceFilters;
-  onFiltersChange: (filters: InvoiceFilters) => void;
-}
-
-export interface InvoiceFilters {
+export interface InvoiceFiltersData {
   search: string;
   status: InvoiceStatus | 'ALL';
   dateFrom: Date | null;
@@ -35,20 +29,28 @@ export interface InvoiceFilters {
   maxAmount?: number | null;
 }
 
+interface InvoiceFiltersProps {
+  filters: InvoiceFiltersData;
+  onFiltersChange: (filters: InvoiceFiltersData) => void;
+}
+
 export const InvoiceFilters: React.FC<InvoiceFiltersProps> = ({
   filters,
   onFiltersChange,
 }) => {
-  const handleFilterChange = (
-    key: keyof InvoiceFilters,
-    value: string | InvoiceStatus | Date | null | number
-  ) => {
-    const newFilters = {
-      ...filters,
-      [key]: value,
-    };
-    onFiltersChange(newFilters);
-  };
+  const handleFilterChange = useCallback(
+    (
+      key: keyof InvoiceFiltersData,
+      value: string | InvoiceStatus | Date | null | number
+    ) => {
+      const newFilters = {
+        ...filters,
+        [key]: value,
+      };
+      onFiltersChange(newFilters);
+    },
+    [filters, onFiltersChange]
+  );
 
   return (
     <div className="space-y-4">

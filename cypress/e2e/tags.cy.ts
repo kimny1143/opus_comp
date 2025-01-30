@@ -1,4 +1,5 @@
 /// <reference types="cypress" />
+// @ts-check
 
 describe('タグ機能', () => {
   let testData: {

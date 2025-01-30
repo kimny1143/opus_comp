@@ -1,6 +1,5 @@
+import React, { useEffect, useState } from 'react';
 import { useSession, signOut } from 'next-auth/react';
-import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import ExportModal from '@/components/ExportModal';
 
@@ -23,7 +22,6 @@ type PaginationInfo = {
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
-  const router = useRouter();
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

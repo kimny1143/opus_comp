@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ReminderType } from '@prisma/client';
 
 interface ReminderSetting {
@@ -18,11 +18,7 @@ export const ReminderSettings: React.FC<Props> = ({ invoiceId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchSettings();
-  }, [invoiceId]);
-
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
       const response = await fetch(`/api/invoices/${invoiceId}/reminders`);
       if (!response.ok) throw new Error('リマインダー設定の取得に失敗しました');
@@ -34,7 +30,11 @@ export const ReminderSettings: React.FC<Props> = ({ invoiceId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [invoiceId]);
+
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
 
   const handleAddReminder = async () => {
     try {

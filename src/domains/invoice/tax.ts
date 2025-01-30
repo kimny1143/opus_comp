@@ -1,5 +1,12 @@
 import { useMemo } from 'react'
-import { TaxCalculation, InvoiceTaxSummary, TaxableItem } from './types'
+import { TaxCalculation, InvoiceTaxSummary } from './types'
+import { Prisma } from '@prisma/client'
+
+export interface TaxableItem {
+  quantity: number;
+  unitPrice: Prisma.Decimal;
+  taxRate: number;
+}
 
 /**
  * 商品1つあたりの税額を計算する
@@ -46,28 +53,31 @@ export const calculateTotal = (items: TaxableItem[]): number => {
 /**
  * 税率ごとの集計を計算する
  */
-export const calculateTaxSummary = (items: TaxableItem[]): InvoiceTaxSummary => {
+export function calculateTaxSummary(items: TaxableItem[]): InvoiceTaxSummary {
   const taxRates = new Set(items.map(item => item.taxRate))
   const byRate = Array.from(taxRates).map(rate => {
-    const itemsWithRate = items.filter(item => item.taxRate === rate)
-    const taxableAmount = itemsWithRate.reduce((acc, item) => {
-      if (item.quantity === 0) return acc
-      return acc + Math.floor(item.unitPrice.toNumber() * item.quantity)
-    }, 0)
-    const taxAmount = Math.floor(taxableAmount * rate)
+    const taxableItems = items.filter(item => item.taxRate === rate)
+    const taxableAmount = taxableItems.reduce((sum, item) => {
+      return sum.plus(item.unitPrice.mul(item.quantity))
+    }, new Prisma.Decimal(0))
+    const taxAmount = taxableAmount.mul(rate / 100)
+
     return {
       taxRate: rate,
-      taxableAmount,
-      taxAmount
+      taxableAmount: taxableAmount.toNumber(),
+      taxAmount: taxAmount.toNumber()
     }
-  }).sort((a, b) => b.taxRate - a.taxRate) // 税率の高い順にソート
+  })
 
-  const totalTaxableAmount = byRate.reduce((acc, rate) => acc + rate.taxableAmount, 0)
-  const totalTaxAmount = byRate.reduce((acc, rate) => acc + rate.taxAmount, 0)
+  const totalTaxableAmount = items.reduce((sum, item) => {
+    return sum.plus(item.unitPrice.mul(item.quantity))
+  }, new Prisma.Decimal(0))
+
+  const totalTaxAmount = byRate.reduce((sum, { taxAmount }) => sum + taxAmount, 0)
 
   return {
     byRate,
-    totalTaxableAmount,
+    totalTaxableAmount: totalTaxableAmount.toNumber(),
     totalTaxAmount
   }
 }

@@ -1,5 +1,6 @@
 import { Prisma, Invoice, InvoiceStatus, Vendor, InvoiceItem } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
+import { AccountType } from '@/types/bankAccount';
 
 export type InvoiceStatusType = InvoiceStatus;
 
@@ -27,7 +28,7 @@ export const InvoiceStatusDisplay: Record<InvoiceStatus, string> = {
 export type BankInfo = Prisma.JsonObject & {
   bankName: string;
   branchName: string;
-  accountType: string;
+  accountType: AccountType;
   accountNumber: string;
   accountName: string;
 };

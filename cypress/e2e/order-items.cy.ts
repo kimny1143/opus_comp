@@ -1,3 +1,6 @@
+/// <reference types="cypress" />
+// @ts-check
+
 describe('明細行フォーム', () => {
   beforeEach(() => {
     cy.log('テストセッションのセットアップを開始');

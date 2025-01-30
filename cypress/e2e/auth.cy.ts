@@ -1,3 +1,6 @@
+/// <reference types="cypress" />
+// @ts-check
+
 import { format } from 'date-fns'
 
 describe('認証機能', () => {
@@ -57,9 +60,12 @@ describe('認証機能', () => {
       cy.get('[data-cy=submit-button]').click()
 
       // APIリクエストの検証
-      cy.wait('@signupRequest', { timeout: 10000 }).then((interception) => {
-        expect(interception.response.statusCode).to.be.oneOf([200, 201])
-        expect(interception.request.body).to.deep.equal({
+      cy.intercept('POST', '/api/auth/signup').as('signupRequest')
+      cy.get('[data-cy=submit-button]').click()
+      cy.wait('@signupRequest').then((interception: Cypress.Interception) => {
+        const { response, request } = interception
+        expect(response?.statusCode).to.be.oneOf([200, 201])
+        expect(request?.body).to.deep.equal({
           email: testEmail,
           password: validPassword,
           confirmPassword: validPassword
@@ -110,6 +116,40 @@ describe('認証機能', () => {
       cy.get('[data-cy=email-error]', { timeout: 10000 })
         .should('be.visible')
         .and('contain', 'このメールアドレスは既に登録されています')
+    })
+  })
+
+  describe('サインアップ', () => {
+    beforeEach(() => {
+      cy.visit('/auth/signup')
+    })
+
+    it('有効な入力で新規ユーザーを登録', () => {
+      const testEmail = `test${Date.now()}@example.com`
+      const validPassword = 'TestPass123'
+
+      // インターセプトの設定
+      cy.intercept('POST', '/api/auth/signup').as('signupRequest')
+
+      cy.get('[data-cy=email-input]').type(testEmail)
+      cy.get('[data-cy=password-input]').type(validPassword)
+      cy.get('[data-cy=confirm-password-input]').type(validPassword)
+      
+      cy.get('[data-cy=submit-button]').click()
+
+      // APIリクエストの検証
+      cy.wait('@signupRequest').should((interception: Cypress.Interception) => {
+        const { response, request } = interception
+        expect(response?.statusCode).to.be.oneOf([200, 201])
+        expect(request?.body).to.deep.equal({
+          email: testEmail,
+          password: validPassword,
+          confirmPassword: validPassword
+        })
+      })
+
+      // サインインページへのリダイレクトを確認
+      cy.url().should('include', '/auth/signin')
     })
   })
 }) 

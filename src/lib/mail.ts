@@ -1,46 +1,42 @@
 import nodemailer from 'nodemailer'
-import { vi } from 'vitest'
+import { render } from '@react-email/render'
+import { EmailTemplate } from '@/components/email/EmailTemplate'
+import { ReactElement } from 'react'
 
-interface MailOptions {
-  to: string
-  subject: string
-  text: string
-  html?: string
+interface MailService {
+  sendEmail: (to: string, subject: string, props: Record<string, any>) => Promise<{ success: boolean; error?: any }>;
 }
 
-class MailService {
-  private transporter: nodemailer.Transporter
-
-  constructor() {
-    this.transporter = nodemailer.createTransport({
+const mailService: MailService = {
+  async sendEmail(to: string, subject: string, props: Record<string, any>) {
+    const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT),
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
         user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      }
+        pass: process.env.SMTP_PASS,
+      },
     })
-  }
 
-  async sendMail(options: MailOptions) {
+    const emailTemplate = EmailTemplate({ ...props }) as ReactElement
+    const emailHtml = await render(emailTemplate)
+
     const mailOptions = {
       from: process.env.SMTP_FROM,
-      ...options
+      to,
+      subject,
+      html: emailHtml,
     }
 
     try {
-      await this.transporter.sendMail(mailOptions)
+      await transporter.sendMail(mailOptions)
+      return { success: true }
     } catch (error) {
-      console.error('メール送信に失敗しました:', error)
-      throw error
+      console.error('Failed to send email:', error)
+      return { success: false, error }
     }
   }
 }
 
-export const mailService = new MailService()
-
-// テスト用のモックメールサービス
-export const mockMailService = {
-  sendMail: vi.fn()
-}
+export { mailService };

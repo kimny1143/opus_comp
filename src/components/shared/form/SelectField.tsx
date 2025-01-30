@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label'
 
 export type SelectOption = {
-  value: string
+  value: string | number
   label: string
 }
 
@@ -17,6 +17,7 @@ export interface SelectFieldProps<T extends FieldValues> {
   required?: boolean
   disabled?: boolean
   className?: string
+  onChange?: (value: string | number) => void
 }
 
 export function SelectField<T extends FieldValues>({
@@ -26,16 +27,24 @@ export function SelectField<T extends FieldValues>({
   options,
   required = false,
   disabled = false,
-  className = ''
+  className = '',
+  onChange
 }: SelectFieldProps<T>) {
   const {
-    field: { value, onChange },
+    field: { value, onChange: fieldOnChange },
     fieldState: { error }
   } = useController({
     name,
     control,
     rules: { required: required && `${label}は必須です` }
   })
+
+  const handleChange = (newValue: string) => {
+    // 数値なら parseFloat, 文字列ならそのまま
+    const parsedValue = isNaN(Number(newValue)) ? newValue : Number(newValue);
+    fieldOnChange(parsedValue);
+    onChange?.(parsedValue);
+  }
 
   return (
     <div className={className}>
@@ -44,8 +53,8 @@ export function SelectField<T extends FieldValues>({
         {required && <span className="text-red-500 ml-1">*</span>}
       </Label>
       <Select
-        value={value}
-        onValueChange={onChange}
+        value={String(value)}
+        onValueChange={handleChange}
         disabled={disabled}
       >
         <SelectTrigger>
@@ -53,7 +62,7 @@ export function SelectField<T extends FieldValues>({
         </SelectTrigger>
         <SelectContent>
           {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
+            <SelectItem key={option.value} value={String(option.value)}>
               {option.label}
             </SelectItem>
           ))}

@@ -2,10 +2,11 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { SerializedInvoice } from "@/types/invoice"
 import { formatDate } from "@/lib/utils/date"
 import { formatCurrency } from "@/lib/utils/format"
+import { AccountType } from "@/types/bankAccount"
 
 interface InvoicePreviewProps {
   invoice: SerializedInvoice;
@@ -15,12 +16,12 @@ interface InvoicePreviewProps {
 export function InvoicePreview({ invoice, onClose }: InvoicePreviewProps) {
   const [open, setOpen] = useState(true)
 
-  const handleOpenChange = (newOpen: boolean) => {
+  const handleOpenChange = useCallback((newOpen: boolean) => {
     setOpen(newOpen);
     if (!newOpen) {
       onClose();
     }
-  };
+  }, [onClose]);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -101,7 +102,7 @@ export function InvoicePreview({ invoice, onClose }: InvoicePreviewProps) {
             <div className="mt-8">
               <h3 className="text-lg font-semibold mb-2">お振込先</h3>
               <p>{invoice.bankInfo.bankName} {invoice.bankInfo.branchName}支店</p>
-              <p>{invoice.bankInfo.accountType === 'ordinary' ? '普通' : '当座'} {invoice.bankInfo.accountNumber}</p>
+              <p>{invoice.bankInfo.accountType === AccountType.ORDINARY ? '普通' : '当座'} {invoice.bankInfo.accountNumber}</p>
               <p>口座名義: {invoice.bankInfo.accountHolder}</p>
             </div>
           )}

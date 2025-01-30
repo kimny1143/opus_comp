@@ -12,20 +12,23 @@ const transporter = createTransport({
   },
 })
 
-// メール送信関数
-export async function sendEmail<T extends MailTemplateType>(
-  to: string,
-  templateType: T,
-  context: MailContext[T]
-): Promise<void> {
-  const template = templates[templateType]
-  const { subject, body } = await template(context)
+export class MailService {
+  static async sendEmail<T extends MailTemplateType>(
+    to: string,
+    templateType: T,
+    context: MailContext[T]
+  ): Promise<void> {
+    const template = templates[templateType]
+    const { subject, body } = await template(context)
 
-  await transporter.sendMail({
-    from: process.env.MAIL_FROM,
-    to,
-    subject,
-    text: body,
-    html: body.replace(/\n/g, '<br>')
-  })
-} 
+    await transporter.sendMail({
+      from: process.env.MAIL_FROM,
+      to,
+      subject,
+      text: body,
+      html: body.replace(/\n/g, '<br>')
+    })
+  }
+}
+
+export const mailService = new MailService() 

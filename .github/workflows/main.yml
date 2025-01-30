@@ -9,7 +9,14 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    environment: test
+    environment:
+      name: test
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      APP_URL: ${{ vars.APP_URL }}
+      NEXTAUTH_URL: ${{ vars.APP_URL }}
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -26,8 +33,6 @@ jobs:
         run: |
           chmod +x .github/workflows/setup-db.sh
           ./.github/workflows/setup-db.sh
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Type Check
         run: npm run type-check
@@ -40,10 +45,6 @@ jobs:
 
       - name: Run E2E Tests
         run: npm run test
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          NEXTAUTH_URL: ${{ vars.APP_URL }}
-          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
 
       - name: Generate Coverage Report
         run: npm run test:coverage

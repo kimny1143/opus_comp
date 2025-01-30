@@ -1,0 +1,27 @@
+{
+  // 使わないでほしいファイルやディレクトリをまとめて指定
+  "ignorePatterns": [
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/__tests__/**",
+    "**/cypress/**",
+    "**/coverage/**",
+    "**/e2e/**",
+    "**/.next/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/*.config.*",
+    "**/*.stories.*",
+    "**/*.d.ts"
+  ],
+  // Next.js は ESM 形式のインポートを使っているはずなので設定
+  "moduleNameFormat": "esm",
+
+  // App Router の動的ルートや特定のエントリーポイントを明示する
+  // この辺りは必要に応じて適宜追加or削除するといい
+  "additionalEntryPoints": [
+    "next.config.js",
+    "src/app/**/route.ts",
+    "src/app/page.tsx"
+  ]
+}

@@ -28,3 +28,6 @@ mock_ui/
 
 # カバレッジ
 coverage/
+
+# 未使用エクスポート
+unused-exports.md

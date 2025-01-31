@@ -27,6 +27,7 @@ model User {
   statusHistory         StatusHistory[]
   createdVendors        Vendor[]          @relation("VendorCreatedBy")
   updatedVendors        Vendor[]          @relation("VendorUpdatedBy")
+  vendors               Vendor[]          @relation("VendorUsers")
   templates             InvoiceTemplate[] @relation("UserTemplates")
 }
 
@@ -123,6 +124,7 @@ model Vendor {
   tags             Tag[]    @relation("TagToVendor")
   invoices         Invoice[]
   purchaseOrders   PurchaseOrder[]
+  users            User[]   @relation("VendorUsers")
 
   @@index([createdById])
   @@index([updatedById])

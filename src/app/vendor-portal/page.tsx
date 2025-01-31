@@ -21,7 +21,8 @@ export default async function VendorPortalPage() {
       }
     },
     include: {
-      tags: true
+      tags: true,
+      users: true
     }
   })
 

@@ -3,18 +3,17 @@
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import Link from 'next/link'
-import { useForm } from 'react-hook-form'
+import { useForm, FormProvider } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { BaseFormWrapper } from '@/components/shared/form/BaseFormWrapper'
 import { InputField } from '@/components/shared/form/InputField'
 import { signinSchema, type SignInFormData } from '@/components/auth/schemas/signinSchema'
 import { useEffect } from 'react'
 
 export default function SignInForm() {
   const router = useRouter()
-  const form = useForm<SignInFormData>({
+  const methods = useForm<SignInFormData>({
     resolver: zodResolver(signinSchema),
     defaultValues: {
       email: '',
@@ -51,66 +50,70 @@ export default function SignInForm() {
   }
 
   return (
-    <Card className="w-full max-w-md" data-testid="signin-card">
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold text-center">サインイン</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <BaseFormWrapper
-          form={form}
-          onSubmit={handleSubmit}
-          data-testid="signin-form"
-        >
-          {(form) => (
-            <div className="space-y-4">
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-full max-w-md shadow-lg">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold text-center">サインイン</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FormProvider {...methods}>
+            <form onSubmit={methods.handleSubmit(handleSubmit)} className="space-y-4" data-testid="signin-form">
               <InputField
                 name="email"
                 label="メールアドレス"
                 type="email"
-                control={form.control}
+                control={methods.control}
                 required
                 data-testid="email-input"
+                className="w-full"
               />
 
               <InputField
                 name="password"
                 label="パスワード"
                 type="password"
-                control={form.control}
+                control={methods.control}
                 required
                 data-testid="password-input"
+                className="w-full"
               />
+
+              <Button type="submit" className="w-full">
+                サインイン
+              </Button>
+            </form>
+          </FormProvider>
+
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="bg-white px-2 text-gray-500">または</span>
+              </div>
             </div>
-          )}
-        </BaseFormWrapper>
 
-        <div className="text-sm text-center">
-          <span className="text-gray-500">アカウントをお持ちでない方は</span>
-          <Link
-            href="/auth/signup"
-            className="font-medium text-primary hover:text-primary/80 ml-1"
-          >
-            新規登録
-          </Link>
-        </div>
-
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300" />
+            <Button
+              onClick={handleGoogleSignIn}
+              variant="outline"
+              className="mt-4 w-full"
+            >
+              Googleでサインイン
+            </Button>
           </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500">または</span>
-          </div>
-        </div>
 
-        <Button
-          onClick={handleGoogleSignIn}
-          variant="outline"
-          className="w-full"
-        >
-          Googleでサインイン
-        </Button>
-      </CardContent>
-    </Card>
+          <div className="mt-6 text-center text-sm">
+            <span className="text-gray-500">アカウントをお持ちでない方は</span>
+            <Link
+              href="/auth/signup"
+              className="font-medium text-primary hover:text-primary/80 ml-1"
+            >
+              新規登録
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 } 

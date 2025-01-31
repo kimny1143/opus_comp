@@ -64,8 +64,8 @@ type InvoiceFormDataWithRHF = {
     id?: string;
     itemName: string;
     quantity: number;
-    unitPrice: number | Prisma.Decimal;
-    taxRate: number | Prisma.Decimal;
+    unitPrice: number;
+    taxRate: number;
     description?: string;
   }>;
   bankInfo: {
@@ -90,15 +90,15 @@ const toInvoiceCreateInput = (data: InvoiceFormDataWithRHF): InvoiceCreateInput 
   }
 
   return {
-    status: data.status || InvoiceStatus.DRAFT,
-    issueDate: data.issueDate || new Date(),
-    dueDate: data.dueDate || new Date(),
+    status: data.status,
+    issueDate: data.issueDate,
+    dueDate: data.dueDate,
     items: data.items.map(item => ({
       id: item.id,
       itemName: item.itemName,
       quantity: item.quantity,
-      unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : item.unitPrice.toNumber(),
-      taxRate: typeof item.taxRate === 'number' ? item.taxRate : item.taxRate.toNumber(),
+      unitPrice: new Prisma.Decimal(item.unitPrice),
+      taxRate: new Prisma.Decimal(item.taxRate),
       description: item.description
     })),
     bankInfo: data.bankInfo,
@@ -118,36 +118,60 @@ export function InvoiceForm({
   readOnly = false
 }: InvoiceFormProps) {
   const { toast } = useToast()
-  const defaultValues = {
+  
+  // 初期値を設定（必須フィールドは必ず値を持つようにする）
+  const baseDefaultValues: InvoiceFormDataWithRHF = {
     status: InvoiceStatus.DRAFT,
     issueDate: new Date(),
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     items: [{
       itemName: '商品名を入力',
       quantity: 1,
-      unitPrice: new Prisma.Decimal(0),
-      taxRate: new Prisma.Decimal(0.1),
+      unitPrice: 0,
+      taxRate: 0.1,
       description: ''
-    }] as const,
+    }],
     bankInfo: {
       accountType: AccountType.ORDINARY,
       bankName: '',
       branchName: '',
       accountNumber: '',
       accountHolder: ''
-    } as const,
+    },
     notes: '',
     vendorId: '',
     purchaseOrderId: '',
-    tags: [{ name: 'タグを入力' }] as const,
-    registrationNumber: 'T0000000000000', // 仮の登録番号（実際の値は適切に設定する必要があります）
-    invoiceNumber: '',
-    ...initialData
-  } as const satisfies Partial<InvoiceFormDataWithRHF>
+    tags: [{ name: 'タグを入力' }],
+    registrationNumber: 'T0000000000000',
+    invoiceNumber: ''
+  }
+
+  // initialDataの値で上書き（必須フィールドは必ず値を持つことを保証）
+  const defaultValues: InvoiceFormDataWithRHF = {
+    ...baseDefaultValues,
+    ...initialData,
+    // 必須フィールドは初期値を保証
+    items: initialData?.items?.length ? initialData.items.map(item => ({
+      ...item,
+      itemName: item.itemName || baseDefaultValues.items[0].itemName,
+      quantity: item.quantity || baseDefaultValues.items[0].quantity,
+      unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : baseDefaultValues.items[0].unitPrice,
+      taxRate: typeof item.taxRate === 'number' ? item.taxRate : baseDefaultValues.items[0].taxRate
+    })) : baseDefaultValues.items,
+    bankInfo: {
+      ...baseDefaultValues.bankInfo,
+      ...initialData?.bankInfo,
+      accountType: initialData?.bankInfo?.accountType || baseDefaultValues.bankInfo.accountType
+    },
+    tags: initialData?.tags?.length ? initialData.tags.map(tag => ({
+      ...tag,
+      name: tag.name || baseDefaultValues.tags[0].name
+    })) : baseDefaultValues.tags
+  }
 
   const methods = useForm<InvoiceFormDataWithRHF>({
     resolver: zodResolver(invoiceSchema),
-    defaultValues: defaultValues as InvoiceFormDataWithRHF
+    defaultValues
   })
 
   const handleSubmit = async (data: InvoiceFormDataWithRHF) => {

@@ -1,4 +1,4 @@
-import { jest, expect as jestExpect } from '@jest/globals'
+import { vi, expect, describe, it, beforeEach, afterEach, beforeAll, afterAll, Mock } from 'vitest'
 import { NextRequest, NextResponse } from 'next/server'
 
 // HTTPステータスコードの定義
@@ -15,20 +15,14 @@ export enum HttpStatus {
 /**
  * テストスイート用のユーティリティ
  */
-export const describe = global.describe
-export const it = global.it
-export const expect = jestExpect
-export const beforeEach = global.beforeEach
-export const afterEach = global.afterEach
-export const beforeAll = global.beforeAll
-export const afterAll = global.afterAll
+export { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll }
 
 /**
  * モック関連のユーティリティ
  */
-export const mockFn = jest.fn
-export const spyOn = jest.spyOn
-export const mocked = jest.mocked
+export const mockFn = vi.fn
+export const spyOn = vi.spyOn
+export const mocked = vi.mocked
 
 /**
  * APIハンドラーのモック用ユーティリティ
@@ -66,9 +60,9 @@ export async function assertApiResponse(
  */
 export function createMockPrisma() {
   return {
-    $transaction: jest.fn((callback: () => any) => callback()),
-    $connect: jest.fn(),
-    $disconnect: jest.fn(),
+    $transaction: vi.fn((callback: () => any) => callback()),
+    $connect: vi.fn(),
+    $disconnect: vi.fn(),
   }
 }
 
@@ -116,4 +110,4 @@ export function assertError(error: unknown, expectedMessage: string): void {
 }
 
 // テスト用の型定義
-export type MockFunction<T extends (...args: any[]) => any> = jest.MockedFunction<T>
+export type MockFunction<T extends (...args: any[]) => any> = Mock<Parameters<T>, ReturnType<T>>

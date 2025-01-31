@@ -1,34 +1,34 @@
-import { jest } from '@jest/globals'
+import { vi, beforeEach, afterEach, afterAll } from 'vitest'
 
 /**
  * モジュールのモック化
  */
-export const mockModule = jest.mock
+export const mockModule = vi.mock
 
 /**
  * モック関数の作成
  */
-export const mockFn = jest.fn
+export const mockFn = vi.fn
 
 /**
  * オブジェクトの監視
  */
-export const spyOn = jest.spyOn
+export const spyOn = vi.spyOn
 
 /**
  * すべてのモックをクリア
  */
-export const clearAllMocks = jest.clearAllMocks
+export const clearAllMocks = vi.clearAllMocks
 
 /**
  * すべてのモックをリセット
  */
-export const resetAllMocks = jest.resetAllMocks
+export const resetAllMocks = vi.resetAllMocks
 
 /**
  * すべてのモックを復元
  */
-export const restoreAllMocks = jest.restoreAllMocks
+export const restoreAllMocks = vi.restoreAllMocks
 
 /**
  * 実装を持つモック関数を作成
@@ -36,28 +36,28 @@ export const restoreAllMocks = jest.restoreAllMocks
 export function createMockFunction<Args extends any[], R>(
   implementation: (...args: Args) => R
 ) {
-  return jest.fn(implementation)
+  return vi.fn(implementation)
 }
 
 /**
  * 解決値を返す非同期モック関数を作成
  */
 export function createAsyncMockFunction<T>(resolvedValue: T) {
-  return jest.fn().mockImplementation(() => Promise.resolve(resolvedValue))
+  return vi.fn().mockImplementation(() => Promise.resolve(resolvedValue))
 }
 
 /**
  * エラーを返す非同期モック関数を作成
  */
 export function createAsyncErrorMockFunction(error: Error) {
-  return jest.fn().mockImplementation(() => Promise.reject(error))
+  return vi.fn().mockImplementation(() => Promise.reject(error))
 }
 
 /**
  * Prismaトランザクションのモック作成
  */
 export function createTransactionMockFunction<T>(callback: (prisma: any) => T) {
-  return jest.fn((fn: (prisma: any) => T) => fn(callback))
+  return vi.fn((fn: (prisma: any) => T) => fn(callback))
 }
 
 /**
@@ -65,15 +65,15 @@ export function createTransactionMockFunction<T>(callback: (prisma: any) => T) {
  */
 export function setupTestMocks(): void {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   afterEach(() => {
-    jest.resetAllMocks()
+    vi.resetAllMocks()
   })
 
   afterAll(() => {
-    jest.restoreAllMocks()
+    vi.restoreAllMocks()
   })
 }
 
@@ -81,12 +81,12 @@ export function setupTestMocks(): void {
  * モックの初期化ヘルパー
  */
 export function initializeMocks(): void {
-  jest.resetModules()
-  jest.clearAllMocks()
+  vi.resetModules()
+  vi.clearAllMocks()
 }
 
-// Vitestからの移行用エイリアス
-export const vi = {
+// Jestとの互換性のためのエイリアス
+export const jest = {
   mock: mockModule,
   fn: mockFn,
   spyOn: spyOn,

@@ -206,4 +206,83 @@
    4. CIパイプラインの更新
 
 この移行作業は既存のテストコードに広範な影響を与える可能性があるため、慎重な計画と実行が必要です。
-承認後、詳細な移行計画を作成し、段階的に実施することを提案します。
+管理者からの承認を受け、以下の手順で移行を実施します。
+
+### Jest→Vitest移行手順
+
+#### 1. Jest関連ファイルの削除
+
+1. jest.config.tsの削除
+
+   - ファイルごと削除
+   - Vitest設定ファイルへ一本化
+
+2. jest.setup.tsの移行
+
+   - vitest.setup.tsへリネーム
+   - Jest特有のモジュール確認
+   - @testing-library/jest-domの互換性確認
+
+3. Jest依存パッケージの削除
+
+   - @jest/types
+   - @jest/globals
+   - jest
+   - 関連パッケージのアンインストール
+
+4. tsconfig.jsonの修正
+   - Jest関連の型定義削除
+   - mocha型定義の削除
+
+#### 2. テストヘルパーの書き換え
+
+- src/test/helpers/mockHelpers.ts
+- src/test/helpers/testUtils.ts
+- Jestグローバル関数のVitest APIへの置換
+- import文の明示的な追加
+
+#### 3. Vitestの設定調整
+
+1. maxWorkersの型エラー修正
+
+   - パーセンテージ指定を数値に変換
+   - 例: '50%' → 0.5
+
+2. 設定ファイルの整理
+
+   - setupFilesの指定
+   - testTimeoutの設定
+   - environment設定の移行
+
+3. CI/CD設定の更新
+   - Jestコマンドの置換
+   - Vitestコマンドへの移行
+
+#### 4. 実施ステップ
+
+1. 依存関係の整理
+
+   - パッケージのアンインストール
+   - 設定ファイルの修正
+
+2. ファイル移行
+
+   - jest.config.ts削除
+   - jest.setup.ts → vitest.setup.ts
+
+3. コード修正
+
+   - テストヘルパーの書き換え
+   - グローバル関数の置換
+
+4. 設定調整
+
+   - maxWorkers設定の修正
+   - 環境設定の最適化
+
+5. 動作確認
+   - ローカルテスト実行
+   - CIパイプラインの確認
+   - カバレッジレポートの検証
+
+この移行計画に基づき、段階的に実施を進めていきます。

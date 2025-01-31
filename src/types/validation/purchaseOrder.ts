@@ -1,73 +1,111 @@
-import { z } from "zod";
-import { PurchaseOrderStatus } from "@prisma/client";
+import { z } from 'zod'
+import { baseValidationMessages, baseValidationRules } from './base'
+import { numberValidation } from './number'
+import { PurchaseOrderStatus } from '@prisma/client'
 
-// 発注品目のスキーマ
+/**
+ * 発注書の品目バリデーションスキーマ
+ */
 export const purchaseOrderItemSchema = z.object({
-  name: z.string().min(1, "品目名は必須です"),
-  quantity: z.number().min(0, "数量は0以上である必要があります"),
-  unitPrice: z.number().min(0, "単価は0以上である必要があります"),
-  taxRate: z.number().min(0, "税率は0以上である必要があります"),
-  description: z.string().optional(),
-  amount: z.number().min(0, "金額は0以上である必要があります"),
-});
-
-// タグのスキーマ
-export const tagSchema = z.object({
   id: z.string().optional(),
-  name: z.string().min(1, "タグ名は必須です"),
-});
+  itemName: baseValidationRules.requiredString.min(2, baseValidationMessages.minLength(2)),
+  description: baseValidationRules.optionalString,
+  quantity: numberValidation.quantity,
+  unitPrice: numberValidation.positivePrice,
+  taxRate: numberValidation.defaultTaxRate,
+  amount: z.number().optional()
+})
 
-// メインの発注書スキーマ
+/**
+ * 発注書のバリデーションスキーマ
+ */
 export const purchaseOrderSchema = z.object({
-  status: z.nativeEnum(PurchaseOrderStatus),
-  orderDate: z.date(),
-  deliveryDate: z.date().optional(),
-  items: z.array(purchaseOrderItemSchema).min(1, "品目は1つ以上必要です"),
-  notes: z.string().optional(),
-  vendorId: z.string().min(1, "取引先の選択は必須です"),
-  tags: z.array(tagSchema).optional(),
-  deliveryAddress: z.string().optional(),
-  orderNumber: z.string().optional(),
-  totalAmount: z.number().min(0, "合計金額は0以上である必要があります"),
-  taxAmount: z.number().min(0, "税額は0以上である必要があります"),
-  projectId: z.string().optional(),
-  terms: z.string().optional(),
-  description: z.string().optional(),
+  vendorId: z.string().min(1, baseValidationMessages.required),
+  orderDate: baseValidationRules.requiredDate,
+  deliveryDate: baseValidationRules.futureDate.nullable(),
+  status: z.nativeEnum(PurchaseOrderStatus, {
+    required_error: 'ステータスは必須です',
+    invalid_type_error: '無効なステータスです'
+  }),
+  description: baseValidationRules.optionalString,
+  items: baseValidationRules.nonEmptyArray(purchaseOrderItemSchema),
+  terms: baseValidationRules.optionalString,
+  tags: z.array(z.object({
+    id: z.string().optional(),
+    name: baseValidationRules.requiredString
+  })).optional()
 }).refine(
-  (data) => {
-    // 合計金額の検証
-    const calculatedTotal = data.items.reduce((sum, item) => sum + item.amount, 0);
-    return Math.abs(calculatedTotal - data.totalAmount) < 0.01; // 小数点の誤差を考慮
+  data => {
+    if (data.deliveryDate && data.orderDate) {
+      return data.deliveryDate > data.orderDate
+    }
+    return true
   },
   {
-    message: "合計金額が品目の合計と一致しません",
-    path: ["totalAmount"],
+    message: '納期は発注日より後の日付を指定してください',
+    path: ['deliveryDate']
   }
-);
+)
 
-// React Hook Form 用型
-export type PurchaseOrderFormData = z.infer<typeof purchaseOrderSchema>;
+/**
+ * ステータス変更時のバリデーションスキーマ
+ */
+export const statusChangeSchema = z.object({
+  status: z.nativeEnum(PurchaseOrderStatus, {
+    required_error: 'ステータスは必須です',
+    invalid_type_error: '無効なステータスです'
+  }),
+  comment: z.string().optional()
+}).refine(
+  data => {
+    // ステータスが REJECTED の場合はコメントを必須とする
+    if (data.status === PurchaseOrderStatus.REJECTED && !data.comment) {
+      return false
+    }
+    return true
+  },
+  {
+    message: '却下理由を入力してください',
+    path: ['comment']
+  }
+)
 
-// React Hook Form 用に最適化した型
-export type PurchaseOrderFormDataRHF = Omit<PurchaseOrderFormData, "items" | "tags"> & {
-  items: z.infer<typeof purchaseOrderItemSchema>[];
-  tags: z.infer<typeof tagSchema>[];
-};
+/**
+ * 型定義のエクスポート
+ */
+export type PurchaseOrderItem = z.infer<typeof purchaseOrderItemSchema>
+export type PurchaseOrderData = z.infer<typeof purchaseOrderSchema>
+export type StatusChangeData = z.infer<typeof statusChangeSchema>
 
-// フォームの初期値
-export const defaultPurchaseOrderFormData: PurchaseOrderFormData = {
-  orderDate: new Date(),
-  deliveryDate: undefined,
-  items: [],
-  notes: "",
-  vendorId: "",
-  tags: [],
-  deliveryAddress: "",
-  orderNumber: "",
-  status: PurchaseOrderStatus.DRAFT,
-  totalAmount: 0,
-  taxAmount: 0,
-  projectId: undefined,
-  terms: "",
-  description: "",
-}; 
+/**
+ * バリデーションエラーの型
+ */
+export type ValidationError = {
+  path: (string | number)[]
+  message: string
+}
+
+/**
+ * バリデーションエラーをフォーマットする関数
+ */
+export const formatValidationErrors = (error: z.ZodError): ValidationError[] => {
+  return error.errors.map(err => ({
+    path: err.path,
+    message: err.message
+  }))
+}
+
+/**
+ * バリデーションエラーメッセージを取得する関数
+ */
+export const getFieldError = (
+  errors: ValidationError[] | null,
+  path: (string | number)[]
+): string | null => {
+  if (!errors) return null
+  const error = errors.find(err => 
+    err.path.length === path.length && 
+    err.path.every((value, index) => value === path[index])
+  )
+  return error ? error.message : null
+}

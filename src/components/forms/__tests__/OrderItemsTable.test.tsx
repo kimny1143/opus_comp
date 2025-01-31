@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { OrderItemsTable } from '../OrderItemsTable'
 import { OrderItem } from '../schemas/orderSchema'
 
@@ -14,16 +15,16 @@ describe('OrderItemsTable', () => {
   ]
 
   const mockHandlers = {
-    onAddItem: jest.fn(),
-    onRemoveItem: jest.fn(),
-    onUpdateItem: jest.fn(),
+    onAddItem: vi.fn(),
+    onRemoveItem: vi.fn(),
+    onUpdateItem: vi.fn(),
     calculateSubtotal: () => 2000,
     calculateTaxAmount: () => 200,
     calculateTotal: () => 2200
   }
 
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   it('明細項目が正しく表示されること', () => {
@@ -98,10 +99,10 @@ describe('OrderItemsTable', () => {
 
     // 品目名を更新
     const itemNameInput = screen.getByDisplayValue('商品A')
-    fireEvent.change(itemNameInput, { target: { value: '商品A（更新）' } })
+    fireEvent.change(itemNameInput, { target: { value: '商品A(更新)' } })
     expect(mockHandlers.onUpdateItem).toHaveBeenCalledWith(0, {
       ...mockItems[0],
-      itemName: '商品A（更新）'
+      itemName: '商品A(更新)'
     })
 
     // 数量を更新
@@ -132,4 +133,4 @@ describe('OrderItemsTable', () => {
     expect(screen.queryByText('項目を追加')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '' })).not.toBeInTheDocument()
   })
-}) 
+})

@@ -36,10 +36,10 @@ describe('Tag', () => {
   it('サイズに応じて適切なスタイルが適用される', () => {
     const { rerender } = render(<Tag tag={mockTag} size="sm" />)
     const tag = screen.getByText('テストタグ').parentElement
-    expect(tag).toHaveClass('text-xs', 'px-2', 'py-0.5')
+    expect(tag).toHaveClass('text-xs px-2 py-0.5')
 
     rerender(<Tag tag={mockTag} size="md" />)
-    expect(tag).not.toHaveClass('text-xs', 'px-2', 'py-0.5')
+    expect(tag).not.toHaveClass('text-xs px-2 py-0.5')
   })
 
   it('カスタムクラス名が適用される', () => {

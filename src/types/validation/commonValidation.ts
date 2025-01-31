@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { AccountType } from '../bankAccount'
 
 /**
  * 共通のバリデーションメッセージ
@@ -128,7 +129,7 @@ const commonSchemas = {
   bankInfo: z.object({
     bankName: stringValidation.required,
     branchName: stringValidation.required,
-    accountType: z.enum(['ORDINARY', 'CURRENT', 'SAVINGS']),
+    accountType: z.nativeEnum(AccountType),
     accountNumber: stringValidation.accountNumber,
     accountHolder: stringValidation.required
   }),

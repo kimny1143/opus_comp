@@ -64,8 +64,8 @@ type InvoiceFormDataWithRHF = {
     id?: string;
     itemName: string;
     quantity: number;
-    unitPrice: number;
-    taxRate: number;
+    unitPrice: number | Prisma.Decimal;
+    taxRate: number | Prisma.Decimal;
     description?: string;
   }>;
   bankInfo: {
@@ -97,8 +97,8 @@ const toInvoiceCreateInput = (data: InvoiceFormDataWithRHF): InvoiceCreateInput 
       id: item.id,
       itemName: item.itemName,
       quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      taxRate: item.taxRate,
+      unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : item.unitPrice.toNumber(),
+      taxRate: typeof item.taxRate === 'number' ? item.taxRate : item.taxRate.toNumber(),
       description: item.description
     })),
     bankInfo: data.bankInfo,
@@ -118,36 +118,36 @@ export function InvoiceForm({
   readOnly = false
 }: InvoiceFormProps) {
   const { toast } = useToast()
-  const defaultValues: Partial<InvoiceFormDataWithRHF> = {
+  const defaultValues = {
     status: InvoiceStatus.DRAFT,
     issueDate: new Date(),
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     items: [{
       itemName: '商品名を入力',
       quantity: 1,
-      unitPrice: 0,
-      taxRate: 0.1,
+      unitPrice: new Prisma.Decimal(0),
+      taxRate: new Prisma.Decimal(0.1),
       description: ''
-    } as const],
+    }] as const,
     bankInfo: {
       accountType: AccountType.ORDINARY,
       bankName: '',
       branchName: '',
       accountNumber: '',
       accountHolder: ''
-    },
+    } as const,
     notes: '',
     vendorId: '',
     purchaseOrderId: '',
-    tags: [{ name: 'タグを入力' } as const],
-    registrationNumber: '',
+    tags: [{ name: 'タグを入力' }] as const,
+    registrationNumber: 'T0000000000000', // 仮の登録番号（実際の値は適切に設定する必要があります）
     invoiceNumber: '',
     ...initialData
-  }
+  } as const satisfies Partial<InvoiceFormDataWithRHF>
 
   const methods = useForm<InvoiceFormDataWithRHF>({
     resolver: zodResolver(invoiceSchema),
-    defaultValues
+    defaultValues: defaultValues as InvoiceFormDataWithRHF
   })
 
   const handleSubmit = async (data: InvoiceFormDataWithRHF) => {

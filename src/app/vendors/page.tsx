@@ -1,69 +1,56 @@
-import { redirect } from 'next/navigation'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
+import { Suspense } from 'react'
 import { VendorList } from '@/components/vendors/VendorList'
 import { prisma } from '@/lib/prisma'
 
-export default async function VendorsPage() {
-  const session = await getServerSession(authOptions)
-  
-  if (!session) {
-    redirect('/auth/signin')
-  }
+export const metadata = {
+  title: '取引先一覧 - OPUS',
+  description: '取引先の一覧を表示し、検索やフィルタリングができます。',
+}
 
-  const vendors = await prisma.vendor.findMany({
+export default async function VendorsPage() {
+  const rawVendors = await prisma.vendor.findMany({
     select: {
       id: true,
       name: true,
       category: true,
-      status: true,
       code: true,
-      phone: true,
+      status: true,
       email: true,
+      phone: true,
       updatedAt: true,
       tags: {
         select: {
-          name: true
-        }
+          name: true,
+        },
       },
       createdBy: {
         select: {
-          name: true
-        }
+          name: true,
+        },
       },
       updatedBy: {
         select: {
-          name: true
-        }
-      }
+          name: true,
+        },
+      },
     },
     orderBy: {
-      updatedAt: 'desc'
-    }
+      updatedAt: 'desc',
+    },
   })
 
-  console.log('Vendors from DB:', JSON.stringify(vendors, null, 2))
-
-  // タグをオブジェクトから文字列の配列に変換し、必要なフィールドのみを抽出
-  const formattedVendors = vendors.map(vendor => ({
-    id: vendor.id,
-    name: vendor.name,
-    category: vendor.category,
-    code: vendor.code,
-    status: vendor.status,
-    email: vendor.email,
-    phone: vendor.phone,
-    updatedAt: vendor.updatedAt,
+  // タグ名の配列に変換
+  const vendors = rawVendors.map(vendor => ({
+    ...vendor,
     tags: vendor.tags.map(tag => tag.name),
-    createdBy: {
-      name: vendor.createdBy?.name || null
-    },
-    updatedBy: {
-      name: vendor.updatedBy?.name || null
-    }
   }))
 
-  console.log('Formatted vendors:', JSON.stringify(formattedVendors, null, 2))
-
-  return <VendorList vendors={formattedVendors} />
-} 
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold mb-6">取引先一覧</h1>
+      <Suspense fallback={<div className="h-[400px] animate-pulse bg-gray-200 rounded-md" />}>
+        <VendorList vendors={vendors} />
+      </Suspense>
+    </div>
+  )
+}

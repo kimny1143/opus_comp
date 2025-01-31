@@ -1,5 +1,10 @@
 import '@testing-library/jest-dom'
-import { vi, beforeEach, afterEach, afterAll } from 'vitest'
+import { expect, vi, beforeEach, afterEach, afterAll } from 'vitest'
+import { cleanup } from '@testing-library/react'
+import matchers from '@testing-library/jest-dom/matchers'
+
+// Testing Libraryのマッチャーを拡張
+expect.extend(matchers)
 
 // テスト環境の設定
 process.env.REDIS_URL = 'redis://localhost:6379'
@@ -75,6 +80,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  cleanup()
   vi.clearAllMocks()
 })
 
@@ -84,3 +90,17 @@ afterAll(() => {
   console.warn = originalConsoleWarn
   console.log = originalConsoleLog
 })
+
+// Testing Libraryのカスタムマッチャーの型定義
+declare module 'vitest' {
+  interface Assertion<T = any> {
+    toBeInTheDocument(): void;
+    toHaveClass(className: string): void;
+    toBeVisible(): void;
+    toBeDisabled(): void;
+    toHaveValue(value: string | number | string[]): void;
+    toHaveAttribute(attr: string, value?: string): void;
+    toHaveTextContent(text: string | RegExp): void;
+    toHaveLength(length: number): void;
+  }
+}

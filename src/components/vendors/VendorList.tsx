@@ -1,16 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Vendor, VendorCategory, VendorStatus } from '@prisma/client'
-import { Building2, Phone, Mail, Calendar, LayoutGrid, LayoutList } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Building2, Phone, Mail, Calendar, LayoutGrid, List } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { VENDOR_CATEGORY_LABELS } from './schemas'
-import { VendorWithRelations } from '@/types/vendor'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { List } from 'lucide-react'
+import { VendorFilters, VendorFiltersData } from './VendorFilters'
 
 interface VendorListProps {
   vendors: {
@@ -36,6 +35,52 @@ type ViewMode = 'list' | 'grid'
 
 export function VendorList({ vendors }: VendorListProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('list')
+  const [filters, setFilters] = useState<VendorFiltersData>({
+    search: '',
+    category: 'ALL',
+    status: 'ALL',
+    tags: []
+  })
+
+  // 利用可能なタグの一覧を取得
+  const availableTags = useMemo(() => {
+    const tagSet = new Set<string>()
+    vendors.forEach(vendor => {
+      vendor.tags.forEach(tag => tagSet.add(tag))
+    })
+    return Array.from(tagSet)
+  }, [vendors])
+
+  // フィルタリングされた取引先一覧
+  const filteredVendors = useMemo(() => {
+    return vendors.filter(vendor => {
+      // キーワード検索
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase()
+        const matchesName = vendor.name.toLowerCase().includes(searchLower)
+        const matchesCode = vendor.code.toLowerCase().includes(searchLower)
+        if (!matchesName && !matchesCode) return false
+      }
+
+      // 区分フィルター
+      if (filters.category !== 'ALL' && vendor.category !== filters.category) {
+        return false
+      }
+
+      // ステータスフィルター
+      if (filters.status !== 'ALL' && vendor.status !== filters.status) {
+        return false
+      }
+
+      // タグフィルター
+      if (filters.tags.length > 0) {
+        const hasAllTags = filters.tags.every(tag => vendor.tags.includes(tag))
+        if (!hasAllTags) return false
+      }
+
+      return true
+    })
+  }, [vendors, filters])
 
   return (
     <div className="space-y-4">
@@ -64,6 +109,12 @@ export function VendorList({ vendors }: VendorListProps) {
         </div>
       </div>
 
+      <VendorFilters
+        filters={filters}
+        onFiltersChange={setFilters}
+        availableTags={availableTags}
+      />
+
       {viewMode === 'list' ? (
         <div className="rounded-md border">
           <Table>
@@ -79,7 +130,7 @@ export function VendorList({ vendors }: VendorListProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {vendors.map((vendor) => (
+              {filteredVendors.map((vendor) => (
                 <TableRow key={vendor.id}>
                   <TableCell>
                     <Link
@@ -89,7 +140,7 @@ export function VendorList({ vendors }: VendorListProps) {
                       {vendor.name}
                     </Link>
                   </TableCell>
-                  <TableCell>{vendor.category}</TableCell>
+                  <TableCell>{VENDOR_CATEGORY_LABELS[vendor.category]}</TableCell>
                   <TableCell>{vendor.code}</TableCell>
                   <TableCell>{vendor.status}</TableCell>
                   <TableCell>
@@ -110,7 +161,7 @@ export function VendorList({ vendors }: VendorListProps) {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {vendors.map((vendor) => (
+          {filteredVendors.map((vendor) => (
             <Card key={vendor.id} className="p-4">
               <div className="space-y-2">
                 <div>
@@ -122,7 +173,7 @@ export function VendorList({ vendors }: VendorListProps) {
                   </Link>
                 </div>
                 <div className="text-sm text-gray-500">
-                  <div>区分: {vendor.category}</div>
+                  <div>区分: {VENDOR_CATEGORY_LABELS[vendor.category]}</div>
                   <div>コード: {vendor.code}</div>
                   <div>ステータス: {vendor.status}</div>
                   {vendor.email && <div>メール: {vendor.email}</div>}

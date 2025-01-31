@@ -9,6 +9,7 @@ setup('グローバルセットアップ', async () => {
   // データベースのクリーンアップ
   await prisma.$transaction([
     prisma.invoice.deleteMany(),
+    prisma.purchaseOrder.deleteMany(),
     prisma.vendor.deleteMany(),
     prisma.user.deleteMany(),
   ]);

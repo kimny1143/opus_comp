@@ -4,9 +4,6 @@ const path = require('path')
 const nextConfig = {
   reactStrictMode: true,
   experimental: {
-    // Server Actions設定
-    serverActions: true,
-    instrumentationHook: false,
     // パフォーマンス最適化
     optimizeCss: true,
     optimizePackageImports: ['@/components']
@@ -14,22 +11,6 @@ const nextConfig = {
   // SWC設定を最適化
   swcMinify: true,
   compiler: {
-    // SWC特有の設定
-    swc: {
-      jsc: {
-        transform: {
-          react: {
-            runtime: 'automatic'
-          }
-        },
-        parser: {
-          syntax: 'typescript',
-          tsx: true,
-          decorators: true
-        },
-        target: 'es2022'
-      }
-    },
     // 本番環境でのみconsole.logを削除
     removeConsole: process.env.NODE_ENV === 'production'
   },

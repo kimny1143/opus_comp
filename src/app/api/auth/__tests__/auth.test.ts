@@ -88,7 +88,7 @@ describe('認証API', () => {
 
   describe('ログイン認証', () => {
     it('有効な認証情報でログインできる', async () => {
-      const mockSession = {
+      const mockSessionData = {
         user: {
           id: '1',
           email: 'test@example.com',
@@ -97,7 +97,7 @@ describe('認証API', () => {
         }
       }
 
-      setupSession(mockSession)
+      setupSession(mockSessionData)
 
       const handler = mockApiHandler()
       const request = createMockRequest({
@@ -113,7 +113,7 @@ describe('認証API', () => {
       const data = await response.json()
       expect(data).toEqual({
         data: {
-          user: mockSession.user
+          user: mockSessionData.user
         }
       })
     })
@@ -136,4 +136,4 @@ describe('認証API', () => {
       })
     })
   })
-}) 
+})

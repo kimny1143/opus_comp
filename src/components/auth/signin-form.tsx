@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { BaseFormWrapper } from '@/components/shared/form/BaseFormWrapper'
 import { InputField } from '@/components/shared/form/InputField'
 import { signinSchema, type SignInFormData } from '@/components/auth/schemas/signinSchema'
+import { useEffect } from 'react'
 
 export default function SignInForm() {
   const router = useRouter()
@@ -21,8 +22,14 @@ export default function SignInForm() {
     }
   })
 
+  // デバッグ用：コンポーネントのマウント確認
+  useEffect(() => {
+    console.log('SignInForm mounted')
+  }, [])
+
   const handleSubmit = async (data: SignInFormData) => {
     try {
+      console.log('Form submitted:', data) // デバッグ用
       const result = await signIn('credentials', {
         email: data.email,
         password: data.password,
@@ -44,7 +51,7 @@ export default function SignInForm() {
   }
 
   return (
-    <Card className="w-full max-w-md">
+    <Card className="w-full max-w-md" data-testid="signin-card">
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-center">サインイン</CardTitle>
       </CardHeader>
@@ -52,6 +59,7 @@ export default function SignInForm() {
         <BaseFormWrapper
           form={form}
           onSubmit={handleSubmit}
+          data-testid="signin-form"
         >
           {(form) => (
             <div className="space-y-4">
@@ -61,6 +69,7 @@ export default function SignInForm() {
                 type="email"
                 control={form.control}
                 required
+                data-testid="email-input"
               />
 
               <InputField
@@ -69,6 +78,7 @@ export default function SignInForm() {
                 type="password"
                 control={form.control}
                 required
+                data-testid="password-input"
               />
             </div>
           )}

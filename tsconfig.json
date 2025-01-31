@@ -27,9 +27,7 @@
     "types": [
       "node",
       "vitest",
-      "@testing-library/jest-dom",
       "cypress",
-      "mocha",
       "react",
       "react-dom",
       "@types/pdfkit"

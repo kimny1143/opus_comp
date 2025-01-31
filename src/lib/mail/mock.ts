@@ -1,8 +1,13 @@
-export const mockSendEmail = async (
+import { MailTemplateType, MailContext } from './types'
+
+export async function mockSendEmail<T extends MailTemplateType>(
   to: string,
-  subject: string,
-  props: Record<string, any>
-): Promise<{ success: boolean; error?: any }> => {
-  console.log('Mock email sent:', { to, subject, props });
-  return { success: true };
-};
+  templateType: T,
+  context: MailContext[T]
+): Promise<void> {
+  console.log('Mock email sent:', {
+    to,
+    templateType,
+    context
+  })
+}

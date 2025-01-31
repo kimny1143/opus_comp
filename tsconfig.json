@@ -27,6 +27,8 @@
     "types": [
       "node",
       "vitest",
+      "vitest/globals",
+      "@testing-library/jest-dom",
       "cypress",
       "react",
       "react-dom",
@@ -40,7 +42,8 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "cypress/**/*.ts"
+    "cypress/**/*.ts",
+    "src/test/setup.ts"
   ],
   "exclude": ["node_modules", "mock_ui/**/*"]
 }

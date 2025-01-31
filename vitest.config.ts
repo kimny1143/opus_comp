@@ -8,7 +8,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    setupFiles: ['./jest.setup.ts'],
+    setupFiles: ['./vitest.setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     exclude: [
       '**/node_modules/**',
@@ -37,7 +37,7 @@ export default defineConfig({
     },
     testTimeout: 30000,
     maxConcurrency: 5,
-    maxWorkers: '50%',
+    maxWorkers: 0.5,
     alias: {
       '@': resolve(__dirname, './src'),
     },

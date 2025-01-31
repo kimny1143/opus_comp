@@ -1,92 +1,145 @@
-import { prisma } from '@/lib/prisma'
-import { v4 as uuidv4 } from 'uuid'
+import { PrismaAdapter } from '@next-auth/prisma-adapter'
+import { NextAuthOptions, DefaultSession, DefaultUser } from 'next-auth'
+import CredentialsProvider from 'next-auth/providers/credentials'
+import { prisma } from './prisma'
+import { sessionManager } from './auth/session-manager'
+import type { Session as RedisSession } from './auth/session-manager'
+import bcrypt from 'bcryptjs'
 
-interface Session {
-  id: string
-  userId: string
-  role: string
-  createdAt: Date
-  expiresAt: Date
+// カスタムユーザー型
+interface CustomUser extends DefaultUser {
+  role?: string
 }
 
-interface SessionCreateParams {
-  userId: string
-  role: string
-}
-
-class SessionManager {
-  private sessions: Map<string, Session>
-
-  constructor() {
-    this.sessions = new Map()
-  }
-
-  async create(params: SessionCreateParams): Promise<Session> {
-    const sessionId = uuidv4()
-    const now = new Date()
-    const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000) // 24時間後
-
-    const session: Session = {
-      id: sessionId,
-      userId: params.userId,
-      role: params.role,
-      createdAt: now,
-      expiresAt
-    }
-
-    this.sessions.set(sessionId, session)
-    return session
-  }
-
-  async get(sessionId: string): Promise<Session | null> {
-    const session = this.sessions.get(sessionId)
-    if (!session) return null
-
-    // 有効期限切れのセッションを削除
-    if (new Date() > session.expiresAt) {
-      this.sessions.delete(sessionId)
-      return null
-    }
-
-    return session
-  }
-
-  async destroy(sessionId: string): Promise<boolean> {
-    return this.sessions.delete(sessionId)
+// カスタムセッション型
+interface CustomSession extends DefaultSession {
+  user?: CustomUser & {
+    id: string
+    sessionId?: string
   }
 }
 
-export const session = new SessionManager()
-
-// テスト用のモックセッション
-interface MockFunction<T> {
-  (...args: any[]): T;
-  mockResolvedValue: (value: T extends Promise<infer U> ? U : never) => void;
-  mockImplementation: (fn: (...args: any[]) => T) => void;
+declare module 'next-auth' {
+  interface User extends CustomUser {}
+  interface Session extends CustomSession {}
 }
 
-interface MockedSessionManager {
-  create: MockFunction<Promise<Session>>;
-  get: MockFunction<Promise<Session | null>>;
-  destroy: MockFunction<Promise<boolean>>;
+declare module 'next-auth/jwt' {
+  interface JWT {
+    userId: string
+    role: string
+    sessionId?: string
+  }
 }
 
-function createMockFunction<T>(): MockFunction<T> {
-  let implementation = (...args: any[]): T => ({} as T);
-  const fn = (...args: any[]): T => implementation(...args);
-  fn.mockResolvedValue = (value: T extends Promise<infer U> ? U : never) => {
-    implementation = (async () => value) as unknown as (...args: any[]) => T;
-  };
-  fn.mockImplementation = (newImpl: (...args: any[]) => T) => {
-    implementation = newImpl;
-  };
-  return fn as MockFunction<T>;
+export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(prisma),
+  providers: [
+    CredentialsProvider({
+      name: 'Credentials',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' }
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error('メールアドレスとパスワードを入力してください')
+        }
+
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email }
+        })
+
+        if (!user || !user.hashedPassword) {
+          throw new Error('ユーザーが見つかりません')
+        }
+
+        const isValid = await bcrypt.compare(credentials.password, user.hashedPassword)
+
+        if (!isValid) {
+          throw new Error('パスワードが正しくありません')
+        }
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role
+        }
+      }
+    })
+  ],
+  session: {
+    strategy: 'jwt',
+    maxAge: 24 * 60 * 60, // 24時間
+  },
+  pages: {
+    signIn: '/auth/signin',
+    error: '/auth/error',
+  },
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.userId = user.id
+        token.role = user.role || 'USER'
+      }
+      return token
+    },
+    async session({ session, token }): Promise<CustomSession> {
+      if (token && session.user) {
+        try {
+          // Redisセッションの作成または更新
+          const redisSession = await sessionManager.create({
+            userId: token.userId as string,
+            role: token.role as string,
+          })
+
+          return {
+            ...session,
+            user: {
+              ...session.user,
+              id: token.userId,
+              role: token.role,
+              sessionId: redisSession.id,
+            },
+          }
+        } catch (error) {
+          console.error('Failed to create/update Redis session:', error)
+          return session
+        }
+      }
+      return session
+    },
+  },
+  events: {
+    async signOut({ token }) {
+      try {
+        if (token && typeof token.sessionId === 'string') {
+          await sessionManager.destroy(token.sessionId)
+        }
+      } catch (error) {
+        console.error('Failed to destroy session:', error)
+      }
+    },
+  },
 }
 
-export const mockSession: MockedSessionManager = {
-  create: createMockFunction<Promise<Session>>(),
-  get: createMockFunction<Promise<Session | null>>(),
-  destroy: createMockFunction<Promise<boolean>>()
-};
+// セッションの検証ユーティリティ
+export async function validateSession(sessionId: string): Promise<RedisSession | null> {
+  try {
+    return await sessionManager.get(sessionId)
+  } catch (error) {
+    console.error('Session validation failed:', error)
+    return null
+  }
+}
 
-export type { Session, SessionCreateParams } 
+// ロールベースの認可チェック
+export function hasRequiredRole(
+  session: CustomSession | null,
+  requiredRole: string
+): boolean {
+  return session?.user?.role === requiredRole
+}
+
+export type { CustomSession, CustomUser }

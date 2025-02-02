@@ -2,7 +2,8 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { InvoicePreviewModal } from '../InvoicePreviewModal';
 import { QualifiedInvoice } from '@/types/invoice';
-import { ItemCategory } from '@/types/itemCategory';
+import { createTestViewTaxCalculation } from '@/test/factories/tax';
+import { toDbTaxCalculation } from '@/utils/typeConverters/tax';
 import { Prisma } from '@prisma/client';
 
 // PDFKitのモック
@@ -43,20 +44,10 @@ describe('InvoicePreviewModal', () => {
       registrationNumber: 'T1234567890123'
     },
     issuer: {
-      id: '1',
       name: 'テスト発行者',
       email: 'issuer@example.com',
       registrationNumber: 'T9876543210123',
       address: '東京都千代田区...'
-    },
-    taxSummary: {
-      byRate: [{
-        rate: 10,
-        taxableAmount: '2000',
-        taxAmount: '200'
-      }],
-      totalTaxableAmount: '2000',
-      totalTaxAmount: '200'
     },
     items: [
       {
@@ -71,7 +62,12 @@ describe('InvoicePreviewModal', () => {
         taxableAmount: 2000
       }
     ],
-    totalAmount: '2200',
+    taxSummary: {
+      byRate: [toDbTaxCalculation(createTestViewTaxCalculation())],
+      totalTaxableAmount: new Prisma.Decimal('2000'),
+      totalTaxAmount: new Prisma.Decimal('200')
+    },
+    totalAmount: new Prisma.Decimal('2200'),
     templateId: null,
     purchaseOrderId: null,
     bankInfo: null,
@@ -79,11 +75,8 @@ describe('InvoicePreviewModal', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
     createdById: '1',
-    updatedById: '1',
-    sentAt: null,
-    paidAt: null,
-    canceledAt: null
-  } as QualifiedInvoice;
+    updatedById: '1'
+  };
 
   const mockCompanyInfo = {
     name: 'テスト株式会社',

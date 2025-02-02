@@ -22,8 +22,9 @@ export { type VendorFormData, type VendorFormDataRHF };
 
 // API入力用の型定義
 export interface VendorCreateInput {
+  id?: string;
   name: string;
-  code: string;
+  code?: string;
   address?: string;
   contacts?: Array<{
     id?: string;
@@ -41,6 +42,13 @@ export interface VendorCreateInput {
   registrationNumber?: string;
   status?: VendorStatusType;
   category?: VendorCategoryType;
+  bankInfo?: {
+    bankName: string;
+    branchName: string;
+    accountType: AccountType;
+    accountNumber: string;
+    accountHolder: string;
+  };
 }
 
 // 拡張取引先型定義

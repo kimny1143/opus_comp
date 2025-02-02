@@ -12,8 +12,8 @@ export interface DateFieldProps<T extends FieldValues> {
   required?: boolean
   disabled?: boolean
   className?: string
-  min?: string | number
-  max?: string | number
+  minDate?: Date
+  maxDate?: Date
 }
 
 export function DateField<T extends FieldValues>({
@@ -23,8 +23,8 @@ export function DateField<T extends FieldValues>({
   required = false,
   disabled = false,
   className = '',
-  min,
-  max
+  minDate,
+  maxDate
 }: DateFieldProps<T>) {
   const {
     field: { value, onChange },
@@ -59,8 +59,8 @@ export function DateField<T extends FieldValues>({
           onChange(date)
         }}
         disabled={disabled}
-        min={min}
-        max={max}
+        min={minDate ? formatDate(minDate) : undefined}
+        max={maxDate ? formatDate(maxDate) : undefined}
       />
       {error && (
         <p className="text-sm text-red-500">{error.message}</p>

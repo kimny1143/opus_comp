@@ -5,15 +5,16 @@ import { generateInvoicePDF } from '@/infrastructure/pdf/invoice';
 import { sendInvoiceEmail, SendInvoiceEmailParams } from '@/infrastructure/mail/invoice';
 import { calculateTaxSummary } from './tax';
 import type { TaxableItem } from './tax';
-import { 
-  QualifiedInvoice, 
-  InvoiceStatusType, 
+import {
+  QualifiedInvoice,
+  InvoiceStatusType,
   InvoiceTemplate,
   QualifiedInvoiceItem,
   BankInfo,
   QualifiedVendor,
   InvoiceTaxSummary
 } from './types';
+import { InvoiceStatusManager, UserRole } from './status';
 import { InvoiceItem as PrismaInvoiceItem } from '@prisma/client';
 
 const invoiceInclude = {
@@ -41,32 +42,63 @@ export class InvoiceService {
     return this.convertToQualifiedInvoice(invoice);
   }
 
-  static async sendInvoice(invoiceId: string, emailData: {
-    to: string;
-    cc?: string;
-    bcc?: string;
-  }): Promise<void> {
+  static async updateStatus(
+    invoiceId: string,
+    nextStatus: InvoiceStatusType,
+    userRoles: UserRole[],
+    emailData?: {
+      to: string;
+      cc?: string;
+      bcc?: string;
+    }
+  ): Promise<QualifiedInvoice> {
     const invoice = await this.getInvoiceById(invoiceId);
     if (!invoice) {
       throw new Error('Invoice not found');
     }
 
-    // PDFを生成
-    const pdfBuffer = await generateInvoicePDF(invoice);
+    // 権限の検証
+    if (!InvoiceStatusManager.hasPermission(nextStatus, userRoles)) {
+      throw new Error('Permission denied for status update');
+    }
 
-    // メールを送信
-    const emailParams: SendInvoiceEmailParams = {
-      invoice,
-      pdfBuffer,
-      ...emailData
-    };
-    await sendInvoiceEmail(emailParams);
+    // ステータス遷移の検証
+    if (!InvoiceStatusManager.validateTransition(invoice.status, nextStatus)) {
+      throw new Error(`Invalid status transition from ${invoice.status} to ${nextStatus}`);
+    }
 
     // ステータスを更新
-    await prisma.invoice.update({
+    const updatedInvoice = await prisma.invoice.update({
       where: { id: invoiceId },
-      data: { status: InvoiceStatus.APPROVED }
+      data: { status: nextStatus },
+      include: invoiceInclude
     });
+
+    // 通知が必要な場合はメール送信
+    if (InvoiceStatusManager.needsNotification(nextStatus) && emailData) {
+      const pdfBuffer = await generateInvoicePDF(invoice);
+      const emailParams: SendInvoiceEmailParams = {
+        invoice,
+        pdfBuffer,
+        ...emailData
+      };
+      await sendInvoiceEmail(emailParams);
+    }
+
+    return this.convertToQualifiedInvoice(updatedInvoice);
+  }
+
+  static async sendInvoice(invoiceId: string, emailData: {
+    to: string;
+    cc?: string;
+    bcc?: string;
+  }): Promise<void> {
+    await this.updateStatus(
+      invoiceId,
+      InvoiceStatus.SENT,
+      ['user' as UserRole, 'admin' as UserRole],
+      emailData
+    );
   }
 
   static async getInvoiceById(id: string): Promise<QualifiedInvoice | null> {

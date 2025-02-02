@@ -377,3 +377,27 @@ enum ReminderType {
   AFTER_DUE
   AFTER_ISSUE
 }
+
+enum ItemCategory {
+  FOOD           // 飲食料品
+  NEWSPAPER      // 定期購読の新聞
+  AGRICULTURE    // 農産品
+  FISHERY        // 水産品
+  LIVESTOCK      // 畜産品
+  ELECTRONICS    // 電化製品
+  CLOTHING       // 衣類
+  FURNITURE      // 家具
+  SERVICES       // サービス
+  OTHER          // その他
+}
+
+model ItemCategoryMaster {
+  id              String      @id @default(cuid())
+  category        ItemCategory @unique
+  name            String
+  description     String?
+  isReducedTaxRate Boolean    @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+

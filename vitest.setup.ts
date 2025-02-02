@@ -1,10 +1,10 @@
 import '@testing-library/jest-dom'
 import { expect, vi, beforeEach, afterEach, afterAll } from 'vitest'
 import { cleanup } from '@testing-library/react'
-import matchers from '@testing-library/jest-dom/matchers'
+import * as matchers from '@testing-library/jest-dom/matchers'
 
 // Testing Libraryのマッチャーを拡張
-expect.extend(matchers)
+expect.extend(matchers as any)
 
 // テスト環境の設定
 process.env.REDIS_URL = 'redis://localhost:6379'
@@ -102,5 +102,15 @@ declare module 'vitest' {
     toHaveAttribute(attr: string, value?: string): void;
     toHaveTextContent(text: string | RegExp): void;
     toHaveLength(length: number): void;
+    toMatchObject(obj: any): void;
+    toHaveBeenCalledTimes(times: number): void;
   }
 }
+
+// グローバルのexpectヘルパー
+const customExpect = expect as typeof expect & {
+  arrayContaining<T>(arr: T[]): T[];
+  objectContaining<T>(obj: Record<string, T>): T;
+}
+
+global.expect = customExpect

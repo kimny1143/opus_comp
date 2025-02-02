@@ -1,10 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { useFieldArray, useFormContext } from 'react-hook-form'
+import { Control, useFieldArray, useFormContext } from 'react-hook-form'
+import type { OrderFormData } from './OrderForm'
 
-export function OrderItemsForm() {
-  const { control, register, watch } = useFormContext()
+interface OrderItemsFormProps {
+  control: Control<OrderFormData>
+  disabled?: boolean
+}
+
+export function OrderItemsForm({ control, disabled = false }: OrderItemsFormProps) {
+  const { register } = useFormContext<OrderFormData>()
   const { fields, append, remove } = useFieldArray({
     control,
     name: 'items'
@@ -15,7 +21,7 @@ export function OrderItemsForm() {
       itemName: '',
       quantity: 1,
       unitPrice: 0,
-      taxRate: 10,
+      taxRate: 0.1,
       description: ''
     })
   }
@@ -27,7 +33,8 @@ export function OrderItemsForm() {
         <button
           type="button"
           onClick={handleAddItem}
-          className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          disabled={disabled}
+          className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
           data-cy="add-item"
         >
           明細行を追加
@@ -46,10 +53,9 @@ export function OrderItemsForm() {
                 品目名
                 <input
                   type="text"
-                  {...register(`items.${index}.itemName` as const, {
-                    required: '品目名を入力してください'
-                  })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  {...register(`items.${index}.itemName`)}
+                  disabled={disabled}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:opacity-50"
                   data-cy="item-name"
                 />
               </label>
@@ -60,11 +66,9 @@ export function OrderItemsForm() {
                 数量
                 <input
                   type="number"
-                  {...register(`items.${index}.quantity` as const, {
-                    required: '数量を入力してください',
-                    min: { value: 1, message: '1以上を入力してください' }
-                  })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  {...register(`items.${index}.quantity`)}
+                  disabled={disabled}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:opacity-50"
                   data-cy="item-quantity"
                 />
               </label>
@@ -75,11 +79,9 @@ export function OrderItemsForm() {
                 単価
                 <input
                   type="number"
-                  {...register(`items.${index}.unitPrice` as const, {
-                    required: '単価を入力してください',
-                    min: { value: 0, message: '0以上を入力してください' }
-                  })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  {...register(`items.${index}.unitPrice`)}
+                  disabled={disabled}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:opacity-50"
                   data-cy="item-unit-price"
                 />
               </label>
@@ -89,12 +91,13 @@ export function OrderItemsForm() {
               <label className="block text-sm font-medium text-gray-700">
                 税率
                 <select
-                  {...register(`items.${index}.taxRate` as const)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  {...register(`items.${index}.taxRate`)}
+                  disabled={disabled}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:opacity-50"
                   data-cy="item-tax-rate"
                 >
-                  <option value="10">10%</option>
-                  <option value="8">8%</option>
+                  <option value="0.1">10%</option>
+                  <option value="0.08">8%</option>
                   <option value="0">0%</option>
                 </select>
               </label>
@@ -104,7 +107,8 @@ export function OrderItemsForm() {
               <button
                 type="button"
                 onClick={() => remove(index)}
-                className="mt-6 text-red-600 hover:text-red-800"
+                disabled={disabled}
+                className="mt-6 text-red-600 hover:text-red-800 disabled:opacity-50"
                 data-cy="delete-item"
               >
                 削除

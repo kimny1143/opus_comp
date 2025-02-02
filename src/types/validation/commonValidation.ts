@@ -1,119 +1,129 @@
-import { z } from 'zod'
-import { AccountType } from '../bankAccount'
-
-/**
- * 共通のバリデーションメッセージ
- * @note 将来的な多言語対応を考慮し、メッセージを一元管理
- */
-const validationMessages = {
-  // 基本メッセージ
-  required: '必須項目です',
-  invalidFormat: '無効な形式です',
-  
-  // 数値関連
-  positiveNumber: '0より大きい値を入力してください',
-  nonNegativeNumber: '0以上の値を入力してください',
-  integerNumber: '整数を入力してください',
-  taxRateMin: 'インボイス制度に基づき、税率は10%以上を入力してください',
-  taxRateMax: '税率は100%以下を入力してください',
-  
-  // 日付関連
-  invalidDate: '無効な日付です',
-  futureDate: '未来の日付を指定してください',
-  pastDate: '過去の日付を指定してください',
-  
-  // 文字列関連
-  invalidEmail: '有効なメールアドレスを入力してください',
-  invalidPhone: '電話番号は数字とハイフンのみ使用できます',
-  invalidPassword: 'パスワードは8文字以上で、大文字・小文字・数字を含める必要があります',
-  invalidRegistrationNumber: '登録番号はTで始まる13桁の数字である必要があります',
-  invalidAccountNumber: '口座番号は数字のみ使用できます',
-  
-  // 配列関連
-  arrayMinLength: '1つ以上の項目が必要です'
-}
+import { z } from 'zod';
+import { AccountType } from '../bankAccount';
+import { getMessage, createRegistrationNumberError } from './messages';
 
 /**
  * 数値関連の共通バリデーション
  */
 const numberValidation = {
   quantity: z.number()
-    .positive(validationMessages.positiveNumber)
-    .int(validationMessages.integerNumber),
+    .positive(getMessage('positiveNumber'))
+    .int(getMessage('integerNumber')),
   
   taxRate: z.number()
-    .min(0.1, validationMessages.taxRateMin)
-    .max(1, validationMessages.taxRateMax)
+    .refine(
+      (value) => value === 0.08 || (value >= 0.1 && value <= 1),
+      {
+        message: getMessage('taxRate')
+      }
+    )
     .transform(value => Number(value.toFixed(2))),
   
   price: z.number()
-    .min(0, validationMessages.nonNegativeNumber)
+    .min(0, getMessage('nonNegativeNumber'))
     .transform(value => Number(value.toFixed(0))),
   
   amount: z.number()
-    .min(0, validationMessages.nonNegativeNumber)
+    .min(0, getMessage('nonNegativeNumber'))
     .transform(value => Number(value.toFixed(0)))
-}
+};
 
 /**
  * 日付関連の共通バリデーション
  */
 const dateValidation = {
   required: z.date({
-    required_error: validationMessages.required,
-    invalid_type_error: validationMessages.invalidDate
+    required_error: getMessage('required'),
+    invalid_type_error: getMessage('invalidDate')
   }),
   
   future: z.date()
-    .min(new Date(), validationMessages.futureDate),
+    .min(new Date(), getMessage('futureDate')),
   
   past: z.date()
-    .max(new Date(), validationMessages.pastDate),
+    .max(new Date(), getMessage('pastDate')),
   
   optional: z.date({
-    invalid_type_error: validationMessages.invalidDate
+    invalid_type_error: getMessage('invalidDate')
   }).optional()
-}
+};
 
 /**
  * 文字列関連の共通バリデーション
  */
 const stringValidation = {
-  required: z.string().min(1, validationMessages.required),
+  required: z.string().min(1, getMessage('required')),
   optional: z.string().optional(),
   
   email: z.string()
-    .email(validationMessages.invalidEmail)
+    .email(getMessage('invalidEmail'))
     .optional()
     .or(z.literal('')),
   
   phone: z.string()
-    .regex(/^[0-9-]*$/, validationMessages.invalidPhone)
+    .regex(/^[0-9-]*$/, getMessage('invalidPhone'))
     .optional(),
   
   description: z.string().optional(),
   
   password: z.string()
-    .min(8, validationMessages.invalidPassword)
-    .regex(/[A-Z]/, validationMessages.invalidPassword)
-    .regex(/[a-z]/, validationMessages.invalidPassword)
-    .regex(/[0-9]/, validationMessages.invalidPassword),
+    .min(8, getMessage('invalidPassword'))
+    .regex(/[A-Z]/, getMessage('invalidPassword'))
+    .regex(/[a-z]/, getMessage('invalidPassword'))
+    .regex(/[0-9]/, getMessage('invalidPassword')),
   
   registrationNumber: z.string()
-    .regex(/^T\d{13}$/, validationMessages.invalidRegistrationNumber),
+    .regex(/^T\d{13}$/, createRegistrationNumberError('format'))
+    .refine(
+      (value) => {
+        // すべて同じ数字でないことを確認(不正な番号の可能性が高い)
+        const digits = value.slice(1);
+        if (new Set(digits).size === 1) return false;
+        
+        // チェックディジットの検証
+        const numericDigits = digits.split('').map(Number);
+        const checkDigit = numericDigits.pop()!;
+        
+        // 1,2,1,2,1,2,1,2,1,2,1,2の重みを適用
+        const weights = [1,2,1,2,1,2,1,2,1,2,1,2];
+        const sum = numericDigits.reduce((acc, digit, index) => {
+          const product = digit * weights[index];
+          // 2桁になる場合は各桁を足す(例:7*2=14 → 1+4=5)
+          return acc + (product >= 10 ? Math.floor(product/10) + (product%10) : product);
+        }, 0);
+        
+        // 合計を9で割った余りを10から引いた値(10の場合は0)がチェックディジットと一致
+        const calculatedCheck = (10 - (sum % 9)) % 10;
+        return calculatedCheck === checkDigit;
+      },
+      createRegistrationNumberError('checkDigit')
+    )
+    .refine(
+      (value) => {
+        // 実在する可能性が低い番号パターンのチェック
+        const patterns = [
+          /^T0{13}$/,  // すべてゼロ
+          /^T1{13}$/,  // すべて1
+          /^T9{13}$/,  // すべて9
+          /^T(\d)\1{12}$/  // 同じ数字の繰り返し
+        ];
+        return !patterns.some(pattern => pattern.test(value));
+      },
+      createRegistrationNumberError('pattern')
+    ),
   
   accountNumber: z.string()
-    .min(1, validationMessages.required)
-    .regex(/^[0-9]+$/, validationMessages.invalidAccountNumber)
-}
+    .min(1, getMessage('required'))
+    .regex(/^[0-9]+$/, getMessage('invalidAccountNumber'))
+};
 
 /**
  * 配列関連の共通バリデーション
  */
 const arrayValidation = {
   nonEmpty: <T extends z.ZodTypeAny>(schema: T) => 
-    z.array(schema).min(1, validationMessages.arrayMinLength)
-}
+    z.array(schema).min(1, getMessage('arrayMinLength'))
+};
 
 /**
  * 共通のスキーマ定義
@@ -143,7 +153,7 @@ const commonSchemas = {
     taxRate: numberValidation.taxRate,
     description: stringValidation.optional
   })
-}
+};
 
 // メインのエクスポート
 export const commonValidation = {
@@ -151,21 +161,19 @@ export const commonValidation = {
   date: dateValidation,
   string: stringValidation,
   array: arrayValidation,
-  schemas: commonSchemas,
-  messages: validationMessages
-}
+  schemas: commonSchemas
+};
 
 // 型定義のエクスポート
-export type Tag = z.infer<typeof commonSchemas.tag>
-export type BankInfo = z.infer<typeof commonSchemas.bankInfo>
-export type Item = z.infer<typeof commonSchemas.item>
+export type Tag = z.infer<typeof commonSchemas.tag>;
+export type BankInfo = z.infer<typeof commonSchemas.bankInfo>;
+export type Item = z.infer<typeof commonSchemas.item>;
 
-// 個別のエクスポートも維持（後方互換性のため）
+// 個別のエクスポートも維持(後方互換性のため)
 export {
   numberValidation,
   dateValidation,
   stringValidation,
   arrayValidation,
-  commonSchemas,
-  validationMessages
-} 
+  commonSchemas
+};

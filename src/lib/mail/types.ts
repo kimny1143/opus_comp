@@ -38,6 +38,11 @@ export type MailTemplate<T extends MailTemplateType> = (
 ) => Promise<{
   subject: string
   body: string
+  attachments?: Array<{
+    filename: string
+    content: Buffer | string
+    contentType?: string
+  }>
 }>
 
 // メールテンプレートの集合

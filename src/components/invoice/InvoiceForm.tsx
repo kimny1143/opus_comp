@@ -129,7 +129,7 @@ export function InvoiceForm({
       quantity: 1,
       unitPrice: 0,
       // 税率は初期値を設定せず、ユーザーに選択を促す
-      taxRate: 0,
+      taxRate: 0.1, // 標準税率(10%)を初期値に設定
       description: ''
     }],
     bankInfo: {

@@ -76,15 +76,19 @@ describe('InvoiceForm', () => {
   it('品目の税率選択が正しく機能すること', async () => {
     render(<InvoiceForm onSubmit={mockOnSubmit} />)
 
-    // 税率選択の確認
+    // 初期値が10%であることを確認
     const taxRateSelect = screen.getByLabelText(/税率/i)
-    expect(taxRateSelect).toBeInTheDocument()
+    expect(taxRateSelect).toHaveValue('0.1')
 
     // 8%を選択
     await userEvent.selectOptions(taxRateSelect, '0.08')
     expect(taxRateSelect).toHaveValue('0.08')
 
-    // 10%を選択
+    // 軽減税率の説明が表示されることを確認
+    expect(screen.getByText(/飲食料品\(酒類を除く\)/i)).toBeInTheDocument()
+    expect(screen.getByText(/週2回以上発行される新聞\(定期購読\)/i)).toBeInTheDocument()
+
+    // 10%に戻す
     await userEvent.selectOptions(taxRateSelect, '0.1')
     expect(taxRateSelect).toHaveValue('0.1')
   })
@@ -95,20 +99,21 @@ describe('InvoiceForm', () => {
     // 品目追加ボタンをクリック
     const addButton = screen.getByRole('button', { name: '品目を追加' })
     await userEvent.click(addButton)
-// 品目が追加されたことを確認
-const itemRows = screen.getAllByTestId('cy=item-row')
-expect(itemRows).toHaveLength(2)
 
-// 削除ボタンをクリック
-const deleteButtons = screen.getAllByRole('button', { name: '削除' })
-await userEvent.click(deleteButtons[1])
+    // 品目が追加されたことを確認
+    const itemRows = screen.getAllByTestId('cy=item-row')
+    expect(itemRows).toHaveLength(2)
 
-// 品目が削除されたことを確認
-await waitFor(() => {
-  const updatedItemRows = screen.getAllByTestId('cy=item-row')
-  expect(updatedItemRows).toHaveLength(1)
-})
-})
+    // 削除ボタンをクリック
+    const deleteButtons = screen.getAllByRole('button', { name: '削除' })
+    await userEvent.click(deleteButtons[1])
+
+    // 品目が削除されたことを確認
+    await waitFor(() => {
+      const updatedItemRows = screen.getAllByTestId('cy=item-row')
+      expect(updatedItemRows).toHaveLength(1)
+    })
+  })
 
   it('Decimal型の金額が正しく処理されること', async () => {
     const decimalInitialData = {
@@ -141,6 +146,36 @@ await waitFor(() => {
       expect(submittedData.items[0].taxRate).toBeInstanceOf(Prisma.Decimal)
       expect(submittedData.items[0].unitPrice.toString()).toBe('1500.50')
       expect(submittedData.items[0].taxRate.toString()).toBe('0.08')
+    })
+  })
+
+  it('税率変更時に金額計算が正しく行われること', async () => {
+    render(<InvoiceForm onSubmit={mockOnSubmit} initialData={mockInitialData} />)
+
+    // 初期表示時の金額確認(10%)
+    expect(screen.getByTestId('cy=subtotal')).toHaveTextContent('¥1,000')
+    expect(screen.getByTestId('cy=tax')).toHaveTextContent('¥100')
+    expect(screen.getByTestId('cy=total')).toHaveTextContent('¥1,100')
+
+    // 税率を8%に変更
+    const taxRateSelect = screen.getByLabelText(/税率/i)
+    await userEvent.selectOptions(taxRateSelect, '0.08')
+
+    // 金額が更新されることを確認
+    await waitFor(() => {
+      expect(screen.getByTestId('cy=subtotal')).toHaveTextContent('¥1,000')
+      expect(screen.getByTestId('cy=tax')).toHaveTextContent('¥80')
+      expect(screen.getByTestId('cy=total')).toHaveTextContent('¥1,080')
+    })
+
+    // 税率を10%に戻す
+    await userEvent.selectOptions(taxRateSelect, '0.1')
+
+    // 金額が元に戻ることを確認
+    await waitFor(() => {
+      expect(screen.getByTestId('cy=subtotal')).toHaveTextContent('¥1,000')
+      expect(screen.getByTestId('cy=tax')).toHaveTextContent('¥100')
+      expect(screen.getByTestId('cy=total')).toHaveTextContent('¥1,100')
     })
   })
 

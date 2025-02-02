@@ -7,8 +7,8 @@ import { commonValidation } from '@/types/validation/commonValidation'
 import { Prisma } from '@prisma/client'
 
 const TAX_RATE_OPTIONS = [
-  { value: 0.08, label: '8%（軽減税率）' },
-  { value: 0.10, label: '10%（標準税率）' }
+  { value: 0.08, label: '8%(軽減税率)' },
+  { value: 0.10, label: '10%(標準税率)' }
 ] as const
 
 export interface OrderItemsFormProps<T extends FieldValues> {
@@ -62,62 +62,49 @@ export function OrderItemsForm<T extends FieldValues>({
     setValue(fieldName, new Prisma.Decimal(value) as any);
   }
 
+  // 数値変換ユーティリティ
+  const toNumber = (value: number | Prisma.Decimal): number => {
+    return value instanceof Prisma.Decimal ? Number(value.toString()) : Number(value);
+  }
+
+  // 品目ごとの計算
+  const calculateItemValues = (item: Item) => {
+    const quantity = toNumber(item.quantity);
+    const unitPrice = toNumber(item.unitPrice);
+    const taxRate = toNumber(item.taxRate);
+
+    if (isNaN(quantity) || isNaN(unitPrice) || isNaN(taxRate)) {
+      return { subtotal: 0, tax: 0 };
+    }
+
+    const subtotal = quantity * unitPrice;
+    const tax = subtotal * taxRate;
+
+    return { subtotal, tax };
+  }
+
+  // 小計の計算
   const calculateSubtotal = () => {
     return fields.reduce((total, field) => {
-      const item = field as unknown as Item;
-      const quantity = Number(item.quantity);
-      const unitPrice = item.unitPrice instanceof Prisma.Decimal 
-        ? Number(item.unitPrice.toString()) 
-        : Number(item.unitPrice);
-      
-      if (isNaN(quantity) || isNaN(unitPrice)) return total;
-      return total + (quantity * unitPrice);
+      const { subtotal } = calculateItemValues(field as unknown as Item);
+      return total + subtotal;
     }, 0).toLocaleString();
   }
 
+  // 消費税の計算
   const calculateTax = () => {
     return fields.reduce((total, field) => {
-      const item = field as unknown as Item;
-      const quantity = Number(item.quantity);
-      const unitPrice = item.unitPrice instanceof Prisma.Decimal 
-        ? Number(item.unitPrice.toString()) 
-        : Number(item.unitPrice);
-      const taxRate = item.taxRate instanceof Prisma.Decimal 
-        ? Number(item.taxRate.toString()) 
-        : Number(item.taxRate);
-      
-      if (isNaN(quantity) || isNaN(unitPrice) || isNaN(taxRate)) return total;
-      return total + (quantity * unitPrice * taxRate);
+      const { tax } = calculateItemValues(field as unknown as Item);
+      return total + tax;
     }, 0).toLocaleString();
   }
 
+  // 合計の計算
   const calculateTotal = () => {
-    const subtotal = fields.reduce((total, field) => {
-      const item = field as unknown as Item;
-      const quantity = Number(item.quantity);
-      const unitPrice = item.unitPrice instanceof Prisma.Decimal 
-        ? Number(item.unitPrice.toString()) 
-        : Number(item.unitPrice);
-      
-      if (isNaN(quantity) || isNaN(unitPrice)) return total;
-      return total + (quantity * unitPrice);
-    }, 0);
-
-    const tax = fields.reduce((total, field) => {
-      const item = field as unknown as Item;
-      const quantity = Number(item.quantity);
-      const unitPrice = item.unitPrice instanceof Prisma.Decimal 
-        ? Number(item.unitPrice.toString()) 
-        : Number(item.unitPrice);
-      const taxRate = item.taxRate instanceof Prisma.Decimal 
-        ? Number(item.taxRate.toString()) 
-        : Number(item.taxRate);
-      
-      if (isNaN(quantity) || isNaN(unitPrice) || isNaN(taxRate)) return total;
-      return total + (quantity * unitPrice * taxRate);
-    }, 0);
-
-    return (subtotal + tax).toLocaleString();
+    return fields.reduce((total, field) => {
+      const { subtotal, tax } = calculateItemValues(field as unknown as Item);
+      return total + subtotal + tax;
+    }, 0).toLocaleString();
   }
 
   return (
@@ -172,9 +159,14 @@ export function OrderItemsForm<T extends FieldValues>({
                 data-cy="item-tax-rate"
                 onChange={(value) => handleTaxRateChange(index, value as number)}
               />
-              <p className="text-sm text-gray-500 mt-1">
-                ※軽減税率（8%）は、食料品等が対象です
-              </p>
+              <div className="text-sm text-gray-500 mt-1 space-y-1">
+                <p>※軽減税率(8%)の対象:</p>
+                <ul className="list-disc pl-4 text-xs">
+                  <li>飲食料品(酒類を除く)</li>
+                  <li>週2回以上発行される新聞(定期購読)</li>
+                </ul>
+                <p className="text-xs">上記以外は標準税率(10%)が適用されます</p>
+              </div>
             </div>
             <div className="col-span-2">
               {!disabled && (
@@ -218,4 +210,4 @@ export function OrderItemsForm<T extends FieldValues>({
       </div>
     </div>
   )
-} 
+}

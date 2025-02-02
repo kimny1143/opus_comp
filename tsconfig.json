@@ -19,11 +19,19 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/types/*": ["./src/types/*"],
+      "@/domains/*": ["./src/domains/*"],
+      "@/lib/*": ["./src/lib/*"],
+      "@/components/*": ["./src/components/*"],
+      "@/hooks/*": ["./src/hooks/*"],
+      "@/contexts/*": ["./src/contexts/*"],
+      "@/utils/*": ["./src/utils/*"],
+      "@/test/*": ["./src/test/*"],
+      "@/factories/*": ["./src/test/factories/*"]
     },
-    "noImplicitAny": false,
-    "strictNullChecks": false,
-    "strictFunctionTypes": false,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
     "types": [
       "node",
       "vitest",

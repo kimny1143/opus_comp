@@ -1,14 +1,40 @@
-import { Prisma } from '@prisma/client';
-import { ItemCategory } from '@/types/itemCategory';
+import { QualifiedInvoice } from '@/types/invoice';
 
+/**
+ * メールテンプレートの種類
+ */
 export type MailTemplateType = 'invoiceCreated' | 'paymentReminder';
 
-export interface MailContext<T = Record<string, unknown>> {
-  to: string;
-  subject: string;
-  data: T;
+/**
+ * テンプレート固有のデータ型のマップ
+ */
+export interface MailTemplateDataMap {
+  invoiceCreated: {
+    invoice: QualifiedInvoice;
+    companyInfo: {
+      name: string;
+      email: string;
+      registrationNumber?: string;
+    };
+  };
+  paymentReminder: {
+    invoice: QualifiedInvoice;
+    daysOverdue: number;
+  };
 }
 
+/**
+ * メール送信のコンテキスト
+ */
+export interface MailContext<T extends keyof MailTemplateDataMap> {
+  to: string;
+  subject: string;
+  data: MailTemplateDataMap[T];
+}
+
+/**
+ * メールレンダリング結果
+ */
 export interface MailRenderResult {
   subject: string;
   body: string;
@@ -18,53 +44,29 @@ export interface MailRenderResult {
   }>;
 }
 
-export interface MailTemplate<T = Record<string, unknown>> {
-  type: MailTemplateType;
-  render: (data: T) => Promise<MailRenderResult>;
+/**
+ * メールテンプレート
+ */
+export interface MailTemplate<T extends keyof MailTemplateDataMap> {
+  type: T;
+  render: (data: MailTemplateDataMap[T]) => Promise<MailRenderResult>;
 }
 
-// メールテンプレート固有の型
-export interface InvoiceCreatedContext {
-  invoice: MailInvoice;
-  companyInfo: {
-    name: string;
-    email: string;
-  };
+/**
+ * メール送信結果
+ */
+export interface MailSendResult {
+  success: boolean;
+  messageId?: string;
+  error?: Error;
 }
 
-export interface PaymentReminderContext {
-  invoice: MailInvoice;
-  daysOverdue: number;
-}
-
-export interface MailInvoiceItem {
-  id: string;
-  invoiceId: string;
-  itemName: string;
-  quantity: number;
-  unitPrice: Prisma.Decimal;
-  taxRate: Prisma.Decimal;
-  description?: string | null;
-  category?: ItemCategory;
-  taxAmount: Prisma.Decimal;
-  taxableAmount: Prisma.Decimal;
-}
-
-export interface MailInvoice {
-  id: string;
-  invoiceNumber: string;
-  issueDate: Date;
-  dueDate?: Date | null;
-  notes?: string | null;
-  status: string;
-  vendor: {
-    id: string;
-    name: string;
-    address?: string;
-    registrationNumber?: string;
-  };
-  items: MailInvoiceItem[];
-  subtotal: Prisma.Decimal;
-  taxAmount: Prisma.Decimal;
-  totalAmount: Prisma.Decimal;
+/**
+ * メール送信オプション
+ */
+export interface MailSendOptions {
+  from?: string;
+  replyTo?: string;
+  cc?: string[];
+  bcc?: string[];
 }

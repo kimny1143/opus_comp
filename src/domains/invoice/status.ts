@@ -1,123 +1,99 @@
-import { InvoiceStatus } from '@prisma/client';
-import { InvoiceStatusType } from './types';
+/**
+ * 請求書のステータス
+ */
+export type InvoiceStatus =
+  | 'DRAFT'      // 下書き
+  | 'PENDING'    // 承認待ち
+  | 'APPROVED'   // 承認済み
+  | 'SENT'       // 送信済み
+  | 'PAID'       // 支払済み
+  | 'CANCELED'   // キャンセル
+  | 'REJECTED';  // 却下
 
 /**
- * 利用可能な権限の定義
+ * ステータスの表示名
  */
-export type UserRole = 'user' | 'admin' | 'system';
+export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
+  DRAFT: '下書き',
+  PENDING: '承認待ち',
+  APPROVED: '承認済み',
+  SENT: '送信済み',
+  PAID: '支払済み',
+  CANCELED: 'キャンセル',
+  REJECTED: '却下'
+};
 
 /**
- * 通知が必要なステータスの定義
+ * 編集可能なステータス
  */
-export const NOTIFICATION_STATUSES = [
-  InvoiceStatus.APPROVED,
-  InvoiceStatus.REJECTED,
-  InvoiceStatus.OVERDUE,
-  InvoiceStatus.PAID
-] as const;
-
-export type NotificationStatus = typeof NOTIFICATION_STATUSES[number];
+export const EDITABLE_STATUSES: InvoiceStatus[] = [
+  'DRAFT',
+  'PENDING',
+  'REJECTED'
+];
 
 /**
- * ステータス遷移の定義
- * キー: 現在のステータス
- * 値: 遷移可能な次のステータスの配列
+ * キャンセル可能なステータス
  */
-const STATUS_TRANSITIONS: Record<InvoiceStatus, readonly InvoiceStatus[]> = {
-  [InvoiceStatus.DRAFT]: [
-    InvoiceStatus.PENDING,
-    InvoiceStatus.REJECTED
-  ],
-  [InvoiceStatus.PENDING]: [
-    InvoiceStatus.REVIEWING,
-    InvoiceStatus.REJECTED
-  ],
-  [InvoiceStatus.REVIEWING]: [
-    InvoiceStatus.APPROVED,
-    InvoiceStatus.REJECTED,
-    InvoiceStatus.PENDING
-  ],
-  [InvoiceStatus.APPROVED]: [
-    InvoiceStatus.PAID,
-    InvoiceStatus.OVERDUE,
-    InvoiceStatus.SENT
-  ],
-  [InvoiceStatus.PAID]: [],  // 最終ステータス
-  [InvoiceStatus.OVERDUE]: [
-    InvoiceStatus.PAID
-  ],
-  [InvoiceStatus.REJECTED]: [
-    InvoiceStatus.DRAFT
-  ],
-  [InvoiceStatus.SENT]: [
-    InvoiceStatus.APPROVED,
-    InvoiceStatus.PAID
-  ]
-} as const;
+export const CANCELABLE_STATUSES: InvoiceStatus[] = [
+  'DRAFT',
+  'PENDING',
+  'APPROVED'
+];
 
 /**
- * ステータス変更に必要な権限の定義
+ * 送信可能なステータス
  */
-export const STATUS_PERMISSIONS: Record<InvoiceStatus, readonly UserRole[]> = {
-  [InvoiceStatus.DRAFT]: ['user', 'admin'],
-  [InvoiceStatus.PENDING]: ['user', 'admin'],
-  [InvoiceStatus.REVIEWING]: ['admin'],
-  [InvoiceStatus.APPROVED]: ['admin'],
-  [InvoiceStatus.PAID]: ['admin'],
-  [InvoiceStatus.OVERDUE]: ['system', 'admin'],  // systemは自動処理用
-  [InvoiceStatus.REJECTED]: ['admin'],
-  [InvoiceStatus.SENT]: ['user', 'admin']
-} as const;
+export const SENDABLE_STATUSES: InvoiceStatus[] = [
+  'APPROVED'
+];
 
-export class InvoiceStatusManager {
-  /**
-   * 指定されたステータス遷移が有効かどうかを検証
-   */
-  static validateTransition(
-    currentStatus: InvoiceStatusType,
-    nextStatus: InvoiceStatusType
-  ): boolean {
-    const allowedStatuses = STATUS_TRANSITIONS[currentStatus];
-    return allowedStatuses.includes(nextStatus);
-  }
+/**
+ * 支払い登録可能なステータス
+ */
+export const PAYABLE_STATUSES: InvoiceStatus[] = [
+  'SENT'
+];
 
-  /**
-   * ステータス変更に必要な権限を持っているかを検証
-   */
-  static hasPermission(
-    status: InvoiceStatusType,
-    userRoles: UserRole[]
-  ): boolean {
-    const requiredRoles = STATUS_PERMISSIONS[status];
-    return userRoles.some(role => requiredRoles.includes(role));
-  }
+/**
+ * ステータスの遷移可否をチェック
+ */
+export const canTransitionTo = (
+  currentStatus: InvoiceStatus,
+  nextStatus: InvoiceStatus
+): boolean => {
+  const allowedTransitions: Record<InvoiceStatus, InvoiceStatus[]> = {
+    DRAFT: ['PENDING', 'CANCELED'],
+    PENDING: ['APPROVED', 'REJECTED', 'CANCELED'],
+    APPROVED: ['SENT', 'CANCELED'],
+    SENT: ['PAID'],
+    PAID: [],
+    CANCELED: [],
+    REJECTED: ['DRAFT', 'CANCELED']
+  };
 
-  /**
-   * 次に可能なステータスの一覧を取得
-   */
-  static getNextPossibleStatuses(
-    currentStatus: InvoiceStatusType,
-    userRoles: UserRole[]
-  ): InvoiceStatusType[] {
-    const allowedStatuses = STATUS_TRANSITIONS[currentStatus];
-    return allowedStatuses.filter(status => 
-      this.hasPermission(status, userRoles)
-    );
-  }
+  return allowedTransitions[currentStatus].includes(nextStatus);
+};
 
-  /**
-   * ステータスに応じたメール通知が必要かどうかを判定
-   */
-  static needsNotification(status: InvoiceStatusType): boolean {
-    return NOTIFICATION_STATUSES.includes(status as NotificationStatus);
-  }
+/**
+ * ステータスの表示名を取得
+ */
+export const getStatusLabel = (status: InvoiceStatus): string => {
+  return INVOICE_STATUS_LABELS[status];
+};
 
-  /**
-   * 支払期限超過の判定
-   */
-  static isOverdue(dueDate: Date): boolean {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return dueDate < today;
-  }
-}
+/**
+ * ステータスの色を取得
+ */
+export const getStatusColor = (status: InvoiceStatus): string => {
+  const colors: Record<InvoiceStatus, string> = {
+    DRAFT: 'gray',
+    PENDING: 'yellow',
+    APPROVED: 'green',
+    SENT: 'blue',
+    PAID: 'purple',
+    CANCELED: 'red',
+    REJECTED: 'red'
+  };
+  return colors[status];
+};

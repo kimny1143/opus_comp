@@ -2,175 +2,185 @@
 
 ## 1. 現状の課題
 
-### 1.1 型の不整合
+### 1.1 型定義の重複と不整合
+
+- 同じ概念(TaxCalculation等)の型が複数のファイルで異なる定義
+- ビュー層とDB層での型の不一致(string vs Decimal)
+- テストデータと実装の型の食い違い
+
+### 1.2 問題のある箇所
 
 1. InvoicePreviewModal.test.tsx
 
-   - TaxCalculationの型定義が不完全
-   - テストデータと実際の型が不一致
+   - taxSummary.byRateの型不整合
+   - テストデータの型が実装と不一致
 
 2. メール送信機能
 
-   - MailContextのジェネリック型の制約が不適切
-   - MailTemplateの型定義が不完全
+   - MailContextのジェネリック型制約が不適切
+   - テンプレート型の定義が不完全
 
 3. PDF生成機能
-
    - QualifiedInvoiceItemの型定義が不完全
    - categoryプロパティの扱いが不統一
 
-4. Prismaモデル
-   - itemCategoryMasterの定義が不足
-   - モデル名の不一致
+## 2. 改善方針
 
-## 2. 対応方針
+### 2.1 単一ソース・オブ・トゥルース
 
-### 2.1 型定義の統一
-
-1. Invoice関連
+1. 基本型定義の集約
 
    ```typescript
-   // 共通の基本型を定義
-   interface BaseTaxCalculation {
+   // @/types/base/tax.ts
+   export interface BaseTaxCalculation {
      rate: number;
-     taxRate: number;
      taxableAmount: string | Prisma.Decimal;
      taxAmount: string | Prisma.Decimal;
    }
+   ```
 
-   // 用途別の具体的な型を定義
-   interface ViewTaxCalculation extends BaseTaxCalculation {
+2. レイヤー別の型定義
+
+   ```typescript
+   // @/types/view/tax.ts
+   export interface ViewTaxCalculation
+     extends Omit<BaseTaxCalculation, "taxableAmount" | "taxAmount"> {
      taxableAmount: string;
      taxAmount: string;
    }
 
-   interface DbTaxCalculation extends BaseTaxCalculation {
+   // @/types/db/tax.ts
+   export interface DbTaxCalculation
+     extends Omit<BaseTaxCalculation, "taxableAmount" | "taxAmount"> {
      taxableAmount: Prisma.Decimal;
      taxAmount: Prisma.Decimal;
    }
    ```
 
-2. Mail関連
+### 2.2 型変換の一元管理
+
+1. 変換ユーティリティ
 
    ```typescript
-   interface MailContext<T extends keyof MailTemplateMap> {
-     to: string;
-     subject: string;
-     data: MailTemplateMap[T];
-   }
+   // @/utils/typeConverters.ts
+   export const toViewTaxCalculation = (
+     db: DbTaxCalculation
+   ): ViewTaxCalculation => ({
+     ...db,
+     taxableAmount: db.taxableAmount.toString(),
+     taxAmount: db.taxAmount.toString(),
+   });
 
-   interface MailTemplateMap {
-     invoiceCreated: {
-       invoice: QualifiedInvoice;
-       companyInfo: CompanyInfo;
-     };
-     // 他のテンプレート型...
-   }
+   export const toDbTaxCalculation = (
+     view: ViewTaxCalculation
+   ): DbTaxCalculation => ({
+     ...view,
+     taxableAmount: new Prisma.Decimal(view.taxableAmount),
+     taxAmount: new Prisma.Decimal(view.taxAmount),
+   });
    ```
 
-### 2.2 変換関数の整備
+2. テストデータ生成
+   ```typescript
+   // @/test/factories/tax.ts
+   export const createTestTaxCalculation = (
+     overrides?: Partial<ViewTaxCalculation>
+   ): ViewTaxCalculation => ({
+     rate: 10,
+     taxableAmount: "2000",
+     taxAmount: "200",
+     ...overrides,
+   });
+   ```
 
-1. 型変換ユーティリティ
+## 3. 実装計画
 
-   - string ⇔ Decimal
-   - View型 ⇔ DB型
-   - テストデータ生成
+### Phase 1: 型定義の整理 (2/3)
 
-2. バリデーション
-   - zodスキーマの整備
-   - 実行時型チェックの強化
+1. 基本型の定義
 
-### 2.3 テストデータの改善
+   - [ ] @/types/base/配下に基本型を集約
+   - [ ] レイヤー別の型を定義(view/db)
+   - [ ] 型変換ユーティリティの作成
 
-1. ファクトリ関数
+2. テストデータ生成の統一
+   - [ ] @/test/factories/配下にファクトリ関数を集約
+   - [ ] ViewTaxCalculation形式に統一
+   - [ ] 既存テストの修正
 
-   - 型安全なモックデータ生成
-   - 必須フィールドの保証
-   - 一貫性のある変換処理
-
-2. テストヘルパー
-   - 共通のセットアップ処理
-   - 型チェック用アサーション
-
-## 3. 実装手順
-
-### Phase 1: 基盤整備 (2/3 - 2/4)
-
-1. 共通型定義の作成
-
-   - [ ] BaseTaxCalculation
-   - [ ] MailTemplateMap
-   - [ ] 変換ユーティリティ
-
-2. Prismaスキーマの更新
-   - [ ] itemCategory モデルの定義
-   - [ ] マイグレーション作成
-   - [ ] 型生成の確認
-
-### Phase 2: コンポーネント修正 (2/5 - 2/6)
+### Phase 2: コンポーネントの修正 (2/4)
 
 1. InvoicePreviewModal
 
-   - [ ] テストデータの型修正
-   - [ ] モック生成関数の改善
-   - [ ] 型アサーションの見直し
+   - [ ] テストデータをファクトリ関数に置き換え
+   - [ ] 型キャストの除去
+   - [ ] バリデーションの追加
 
 2. メール機能
-   - [ ] MailTemplate型の再定義
-   - [ ] invoiceCreatedの型対応
-   - [ ] テストケースの更新
+   - [ ] MailContextのジェネリック制約追加
+   - [ ] テンプレート型の再定義
+   - [ ] 型安全な実装に修正
 
-### Phase 3: テスト強化 (2/7)
+### Phase 3: PDF機能の改善 (2/5)
 
-1. テストユーティリティ
-   - [ ] 型安全なモックファクトリ
-   - [ ] カスタムマッチャー
-   - [ ] 型チェックヘルパー
+1. 型の整理
+
+   - [ ] QualifiedInvoiceItemの完全な定義
+   - [ ] categoryプロパティの扱いを決定
+   - [ ] 変換ロジックの実装
+
+2. テストの強化
+   - [ ] 型チェックの追加
+   - [ ] エッジケースのテスト
+   - [ ] 変換テストの追加
 
 ## 4. 品質基準
 
-1. 型安全性
+### 4.1 型安全性
 
-   - 明示的な型アサーションの最小化
-   - 実行時型チェックの導入
-   - 型定義の自動テスト
+- 明示的な型キャストの禁止
+- unknown経由の型変換の最小化
+- 共通型の使用を強制
 
-2. テストカバレッジ
+### 4.2 テスト要件
 
-   - 型変換関数: 100%
-   - バリデーション: 100%
-   - エッジケース: 90%
+- ファクトリ関数のカバレッジ100%
+- 型変換テストの完備
+- エッジケースの網羅
 
-3. コード品質
-   - ESLintの型チェック有効化
-   - 型定義の重複排除
-   - 命名規則の統一
+### 4.3 コード品質
+
+- ESLint strict modeの有効化
+- 型定義ファイルの整理
+- 命名規則の統一
 
 ## 5. リスク管理
 
-1. 互換性の維持
+### 5.1 移行リスク
 
-   - 既存コードへの影響を最小化
-   - 段階的な移行計画
-   - 型の後方互換性確保
+- 既存コードへの影響
+- テストの破損可能性
+- 型エラーの一時的な増加
 
-2. パフォーマンス
-   - 型チェックのオーバーヘッド
-   - バンドルサイズへの影響
-   - 実行時コストの評価
+### 5.2 対策
 
-## 6. 承認依頼事項
+- 段階的な移行
+- テストの並行実行
+- リグレッションテストの強化
 
-1. 型システムの設計方針
+## 6. ドキュメント
 
-   - 基本型定義の妥当性
-   - 変換戦略の適切性
-   - テスト方針の十分性
+### 6.1 型定義ガイド
 
-2. 移行計画
-   - 段階的実装の順序
-   - 優先順位の設定
-   - リスク対策の評価
+- 基本型の説明
+- レイヤー別の使い分け
+- 変換ルール
 
-この計画は、現在発生している型の問題に対する包括的な解決策を提案するものです。
-承認いただければ、Phase 1から順次実装を進めていきたいと考えています。
+### 6.2 テストガイド
+
+- ファクトリ関数の使用方法
+- テストデータの作成ルール
+- 型チェックの方法
+
+この計画は、型の不整合を根本的に解決し、プロジェクト全体で一貫性のある型システムを確立することを目指します。
+承認いただければ、Phase 1から実装を開始いたします。

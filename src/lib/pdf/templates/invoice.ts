@@ -1,21 +1,9 @@
 import PDFDocument from 'pdfkit';
-import { Invoice, InvoiceItem, Vendor } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import path from 'path';
 import { promises as fs } from 'fs';
-
 import { ItemCategory, ITEM_CATEGORY_LABELS } from '@/types/itemCategory';
-
-interface InvoiceWithRelations extends Invoice {
-  vendor: Vendor;
-  items: (InvoiceItem & {
-    category?: ItemCategory;
-  })[];
-}
-
-interface InvoiceItemWithCategory extends InvoiceItem {
-  category?: ItemCategory;
-}
+import { PdfInvoice, PdfInvoiceItem } from '@/lib/pdf/types';
 
 interface CompanyInfo {
   name: string;
@@ -34,12 +22,6 @@ const TAX_RATE_LABELS = {
 } as const;
 
 type TaxRateKey = keyof typeof TAX_RATE_LABELS;
-
-interface TaxRateSummary {
-  taxRate: TaxRateKey;
-  subtotal: Prisma.Decimal;
-  tax: Prisma.Decimal;
-}
 
 // カスタムエラー定義
 export class PDFGenerationError extends Error {
@@ -73,7 +55,7 @@ async function setupFont(doc: PDFKit.PDFDocument) {
 
 export async function generateInvoicePDF(
   doc: PDFKit.PDFDocument,
-  invoice: InvoiceWithRelations,
+  invoice: PdfInvoice,
   companyInfo: CompanyInfo
 ) {
   try {
@@ -89,7 +71,7 @@ export async function generateInvoicePDF(
     await drawHeader(doc, companyInfo);
     drawInvoiceInfo(doc, invoice, companyInfo);
     drawItemsTable(doc, invoice.items);
-    drawSummary(doc, invoice.items);
+    drawSummary(doc, invoice);
     drawNotes(doc, invoice.notes);
     drawPaymentTerms(doc, invoice);
 
@@ -126,7 +108,7 @@ async function drawHeader(
 // 請求書基本情報の描画
 function drawInvoiceInfo(
   doc: PDFKit.PDFDocument,
-  invoice: InvoiceWithRelations,
+  invoice: PdfInvoice,
   companyInfo: CompanyInfo
 ) {
   // 適格請求書等の表示
@@ -165,12 +147,13 @@ function drawInvoiceInfo(
 // 明細テーブルの描画
 function drawItemsTable(
   doc: PDFKit.PDFDocument,
-  items: InvoiceItemWithCategory[]
+  items: PdfInvoiceItem[]
 ) {
   // テキストの色を設定する関数
   const setTextColor = (doc: PDFKit.PDFDocument, isReducedTax: boolean) => {
     doc.fillColor(isReducedTax ? '#2563eb' : '#000000');
   };
+
   const columns = {
     item: { x: 50, w: 150 },
     category: { x: 200, w: 80 },
@@ -198,9 +181,8 @@ function drawItemsTable(
 
   // 明細行
   const lineHeight = 20;
-  items.forEach((item, i) => {
+  items.forEach((item) => {
     const y = doc.y + lineHeight;
-    const amount = new Prisma.Decimal(item.quantity).mul(item.unitPrice);
     const taxRateValue = Number(item.taxRate);
     const taxRateLabel = TAX_RATE_LABELS[taxRateValue as TaxRateKey] || `${taxRateValue * 100}%`;
 
@@ -208,16 +190,15 @@ function drawItemsTable(
     const categoryLabel = item.category ? ITEM_CATEGORY_LABELS[item.category] : '未分類';
     const isReducedTax = taxRateValue === 0.08;
 
-    doc
-      .text(item.itemName, columns.item.x, y, { width: columns.item.w });
+    doc.text(item.itemName, columns.item.x, y, { width: columns.item.w });
 
     setTextColor(doc, isReducedTax);
     doc.text(categoryLabel, columns.category.x, y, { width: columns.category.w });
     doc.text(item.quantity.toString(), columns.quantity.x, y);
     doc.text(`¥${item.unitPrice.toFixed(0)}`, columns.price.x, y);
     doc.text(taxRateLabel, columns.taxRate.x, y);
-    doc.text(`¥${amount.toFixed(0)}`, columns.amount.x, y);
-    setTextColor(doc, false); // 色を元に戻す
+    doc.text(`¥${item.taxableAmount.toFixed(0)}`, columns.amount.x, y);
+    setTextColor(doc, false);
 
     // 品目説明がある場合は追加行に表示
     if (item.description) {
@@ -232,94 +213,68 @@ function drawItemsTable(
 
     doc.y = y + (item.description ? lineHeight : 0);
   });
-} 
+}
 
 // 金額サマリーの描画
 function drawSummary(
   doc: PDFKit.PDFDocument,
-  items: InvoiceItemWithCategory[]
+  invoice: PdfInvoice
 ) {
-  // テキストの色を設定する関数
-  const setTextColor = (doc: PDFKit.PDFDocument, isReducedTax: boolean) => {
-    doc.fillColor(isReducedTax ? '#2563eb' : '#000000');
-  };
-
-  // カテゴリー情報を含む税率区分ごとの集計
-  interface CategorySummary {
-    taxRate: TaxRateKey;
-    subtotal: Prisma.Decimal;
-    tax: Prisma.Decimal;
-    categories: Set<ItemCategory>;
-  }
-
-  const taxRateSummaries = items.reduce<CategorySummary[]>((acc, item) => {
-    const taxRateValue = Number(item.taxRate);
-    const amount = new Prisma.Decimal(item.quantity).mul(item.unitPrice);
-    const tax = amount.mul(new Prisma.Decimal(taxRateValue));
-    
-    const existingSummary = acc.find(s => s.taxRate === taxRateValue);
-    if (existingSummary) {
-      existingSummary.subtotal = existingSummary.subtotal.add(amount);
-      existingSummary.tax = existingSummary.tax.add(tax);
-      if (item.category) {
-        existingSummary.categories.add(item.category);
-      }
-    } else {
-      acc.push({
-        taxRate: taxRateValue as TaxRateKey,
-        subtotal: amount,
-        tax: tax,
-        categories: new Set(item.category ? [item.category] : [])
-      });
-    }
-    return acc;
-  }, []);
-
   const summaryX = 350;
   const amountX = 450;
-  const totalSubtotal = taxRateSummaries.reduce((acc, s) => acc.add(s.subtotal), new Prisma.Decimal(0));
-  const totalTax = taxRateSummaries.reduce((acc, s) => acc.add(s.tax), new Prisma.Decimal(0));
 
   // 小計
   doc.moveDown(2);
   doc.fontSize(12)
      .text('小計:', summaryX)
-     .text(`¥${totalSubtotal.toFixed(0)}`, amountX)
+     .text(`¥${invoice.subtotal.toFixed(0)}`, amountX)
      .moveDown(0.5);
 
   // 税率区分ごとの消費税(カテゴリー情報付き)
-  taxRateSummaries.forEach(summary => {
-    const label = TAX_RATE_LABELS[summary.taxRate];
-    const isReducedTax = summary.taxRate === 0.08;
+  const taxRateGroups = invoice.items.reduce<Map<number, PdfInvoiceItem[]>>((acc, item) => {
+    const rate = Number(item.taxRate);
+    if (!acc.has(rate)) {
+      acc.set(rate, []);
+    }
+    acc.get(rate)?.push(item);
+    return acc;
+  }, new Map());
+
+  // Mapをエントリーの配列に変換して反復処理
+  for (const [rate, items] of Array.from(taxRateGroups.entries())) {
+    const isReducedTax = rate === 0.08;
+    const label = TAX_RATE_LABELS[rate as TaxRateKey];
+    const taxAmount = items.reduce((sum, item) => sum.add(item.taxAmount), new Prisma.Decimal(0));
     
-    setTextColor(doc, isReducedTax);
+    doc.fillColor(isReducedTax ? '#2563eb' : '#000000');
     doc.text(`消費税(${label}):`, summaryX)
-       .text(`¥${summary.tax.toFixed(0)}`, amountX)
+       .text(`¥${taxAmount.toFixed(0)}`, amountX)
        .moveDown(0.5);
 
     // カテゴリー情報の表示
-    if (summary.categories.size > 0) {
+    const categories = new Set(items.map(item => item.category).filter((c): c is ItemCategory => !!c));
+    if (categories.size > 0) {
       doc.fontSize(8)
-         .text(`対象品目: ${Array.from(summary.categories).map(cat => ITEM_CATEGORY_LABELS[cat]).join('、')}`, {
+         .text(`対象品目: ${Array.from(categories).map(cat => ITEM_CATEGORY_LABELS[cat]).join('、')}`, {
            width: 300,
            align: 'right'
          })
          .moveDown(0.5);
     }
-    setTextColor(doc, false);
-  });
+    doc.fillColor('#000000');
+  }
 
   // 合計金額
   doc.fontSize(14)
      .text('合計金額:', summaryX)
-     .text(`¥${totalSubtotal.add(totalTax).toFixed(0)}`, amountX);
+     .text(`¥${invoice.totalAmount.toFixed(0)}`, amountX);
 
   // インボイス制度対応の注記
   doc.moveDown();
   doc.fontSize(8);
 
   // 軽減税率対象品目がある場合の注記
-  const hasReducedTaxItems = taxRateSummaries.some(s => s.taxRate === 0.08);
+  const hasReducedTaxItems = invoice.items.some(item => Number(item.taxRate) === 0.08);
   if (hasReducedTaxItems) {
     doc.text('※ 軽減税率対象品目には軽減税率(8%)が適用されています。', {
       align: 'right'
@@ -359,7 +314,7 @@ function drawNotes(
 // 支払い条件の描画
 function drawPaymentTerms(
   doc: PDFKit.PDFDocument,
-  invoice: InvoiceWithRelations
+  invoice: PdfInvoice
 ) {
   doc.moveDown(2);
   if (invoice.dueDate) {

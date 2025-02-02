@@ -234,10 +234,36 @@
 
    Day 3-4: 動的生成機能
 
-   - [ ] プレビュー機能の実装
-     - プレビューモーダルの作成
-     - 印刷プレビューの最適化
-     - ダウンロード機能の追加
+   - [~] プレビュー機能の実装
+     - [x] プレビューモーダルの作成
+     - [x] 印刷プレビューの最適化
+     - [x] ダウンロード機能の追加
+     - [ ] 型エラーの修正
+       - InvoicePreviewModal.test.tsx: TaxCalculationの型定義の問題
+       - smtp.ts: MailContextのジェネリック型の問題
+       - invoiceCreated.ts: MailTemplateの型定義の問題
+       - itemCategory.ts: Prismaモデルの問題
+       - pdf/utils.ts: QualifiedInvoiceItemの型定義の問題
+
+   残課題:
+
+   1. 型の不整合
+
+      - QualifiedInvoiceとPDFテンプレートの型の差異
+      - メール送信機能の型定義の問題
+      - 品目カテゴリーのPrismaモデルの問題
+
+   2. 必要な対応
+
+      - TaxCalculationの型定義の見直し
+      - MailTemplateのジェネリック型の改善
+      - Prismaスキーマの更新(itemCategoryMaster)
+      - テストデータの型安全性の向上
+
+   3. 承認依頼事項
+      - 型定義の方針(特にTaxCalculationとMailTemplate)
+      - Prismaスキーマの変更方針
+      - テストデータの扱い方
 
 3. メール送信システム実装 (2025/2/12 - 2025/2/16)
 

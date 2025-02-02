@@ -1,51 +1,70 @@
-import { Invoice, InvoiceStatus, PurchaseOrder, PurchaseOrderStatus } from '@prisma/client'
+import { Prisma } from '@prisma/client';
+import { ItemCategory } from '@/types/itemCategory';
 
-// メールテンプレートの種類を定義
-export type MailTemplateType = 
-  | 'invoiceCreated'
-  | 'invoiceStatusUpdated'
-  | 'purchaseOrderCreated'
-  | 'purchaseOrderStatusUpdated'
-  | 'paymentReminder'
+export type MailTemplateType = 'invoiceCreated' | 'paymentReminder';
 
-// メールテンプレートのコンテキスト型
-export interface MailContext {
-  invoiceCreated: {
-    invoice: Invoice
-  }
-  invoiceStatusUpdated: {
-    invoice: Invoice
-    oldStatus: InvoiceStatus
-    newStatus: InvoiceStatus
-  }
-  purchaseOrderCreated: {
-    purchaseOrder: PurchaseOrder
-  }
-  purchaseOrderStatusUpdated: {
-    purchaseOrder: PurchaseOrder
-    oldStatus: PurchaseOrderStatus
-    newStatus: PurchaseOrderStatus
-  }
-  paymentReminder: {
-    invoice: Invoice
-    daysOverdue: number
-  }
+export interface MailContext<T = Record<string, unknown>> {
+  to: string;
+  subject: string;
+  data: T;
 }
 
-// メールテンプレート関数の型
-export type MailTemplate<T extends MailTemplateType> = (
-  context: MailContext[T]
-) => Promise<{
-  subject: string
-  body: string
+export interface MailRenderResult {
+  subject: string;
+  body: string;
   attachments?: Array<{
-    filename: string
-    content: Buffer | string
-    contentType?: string
-  }>
-}>
+    filename: string;
+    content: Buffer;
+  }>;
+}
 
-// メールテンプレートの集合
-export type MailTemplates = {
-  [K in MailTemplateType]: MailTemplate<K>
-} 
+export interface MailTemplate<T = Record<string, unknown>> {
+  type: MailTemplateType;
+  render: (data: T) => Promise<MailRenderResult>;
+}
+
+// メールテンプレート固有の型
+export interface InvoiceCreatedContext {
+  invoice: MailInvoice;
+  companyInfo: {
+    name: string;
+    email: string;
+  };
+}
+
+export interface PaymentReminderContext {
+  invoice: MailInvoice;
+  daysOverdue: number;
+}
+
+export interface MailInvoiceItem {
+  id: string;
+  invoiceId: string;
+  itemName: string;
+  quantity: number;
+  unitPrice: Prisma.Decimal;
+  taxRate: Prisma.Decimal;
+  description?: string | null;
+  category?: ItemCategory;
+  taxAmount: Prisma.Decimal;
+  taxableAmount: Prisma.Decimal;
+}
+
+export interface MailInvoice {
+  id: string;
+  invoiceNumber: string;
+  issueDate: Date;
+  dueDate?: Date | null;
+  notes?: string | null;
+  status: string;
+  vendor: {
+    id: string;
+    name: string;
+    address?: string;
+    registrationNumber?: string;
+  };
+  items: MailInvoiceItem[];
+  subtotal: Prisma.Decimal;
+  taxAmount: Prisma.Decimal;
+  totalAmount: Prisma.Decimal;
+}

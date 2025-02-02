@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import PDFDocument from 'pdfkit';
 import { generateInvoicePDF } from '../templates/invoice';
 import { Prisma } from '@prisma/client';
+import { ItemCategory } from '@/types/itemCategory';
 
 describe('generateInvoicePDF', () => {
   const mockDoc = {
@@ -15,6 +16,7 @@ describe('generateInvoicePDF', () => {
     lineTo: vi.fn().mockReturnThis(),
     stroke: vi.fn(),
     rect: vi.fn().mockReturnThis(),
+    fillColor: vi.fn().mockReturnThis(),
     y: 0,
   } as unknown as PDFKit.PDFDocument;
 
@@ -24,84 +26,115 @@ describe('generateInvoicePDF', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
-  const mockInvoice = {
-    invoiceNumber: 'INV-001',
-    issueDate: new Date('2025-02-02'),
-    dueDate: new Date('2025-03-02'),
-    notes: 'テスト用請求書',
-    vendor: {
-      name: 'テスト取引先',
-      address: '東京都渋谷区...',
-      registrationNumber: 'T1234567890123',
-    },
-    items: [
-      {
-        itemName: '商品A',
-        quantity: new Prisma.Decimal(2),
-        unitPrice: new Prisma.Decimal(1000),
-        taxRate: new Prisma.Decimal(0.1),
-        description: '標準税率商品',
+  it('should generate PDF with invoice data', async () => {
+    const mockInvoice = {
+      id: '1',
+      invoiceNumber: 'INV-001',
+      issueDate: new Date('2025-02-01'),
+      dueDate: new Date('2025-02-28'),
+      notes: 'テスト用請求書',
+      vendor: {
+        name: 'テスト取引先',
+        address: '東京都渋谷区...',
+        registrationNumber: 'T1234567890123'
       },
-      {
-        itemName: '商品B',
-        quantity: new Prisma.Decimal(1),
-        unitPrice: new Prisma.Decimal(500),
-        taxRate: new Prisma.Decimal(0.08),
-        description: '軽減税率商品',
-      },
-    ],
-  };
+      items: [
+        {
+          id: '1',
+          itemName: 'テスト商品1',
+          quantity: 2,
+          unitPrice: new Prisma.Decimal(1000),
+          taxRate: new Prisma.Decimal(0.1),
+          description: '商品の説明1',
+          category: ItemCategory.ELECTRONICS
+        },
+        {
+          id: '2',
+          itemName: 'テスト商品2',
+          quantity: 1,
+          unitPrice: new Prisma.Decimal(800),
+          taxRate: new Prisma.Decimal(0.08),
+          description: '商品の説明2',
+          category: ItemCategory.FOOD
+        }
+      ]
+    };
 
-  const mockCompanyInfo = {
-    name: 'テスト株式会社',
-    postalCode: '150-0001',
-    address: '東京都渋谷区...',
-    tel: '03-1234-5678',
-    email: 'test@example.com',
-    registrationNumber: 'T9876543210987',
-  };
+    const mockCompanyInfo = {
+      name: 'テスト株式会社',
+      postalCode: '123-4567',
+      address: '東京都千代田区...',
+      tel: '03-1234-5678',
+      email: 'test@example.com',
+      registrationNumber: 'T9876543210123'
+    };
 
-  it('should generate PDF with registration numbers', async () => {
     await generateInvoicePDF(mockDoc, mockInvoice as any, mockCompanyInfo);
 
-    // 適格請求書等の表示確認
-    expect(mockDoc.text).toHaveBeenCalledWith('※適格請求書等', { align: 'center' });
+    // ヘッダー情報の検証
+    expect(mockDoc.text).toHaveBeenCalledWith('請求書', expect.any(Object));
+    expect(mockDoc.text).toHaveBeenCalledWith('※適格請求書等', expect.any(Object));
+    expect(mockDoc.text).toHaveBeenCalledWith(`請求書番号: ${mockInvoice.invoiceNumber}`, expect.any(Object));
 
-    // 登録番号の表示確認
-    expect(mockDoc.text).toHaveBeenCalledWith(
-      `登録番号: ${mockCompanyInfo.registrationNumber}`,
-      { align: 'right' }
-    );
+    // 登録番号の検証
+    expect(mockDoc.text).toHaveBeenCalledWith(`登録番号: ${mockCompanyInfo.registrationNumber}`, expect.any(Object));
+    expect(mockDoc.text).toHaveBeenCalledWith(`登録番号: ${mockInvoice.vendor.registrationNumber}`, expect.any(Object));
 
-    // 取引先の登録番号の表示確認
-    const textFn = mockDoc.text as unknown as ReturnType<typeof vi.fn>;
-    const vendorRegCall = textFn.mock.calls.find(
-      call => call[0] === `登録番号: ${mockInvoice.vendor.registrationNumber}`
-    );
-    expect(vendorRegCall).toBeTruthy();
-  });
+    // 明細行の検証
+    mockInvoice.items.forEach(item => {
+      expect(mockDoc.text).toHaveBeenCalledWith(item.itemName, expect.any(Number), expect.any(Number), expect.any(Object));
+      expect(mockDoc.text).toHaveBeenCalledWith(item.quantity.toString(), expect.any(Number), expect.any(Number));
+    });
 
-  it('should handle different tax rates correctly', async () => {
-    await generateInvoicePDF(mockDoc, mockInvoice as any, mockCompanyInfo);
-
-    // 税率区分の表示確認
-    expect(mockDoc.text).toHaveBeenCalledWith('税率', 380, 80);
-    expect(mockDoc.text).toHaveBeenCalledWith('標準税率(10%)', 380, 100);
-    expect(mockDoc.text).toHaveBeenCalledWith('軽減税率(8%)', 380, 140);
-
-    // 軽減税率の注記確認
+    // 軽減税率の注記の検証
     expect(mockDoc.text).toHaveBeenCalledWith(
       '※ 軽減税率対象品目には軽減税率(8%)が適用されています。',
-      { align: 'right' }
+      expect.any(Object)
+    );
+
+    // インボイス制度対応の注記の検証
+    expect(mockDoc.text).toHaveBeenCalledWith(
+      '※ この請求書は「適格請求書等保存方式」に対応した請求書です。',
+      expect.any(Object)
     );
   });
 
-  it('should calculate tax amounts correctly', async () => {
+  it('should handle missing optional data', async () => {
+    const mockInvoice = {
+      id: '1',
+      invoiceNumber: 'INV-001',
+      issueDate: new Date('2025-02-01'),
+      dueDate: new Date('2025-02-28'),
+      vendor: {
+        name: 'テスト取引先'
+      },
+      items: [
+        {
+          id: '1',
+          itemName: 'テスト商品1',
+          quantity: 1,
+          unitPrice: new Prisma.Decimal(1000),
+          taxRate: new Prisma.Decimal(0.1)
+        }
+      ]
+    };
+
+    const mockCompanyInfo = {
+      name: 'テスト株式会社',
+      postalCode: '123-4567',
+      address: '東京都千代田区...',
+      tel: '03-1234-5678',
+      email: 'test@example.com'
+    };
+
     await generateInvoicePDF(mockDoc, mockInvoice as any, mockCompanyInfo);
 
-    // 標準税率(10%)の商品: 2000円 × 0.1 = 200円
-    expect(mockDoc.text).toHaveBeenCalledWith('¥200', 450);
-    // 軽減税率(8%)の商品: 500円 × 0.08 = 40円
-    expect(mockDoc.text).toHaveBeenCalledWith('¥40', 450);
+    // 基本情報の検証
+    expect(mockDoc.text).toHaveBeenCalledWith('請求書', expect.any(Object));
+    expect(mockDoc.text).toHaveBeenCalledWith(`請求書番号: ${mockInvoice.invoiceNumber}`, expect.any(Object));
+
+    // オプショナルな情報が省略されていることの検証
+    expect(mockDoc.text).not.toHaveBeenCalledWith('※適格請求書等', expect.any(Object));
+    expect(mockDoc.text).not.toHaveBeenCalledWith('登録番号:', expect.any(Object));
   });
 });

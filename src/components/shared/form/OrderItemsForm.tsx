@@ -202,10 +202,19 @@ export function OrderItemsForm<T extends FieldValues>({
           品目を追加
         </Button>
       )}
-      <div className="mt-4 space-y-2">
-        <div data-cy="subtotal">小計: ¥{calculateSubtotal()}</div>
-        <div data-cy="tax">消費税: ¥{calculateTax()}</div>
-        <div data-cy="total">合計: ¥{calculateTotal()}</div>
+      <div className="mt-6 space-y-3 border-t pt-4">
+        <div className="flex justify-between items-center text-sm" data-cy="subtotal">
+          <span className="text-gray-600">小計</span>
+          <span className="font-medium">¥{calculateSubtotal()}</span>
+        </div>
+        <div className="flex justify-between items-center text-sm" data-cy="tax">
+          <span className="text-gray-600">消費税</span>
+          <span className="font-medium">¥{calculateTax()}</span>
+        </div>
+        <div className="flex justify-between items-center text-lg font-bold border-t pt-3" data-cy="total">
+          <span>合計</span>
+          <span>¥{calculateTotal()}</span>
+        </div>
       </div>
     </div>
   )

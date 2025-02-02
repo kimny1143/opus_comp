@@ -125,10 +125,11 @@ export function InvoiceForm({
     issueDate: new Date(),
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     items: [{
-      itemName: '商品名を入力',
+      itemName: '',
       quantity: 1,
       unitPrice: 0,
-      taxRate: 0.1,
+      // 税率は初期値を設定せず、ユーザーに選択を促す
+      taxRate: 0,
       description: ''
     }],
     bankInfo: {
@@ -155,8 +156,16 @@ export function InvoiceForm({
       ...item,
       itemName: item.itemName || baseDefaultValues.items[0].itemName,
       quantity: item.quantity || baseDefaultValues.items[0].quantity,
-      unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : baseDefaultValues.items[0].unitPrice,
-      taxRate: typeof item.taxRate === 'number' ? item.taxRate : baseDefaultValues.items[0].taxRate
+      unitPrice: item.unitPrice instanceof Prisma.Decimal
+        ? Number(item.unitPrice.toString())
+        : typeof item.unitPrice === 'number'
+          ? item.unitPrice
+          : baseDefaultValues.items[0].unitPrice,
+      taxRate: item.taxRate instanceof Prisma.Decimal
+        ? Number(item.taxRate.toString())
+        : typeof item.taxRate === 'number'
+          ? item.taxRate
+          : baseDefaultValues.items[0].taxRate
     })) : baseDefaultValues.items,
     bankInfo: {
       ...baseDefaultValues.bankInfo,
@@ -211,6 +220,14 @@ export function InvoiceForm({
           <DateField
             name="dueDate"
             label="支払期限"
+            control={methods.control}
+            required
+            disabled={readOnly}
+          />
+
+          <InputField
+            name="registrationNumber"
+            label="登録番号"
             control={methods.control}
             required
             disabled={readOnly}
@@ -281,16 +298,6 @@ export function InvoiceForm({
             entityId={id || ''}
             placeholder="タグを追加..."
             readOnly={readOnly || isSubmitting}
-          />
-
-          <InputField
-            name="registrationNumber"
-            label="登録番号"
-            control={methods.control}
-            placeholder="T1234567890123"
-            description="適格請求書発行事業者の登録番号（T+13桁数字）"
-            required
-            disabled={readOnly}
           />
         </div>
 

@@ -245,25 +245,64 @@
        - itemCategory.ts: Prismaモデルの問題
        - pdf/utils.ts: QualifiedInvoiceItemの型定義の問題
 
-   残課題:
+   残課題と対応方針:
 
-   1. 型の不整合
+   1. 型の不整合と修正計画
+      a. InvoicePreviewModal.test.tsx の型変換問題
 
-      - QualifiedInvoiceとPDFテンプレートの型の差異
-      - メール送信機能の型定義の問題
-      - 品目カテゴリーのPrismaモデルの問題
+      - unknown経由での型キャスト実装
+      - TaxCalculation型の完全な定義
+      - テストデータ生成ユーティリティの作成
 
-   2. 必要な対応
+      b. メール送信機能の型定義
 
-      - TaxCalculationの型定義の見直し
-      - MailTemplateのジェネリック型の改善
-      - Prismaスキーマの更新(itemCategoryMaster)
-      - テストデータの型安全性の向上
+      - MailContextのジェネリック制約追加
+      - MailTemplate型の厳密化
+      - invoiceCreatedTemplateの型定義修正
 
-   3. 承認依頼事項
-      - 型定義の方針(特にTaxCalculationとMailTemplate)
-      - Prismaスキーマの変更方針
-      - テストデータの扱い方
+      c. 品目カテゴリーの実装
+
+      - Prismaスキーマの見直し
+      - モデル名の統一 (itemCategoryMaster → itemCategory)
+      - 型定義の整理
+
+   2. 実装方針の詳細
+      a. 型安全性の向上
+
+      - 一時的な型キャストを段階的に除去
+      - 共通の型変換ユーティリティを整備
+      - テスト用のファクトリ関数を実装
+
+      b. Prisma関連の改善
+
+      - スキーマの正規化
+      - マイグレーション計画の作成
+      - 既存データの移行手順の整理
+
+      c. テスト改善計画
+
+      - モック生成の共通化
+      - 型安全なテストヘルパーの作成
+      - テストデータの型チェック強化
+
+   3. 段階的な改善計画
+      a. 優先度の高い修正
+
+      - InvoicePreviewModalのテスト修正
+      - MailTemplate型の再定義
+      - Prismaスキーマの更新
+
+      b. 中期的な改善
+
+      - 型変換ユーティリティの整備
+      - テストヘルパーの実装
+      - 既存コードの型安全性向上
+
+      c. 長期的な計画
+
+      - 全体的な型定義の見直し
+      - テストカバレッジの向上
+      - コード品質の継続的な改善
 
 3. メール送信システム実装 (2025/2/12 - 2025/2/16)
 

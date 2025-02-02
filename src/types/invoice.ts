@@ -4,6 +4,8 @@ import { BankInfo } from '@/types/bankAccount'
 import { TagFormData } from '@/types/tag'
 import type { InvoiceFormData, InvoiceFormDataRHF } from '@/types/validation/invoice'
 import { Decimal } from '@prisma/client/runtime/library'
+import { DbTaxCalculation, DbTaxSummary } from '@/types/base/tax';
+import { ItemCategory } from '@/types/itemCategory';
 
 // 基本型定義
 export type InvoiceStatusType = InvoiceStatus;
@@ -185,17 +187,7 @@ export type SerializedInvoice = Omit<QualifiedInvoice, 'issueDate' | 'dueDate' |
 export type InvoiceWithRelations = ExtendedInvoice;
 
 // 税計算関連の型定義
-export interface TaxCalculation {
-  taxRate: number;
-  taxableAmount: Prisma.Decimal;
-  taxAmount: Prisma.Decimal;
-}
-
-export interface InvoiceTaxSummary {
-  byRate: TaxCalculation[];
-  totalTaxableAmount: Prisma.Decimal;
-  totalTaxAmount: Prisma.Decimal;
-}
+export interface InvoiceTaxSummary extends DbTaxSummary {}
 
 // 発行者情報の型定義
 export interface InvoiceIssuer {
@@ -216,6 +208,7 @@ export interface QualifiedInvoiceItem {
   taxRate: number;
   taxAmount: number;
   taxableAmount: number;
+  category?: ItemCategory;
 }
 
 export interface TaxableItem {

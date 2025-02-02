@@ -1,6 +1,7 @@
 import { QualifiedInvoice, QualifiedInvoiceItem } from '@/types/invoice';
 import { TaxCalculation } from '@/types/tax';
 import { Prisma } from '@prisma/client';
+import { toDbTaxCalculation } from '@/utils/typeConverters/tax';
 
 /**
  * テスト用のInvoiceItemを生成
@@ -60,7 +61,7 @@ export const createTestInvoice = (
   },
   items: [createTestInvoiceItem()],
   taxSummary: {
-    byRate: [createTestTaxCalculation()],
+    byRate: [toDbTaxCalculation(createTestTaxCalculation())],
     totalTaxableAmount: new Prisma.Decimal('2000'),
     totalTaxAmount: new Prisma.Decimal('200')
   },
@@ -73,9 +74,6 @@ export const createTestInvoice = (
   updatedAt: new Date(),
   createdById: '1',
   updatedById: '1',
-  sentAt: null,
-  paidAt: null,
-  canceledAt: null,
   ...overrides
 });
 

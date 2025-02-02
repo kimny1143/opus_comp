@@ -1,30 +1,16 @@
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { ItemCategory } from './itemCategory';
+import { ViewTaxCalculation, ViewTaxSummary } from '@/types/base/tax';
+
+// 再エクスポート
+export type { ViewTaxCalculation as TaxCalculation };
+export type { ViewTaxSummary as TaxSummary };
 
 /**
  * 税率の型定義
  */
 export type TaxRate = typeof TAX_RATES[keyof typeof TAX_RATES];
-
-/**
- * 税率計算の結果
- */
-export interface TaxCalculation {
-  rate: number;
-  taxRate: number;  // 互換性のために残す
-  taxableAmount: string;
-  taxAmount: string;
-}
-
-/**
- * 税率サマリー
- */
-export interface TaxSummary {
-  byRate: TaxCalculation[];
-  totalTaxableAmount: string;
-  totalTaxAmount: string;
-}
 
 /**
  * 税率の定義
@@ -94,7 +80,7 @@ export const calculateTotalWithTax = (amount: number | string, rate: number): st
 export const calculateTaxResult = (
   amount: number | string,
   rate: number
-): TaxCalculation => {
+): ViewTaxCalculation => {
   const taxableAmount = amount.toString();
   const taxAmount = calculateTax(amount, rate);
   return {

@@ -13,20 +13,13 @@ import { generateInvoicePDF } from '@/lib/pdf/templates/invoice';
 import { convertToPdfInvoice } from '@/lib/pdf/utils';
 import PDFDocument from 'pdfkit';
 import { QualifiedInvoice } from '@/types/invoice';
-import { PdfInvoice } from '@/lib/pdf/types';
+import { PdfInvoice, PdfCompanyInfo } from '@/lib/pdf/types';
 
 interface InvoicePreviewModalProps {
   open: boolean;
   onClose: () => void;
   invoice: QualifiedInvoice;
-  companyInfo: {
-    name: string;
-    postalCode: string;
-    address: string;
-    tel: string;
-    email: string;
-    registrationNumber?: string;
-  };
+  companyInfo: PdfCompanyInfo;
 }
 
 export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
@@ -72,14 +65,11 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
       
       // PDFの生成
       const pdfInvoice = convertToPdfInvoice(invoice);
-      await generateInvoicePDF(doc, pdfInvoice, {
-        name: companyInfo.name,
-        postalCode: '',  // 必要に応じて追加
-        address: '',     // 必要に応じて追加
-        tel: '',        // 必要に応じて追加
-        email: companyInfo.email,
-        registrationNumber: companyInfo.registrationNumber
-      });
+      if (!pdfInvoice) {
+        throw new Error('請求書データの変換に失敗しました');
+      }
+
+      await generateInvoicePDF(doc, pdfInvoice, companyInfo);
       doc.end();
 
       // BufferからBlobを作成
@@ -91,7 +81,7 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
       console.error('PDF生成エラー:', error);
       toast({
         title: 'PDFの生成に失敗しました',
-        description: 'もう一度お試しください',
+        description: error instanceof Error ? error.message : 'もう一度お試しください',
         variant: 'destructive'
       });
     } finally {
@@ -102,39 +92,60 @@ export const InvoicePreviewModal: React.FC<InvoicePreviewModalProps> = ({
   const handleDownload = () => {
     if (!pdfUrl) return;
 
-    const link = document.createElement('a');
-    link.href = pdfUrl;
-    link.download = `請求書_${invoice.invoiceNumber}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      const link = document.createElement('a');
+      link.href = pdfUrl;
+      link.download = `請求書_${invoice.invoiceNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('ダウンロードエラー:', error);
+      toast({
+        title: 'ダウンロードに失敗しました',
+        description: 'もう一度お試しください',
+        variant: 'destructive'
+      });
+    }
   };
 
   const handlePrint = () => {
     if (!pdfUrl) return;
 
-    // 印刷用のiframeを作成
-    const printFrame = document.createElement('iframe');
-    printFrame.style.display = 'none';
-    printFrame.src = pdfUrl;
-    document.body.appendChild(printFrame);
+    try {
+      // 印刷用のiframeを作成
+      const printFrame = document.createElement('iframe');
+      printFrame.style.display = 'none';
+      printFrame.src = pdfUrl;
+      document.body.appendChild(printFrame);
 
-    printFrame.onload = () => {
-      try {
-        printFrame.contentWindow?.print();
-      } catch (error) {
-        console.error('印刷エラー:', error);
-        toast({
-          title: '印刷の準備に失敗しました',
-          description: 'もう一度お試しください',
-          variant: 'destructive'
-        });
-      }
-      // 印刷ダイアログが閉じられた後にiframeを削除
-      setTimeout(() => {
-        document.body.removeChild(printFrame);
-      }, 1000);
-    };
+      printFrame.onload = () => {
+        try {
+          if (!printFrame.contentWindow) {
+            throw new Error('印刷用ウィンドウの作成に失敗しました');
+          }
+          printFrame.contentWindow.print();
+        } catch (error) {
+          console.error('印刷エラー:', error);
+          toast({
+            title: '印刷の準備に失敗しました',
+            description: error instanceof Error ? error.message : 'もう一度お試しください',
+            variant: 'destructive'
+          });
+        }
+        // 印刷ダイアログが閉じられた後にiframeを削除
+        setTimeout(() => {
+          document.body.removeChild(printFrame);
+        }, 1000);
+      };
+    } catch (error) {
+      console.error('印刷エラー:', error);
+      toast({
+        title: '印刷の準備に失敗しました',
+        description: error instanceof Error ? error.message : 'もう一度お試しください',
+        variant: 'destructive'
+      });
+    }
   };
 
   return (

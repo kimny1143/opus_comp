@@ -1,10 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { InvoicePreviewModal } from '../InvoicePreviewModal';
-import { QualifiedInvoice } from '@/types/invoice';
-import { createTestViewTaxCalculation } from '@/test/factories/tax';
-import { toDbTaxCalculation } from '@/utils/typeConverters/tax';
-import { Prisma } from '@prisma/client';
+import { createTestInvoice, createTestCompanyInfo } from '@/test/helpers/invoice';
+import { convertToPdfInvoice } from '@/lib/pdf/utils';
+import type { Mock } from 'vitest';
 
 // PDFKitのモック
 vi.mock('pdfkit', () => {
@@ -28,70 +27,29 @@ vi.mock('pdfkit', () => {
   };
 });
 
-describe('InvoicePreviewModal', () => {
-  const mockInvoice: QualifiedInvoice = {
-    id: '1',
-    invoiceNumber: 'INV-001',
-    issueDate: new Date('2025-02-01'),
-    dueDate: new Date('2025-02-28'),
-    status: 'DRAFT',
-    notes: 'テスト用請求書',
-    vendorId: '1',
-    vendor: {
-      id: '1',
-      name: 'テスト取引先',
-      address: '東京都渋谷区...',
-      registrationNumber: 'T1234567890123'
-    },
-    issuer: {
-      name: 'テスト発行者',
-      email: 'issuer@example.com',
-      registrationNumber: 'T9876543210123',
-      address: '東京都千代田区...'
-    },
-    items: [
-      {
-        id: '1',
-        invoiceId: '1',
-        itemName: 'テスト商品1',
-        quantity: 2,
-        unitPrice: '1000',
-        taxRate: 10,
-        description: '商品の説明1',
-        taxAmount: 200,
-        taxableAmount: 2000
-      }
-    ],
-    taxSummary: {
-      byRate: [toDbTaxCalculation(createTestViewTaxCalculation())],
-      totalTaxableAmount: new Prisma.Decimal('2000'),
-      totalTaxAmount: new Prisma.Decimal('200')
-    },
-    totalAmount: new Prisma.Decimal('2200'),
-    templateId: null,
-    purchaseOrderId: null,
-    bankInfo: null,
-    template: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    createdById: '1',
-    updatedById: '1'
-  };
+// PDF変換のモック
+vi.mock('@/lib/pdf/utils', () => ({
+  convertToPdfInvoice: vi.fn()
+}));
 
-  const mockCompanyInfo = {
-    name: 'テスト株式会社',
-    postalCode: '123-4567',
-    address: '東京都千代田区...',
-    tel: '03-1234-5678',
-    email: 'test@example.com',
-    registrationNumber: 'T9876543210123'
-  };
+describe('InvoicePreviewModal', () => {
+  const mockInvoice = createTestInvoice();
+  const mockCompanyInfo = createTestCompanyInfo();
 
   beforeEach(() => {
     vi.clearAllMocks();
     // URLオブジェクトのモック
     global.URL.createObjectURL = vi.fn(() => 'mock-url');
     global.URL.revokeObjectURL = vi.fn();
+    // convertToPdfInvoiceのデフォルト動作を設定
+    (convertToPdfInvoice as Mock).mockReturnValue({
+      ...mockInvoice,
+      items: mockInvoice.items.map(item => ({
+        ...item,
+        unitPrice: item.unitPrice,
+        taxRate: item.taxRate
+      }))
+    });
   });
 
   it('should render modal with loading state initially', () => {
@@ -205,5 +163,53 @@ describe('InvoicePreviewModal', () => {
     );
 
     expect(global.URL.revokeObjectURL).toHaveBeenCalled();
+  });
+
+  it('should show error toast when PDF generation fails', async () => {
+    (convertToPdfInvoice as Mock).mockReturnValue(null);
+
+    render(
+      <InvoicePreviewModal
+        open={true}
+        onClose={() => {}}
+        invoice={mockInvoice}
+        companyInfo={mockCompanyInfo}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('PDFの生成に失敗しました')).toBeInTheDocument();
+      expect(screen.getByText('請求書データの変換に失敗しました')).toBeInTheDocument();
+    });
+  });
+
+  it('should show error toast when print fails', async () => {
+    render(
+      <InvoicePreviewModal
+        open={true}
+        onClose={() => {}}
+        invoice={mockInvoice}
+        companyInfo={mockCompanyInfo}
+      />
+    );
+
+    await waitFor(() => {
+      const printButton = screen.getByText('印刷');
+      expect(printButton).not.toBeDisabled();
+    });
+
+    // contentWindowをnullに設定してエラーを発生させる
+    Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
+      value: null,
+      writable: true
+    });
+
+    const printButton = screen.getByText('印刷');
+    fireEvent.click(printButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('印刷の準備に失敗しました')).toBeInTheDocument();
+      expect(screen.getByText('印刷用ウィンドウの作成に失敗しました')).toBeInTheDocument();
+    });
   });
 });

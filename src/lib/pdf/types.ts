@@ -1,6 +1,15 @@
 import { Prisma } from '@prisma/client';
 import { ItemCategory } from '@/types/itemCategory';
 
+export interface PdfCompanyInfo {
+  name: string;
+  postalCode: string;
+  address: string;
+  tel: string;
+  email: string;
+  registrationNumber?: string;
+}
+
 export interface PdfInvoiceItem {
   id: string;
   invoiceId: string;

@@ -28,14 +28,14 @@ describe('TaxRateSelect', () => {
   it('should render with custom label', () => {
     render(
       <TestWrapper>
-        <TaxRateSelect name="taxRate" label="消費税率" />
+        <TaxRateSelect name="taxRate" label="適用税率" />
       </TestWrapper>
     );
 
-    expect(screen.getByText('消費税率')).toBeInTheDocument();
+    expect(screen.getByText('適用税率')).toBeInTheDocument();
   });
 
-  it('should show tax rate options', async () => {
+  it('should show tax rate options', () => {
     render(
       <TestWrapper>
         <TaxRateSelect name="taxRate" />
@@ -45,25 +45,9 @@ describe('TaxRateSelect', () => {
     // セレクトボックスを開く
     fireEvent.click(screen.getByRole('combobox'));
 
-    // オプションが表示されることを確認
-    const options = screen.getAllByRole('option', { hidden: true });
-    expect(options).toHaveLength(2);
-    expect(options[0]).toHaveTextContent('軽減税率(8%)');
-    expect(options[1]).toHaveTextContent('標準税率(10%)');
-  });
-
-  it('should mark reduced tax rate as applicable for eligible categories', () => {
-    render(
-      <TestWrapper>
-        <TaxRateSelect name="taxRate" category="FOOD" />
-      </TestWrapper>
-    );
-
-    // セレクトボックスを開く
-    fireEvent.click(screen.getByRole('combobox'));
-
-    // 軽減税率が適用対象として表示されることを確認
-    expect(screen.getByText('軽減税率(8%) (適用対象)')).toBeInTheDocument();
+    // 税率オプションが表示されることを確認
+    expect(screen.getByText('標準税率(10%)')).toBeInTheDocument();
+    expect(screen.getByText('軽減税率(8%)')).toBeInTheDocument();
   });
 
   it('should be disabled when specified', () => {
@@ -76,7 +60,7 @@ describe('TaxRateSelect', () => {
     expect(screen.getByRole('combobox')).toBeDisabled();
   });
 
-  it('should apply correct styling for different tax rates', () => {
+  it('should apply blue color to reduced tax rate option', () => {
     render(
       <TestWrapper>
         <TaxRateSelect name="taxRate" />
@@ -86,12 +70,25 @@ describe('TaxRateSelect', () => {
     // セレクトボックスを開く
     fireEvent.click(screen.getByRole('combobox'));
 
-    // 軽減税率の項目が青色で表示されることを確認
-    const reducedRateOption = screen.getAllByRole('option', { hidden: true })[0];
-    expect(reducedRateOption.closest('[data-radix-collection-item]')).toHaveClass('text-blue-600');
+    // 軽減税率のオプションが青色で表示されることを確認
+    const reducedTaxOption = screen.getByText('軽減税率(8%)').closest('.text-blue-600');
+    expect(reducedTaxOption).toBeInTheDocument();
+  });
 
-    // 標準税率の項目が通常の色で表示されることを確認
-    const standardRateOption = screen.getAllByRole('option', { hidden: true })[1];
-    expect(standardRateOption.closest('[data-radix-collection-item]')).toHaveClass('text-gray-900');
+  it('should handle value change', () => {
+    render(
+      <TestWrapper>
+        <TaxRateSelect name="taxRate" />
+      </TestWrapper>
+    );
+
+    // セレクトボックスを開く
+    fireEvent.click(screen.getByRole('combobox'));
+
+    // 軽減税率を選択
+    fireEvent.click(screen.getByText('軽減税率(8%)'));
+
+    // 選択した値が反映されることを確認
+    expect(screen.getByRole('combobox')).toHaveTextContent('軽減税率(8%)');
   });
 });

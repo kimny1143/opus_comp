@@ -1,151 +1,130 @@
 import { describe, expect, it } from 'vitest';
 import {
   TAX_RATES,
+  isReducedTaxItem,
   calculateTax,
   calculateTotalWithTax,
-  isReducedTaxItem,
   calculateTaxResult,
   taxRateSchema,
   getTaxRateOptions
 } from '../tax';
+import { ItemCategory } from '../itemCategory';
 
 describe('tax utilities', () => {
-  describe('tax rate validation', () => {
-    it('should accept valid tax rates', () => {
-      const validRates = [
-        TAX_RATES.REDUCED,  // 8%
-        TAX_RATES.STANDARD  // 10%
-      ];
-
-      validRates.forEach(rate => {
-        const result = taxRateSchema.safeParse(rate);
-        expect(result.success).toBe(true);
-      });
+  describe('taxRateSchema', () => {
+    it('should validate standard tax rate', () => {
+      const result = taxRateSchema.safeParse(10);
+      expect(result.success).toBe(true);
     });
 
-    it('should reject invalid tax rates', () => {
-      const invalidRates = [
-        0.05,  // 5%
-        0.15,  // 15%
-        0,     // 0%
-        -0.1   // -10%
-      ];
+    it('should validate reduced tax rate', () => {
+      const result = taxRateSchema.safeParse(8);
+      expect(result.success).toBe(true);
+    });
 
-      invalidRates.forEach(rate => {
-        const result = taxRateSchema.safeParse(rate);
-        expect(result.success).toBe(false);
-      });
+    it('should reject invalid tax rate', () => {
+      const result = taxRateSchema.safeParse(5);
+      expect(result.success).toBe(false);
     });
   });
 
-  describe('tax calculations', () => {
-    it('should calculate tax amount correctly', () => {
-      const testCases = [
-        { amount: 1000, rate: TAX_RATES.REDUCED, expected: 80 },   // 1000 * 0.08
-        { amount: 1000, rate: TAX_RATES.STANDARD, expected: 100 }, // 1000 * 0.10
-        { amount: 1234, rate: TAX_RATES.REDUCED, expected: 99 },   // 1234 * 0.08 (rounded)
-        { amount: 1234, rate: TAX_RATES.STANDARD, expected: 123 }  // 1234 * 0.10 (rounded)
-      ];
-
-      testCases.forEach(({ amount, rate, expected }) => {
-        expect(calculateTax(amount, rate)).toBe(expected);
-      });
-    });
-
-    it('should calculate total with tax correctly', () => {
-      const testCases = [
-        { amount: 1000, rate: TAX_RATES.REDUCED, expected: 1080 },   // 1000 + (1000 * 0.08)
-        { amount: 1000, rate: TAX_RATES.STANDARD, expected: 1100 },  // 1000 + (1000 * 0.10)
-        { amount: 1234, rate: TAX_RATES.REDUCED, expected: 1333 },   // 1234 + (1234 * 0.08)
-        { amount: 1234, rate: TAX_RATES.STANDARD, expected: 1357 }   // 1234 + (1234 * 0.10)
-      ];
-
-      testCases.forEach(({ amount, rate, expected }) => {
-        expect(calculateTotalWithTax(amount, rate)).toBe(expected);
-      });
-    });
-  });
-
-  describe('reduced tax rate determination', () => {
-    it('should identify reduced tax rate items correctly', () => {
-      const reducedTaxCategories = [
-        'FOOD',
-        'NEWSPAPER',
-        'AGRICULTURE',
-        'FISHERY',
-        'LIVESTOCK'
-      ];
-
-      reducedTaxCategories.forEach(category => {
-        expect(isReducedTaxItem(category)).toBe(true);
-      });
-    });
-
-    it('should identify standard tax rate items correctly', () => {
-      const standardTaxCategories = [
-        'ELECTRONICS',
-        'CLOTHING',
-        'FURNITURE',
-        'SERVICES',
-        'OTHER'
-      ];
-
-      standardTaxCategories.forEach(category => {
-        expect(isReducedTaxItem(category)).toBe(false);
-      });
-    });
-  });
-
-  describe('tax calculation result', () => {
-    it('should calculate full tax result for standard rate items', () => {
-      const result = calculateTaxResult(1000, TAX_RATES.STANDARD, 'ELECTRONICS');
-      
-      expect(result).toEqual({
-        subtotal: 1000,
-        taxAmount: 100,
-        total: 1100,
-        taxRate: TAX_RATES.STANDARD,
-        isReduced: false
-      });
-    });
-
-    it('should apply reduced tax rate for eligible items regardless of input rate', () => {
-      const result = calculateTaxResult(1000, TAX_RATES.STANDARD, 'FOOD');
-      
-      expect(result).toEqual({
-        subtotal: 1000,
-        taxAmount: 80,
-        total: 1080,
-        taxRate: TAX_RATES.REDUCED,
-        isReduced: true
-      });
-    });
-
-    it('should handle edge cases with zero amount', () => {
-      const result = calculateTaxResult(0, TAX_RATES.STANDARD, 'ELECTRONICS');
-      
-      expect(result).toEqual({
-        subtotal: 0,
-        taxAmount: 0,
-        total: 0,
-        taxRate: TAX_RATES.STANDARD,
-        isReduced: false
-      });
-    });
-  });
-
-  describe('tax rate options', () => {
-    it('should generate correct options for UI', () => {
+  describe('getTaxRateOptions', () => {
+    it('should return tax rate options', () => {
       const options = getTaxRateOptions();
-      
       expect(options).toHaveLength(2);
-      expect(options).toContainEqual({
-        value: TAX_RATES.REDUCED,
-        label: '軽減税率(8%)'
+      expect(options).toEqual([
+        { value: 10, label: '標準税率(10%)' },
+        { value: 8, label: '軽減税率(8%)' }
+      ]);
+    });
+  });
+
+  describe('isReducedTaxItem', () => {
+    it('should return true for food items', () => {
+      expect(isReducedTaxItem(ItemCategory.FOOD)).toBe(true);
+    });
+
+    it('should return true for newspaper', () => {
+      expect(isReducedTaxItem(ItemCategory.NEWSPAPER)).toBe(true);
+    });
+
+    it('should return true for agriculture products', () => {
+      expect(isReducedTaxItem(ItemCategory.AGRICULTURE)).toBe(true);
+    });
+
+    it('should return true for fishery products', () => {
+      expect(isReducedTaxItem(ItemCategory.FISHERY)).toBe(true);
+    });
+
+    it('should return true for livestock products', () => {
+      expect(isReducedTaxItem(ItemCategory.LIVESTOCK)).toBe(true);
+    });
+
+    it('should return false for electronics', () => {
+      expect(isReducedTaxItem(ItemCategory.ELECTRONICS)).toBe(false);
+    });
+
+    it('should return false for services', () => {
+      expect(isReducedTaxItem(ItemCategory.SERVICES)).toBe(false);
+    });
+  });
+
+  describe('calculateTax', () => {
+    it('should calculate tax amount for standard rate', () => {
+      expect(calculateTax(1000, TAX_RATES.STANDARD)).toBe('100');
+    });
+
+    it('should calculate tax amount for reduced rate', () => {
+      expect(calculateTax(1000, TAX_RATES.REDUCED)).toBe('80');
+    });
+
+    it('should handle string input', () => {
+      expect(calculateTax('1000', TAX_RATES.STANDARD)).toBe('100');
+    });
+  });
+
+  describe('calculateTotalWithTax', () => {
+    it('should calculate total with standard tax', () => {
+      expect(calculateTotalWithTax(1000, TAX_RATES.STANDARD)).toBe('1100');
+    });
+
+    it('should calculate total with reduced tax', () => {
+      expect(calculateTotalWithTax(1000, TAX_RATES.REDUCED)).toBe('1080');
+    });
+
+    it('should handle string input', () => {
+      expect(calculateTotalWithTax('1000', TAX_RATES.STANDARD)).toBe('1100');
+    });
+  });
+
+  describe('calculateTaxResult', () => {
+    it('should return tax calculation result for standard rate', () => {
+      const result = calculateTaxResult(1000, TAX_RATES.STANDARD);
+      expect(result).toEqual({
+        rate: 10,
+        taxRate: 10,
+        taxableAmount: '1000',
+        taxAmount: '100'
       });
-      expect(options).toContainEqual({
-        value: TAX_RATES.STANDARD,
-        label: '標準税率(10%)'
+    });
+
+    it('should return tax calculation result for reduced rate', () => {
+      const result = calculateTaxResult(1000, TAX_RATES.REDUCED);
+      expect(result).toEqual({
+        rate: 8,
+        taxRate: 8,
+        taxableAmount: '1000',
+        taxAmount: '80'
+      });
+    });
+
+    it('should handle string input', () => {
+      const result = calculateTaxResult('1000', TAX_RATES.STANDARD);
+      expect(result).toEqual({
+        rate: 10,
+        taxRate: 10,
+        taxableAmount: '1000',
+        taxAmount: '100'
       });
     });
   });

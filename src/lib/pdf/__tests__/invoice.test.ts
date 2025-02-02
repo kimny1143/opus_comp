@@ -1,140 +1,116 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import PDFDocument from 'pdfkit';
-import { generateInvoicePDF } from '../templates/invoice';
+import { describe, expect, it, vi } from 'vitest';
+import { convertToPdfInvoice, convertToPdfInvoiceItem } from '../utils';
+import { createTestInvoice, createTestInvoiceItem } from '@/test/helpers/invoice';
+import { PdfValidationError } from '../types';
 import { Prisma } from '@prisma/client';
 import { ItemCategory } from '@/types/itemCategory';
 
-describe('generateInvoicePDF', () => {
-  const mockDoc = {
-    registerFont: vi.fn(),
-    font: vi.fn(),
-    fontSize: vi.fn().mockReturnThis(),
-    text: vi.fn().mockReturnThis(),
-    moveDown: vi.fn().mockReturnThis(),
-    image: vi.fn(),
-    moveTo: vi.fn().mockReturnThis(),
-    lineTo: vi.fn().mockReturnThis(),
-    stroke: vi.fn(),
-    rect: vi.fn().mockReturnThis(),
-    fillColor: vi.fn().mockReturnThis(),
-    y: 0,
-  } as unknown as PDFKit.PDFDocument;
+describe('PDF生成ユーティリティ', () => {
+  describe('convertToPdfInvoiceItem', () => {
+    it('正しく明細項目を変換できる', () => {
+      const item = createTestInvoiceItem({
+        quantity: 2,
+        unitPrice: '1000',
+        taxRate: 10,
+        category: ItemCategory.ELECTRONICS
+      });
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    // フォントのモック
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-  });
+      const pdfItem = convertToPdfInvoiceItem(item);
 
-  it('should generate PDF with invoice data', async () => {
-    const mockInvoice = {
-      id: '1',
-      invoiceNumber: 'INV-001',
-      issueDate: new Date('2025-02-01'),
-      dueDate: new Date('2025-02-28'),
-      notes: 'テスト用請求書',
-      vendor: {
-        name: 'テスト取引先',
-        address: '東京都渋谷区...',
-        registrationNumber: 'T1234567890123'
-      },
-      items: [
-        {
-          id: '1',
-          itemName: 'テスト商品1',
-          quantity: 2,
-          unitPrice: new Prisma.Decimal(1000),
-          taxRate: new Prisma.Decimal(0.1),
-          description: '商品の説明1',
-          category: ItemCategory.ELECTRONICS
-        },
-        {
-          id: '2',
-          itemName: 'テスト商品2',
-          quantity: 1,
-          unitPrice: new Prisma.Decimal(800),
-          taxRate: new Prisma.Decimal(0.08),
-          description: '商品の説明2',
-          category: ItemCategory.FOOD
-        }
-      ]
-    };
-
-    const mockCompanyInfo = {
-      name: 'テスト株式会社',
-      postalCode: '123-4567',
-      address: '東京都千代田区...',
-      tel: '03-1234-5678',
-      email: 'test@example.com',
-      registrationNumber: 'T9876543210123'
-    };
-
-    await generateInvoicePDF(mockDoc, mockInvoice as any, mockCompanyInfo);
-
-    // ヘッダー情報の検証
-    expect(mockDoc.text).toHaveBeenCalledWith('請求書', expect.any(Object));
-    expect(mockDoc.text).toHaveBeenCalledWith('※適格請求書等', expect.any(Object));
-    expect(mockDoc.text).toHaveBeenCalledWith(`請求書番号: ${mockInvoice.invoiceNumber}`, expect.any(Object));
-
-    // 登録番号の検証
-    expect(mockDoc.text).toHaveBeenCalledWith(`登録番号: ${mockCompanyInfo.registrationNumber}`, expect.any(Object));
-    expect(mockDoc.text).toHaveBeenCalledWith(`登録番号: ${mockInvoice.vendor.registrationNumber}`, expect.any(Object));
-
-    // 明細行の検証
-    mockInvoice.items.forEach(item => {
-      expect(mockDoc.text).toHaveBeenCalledWith(item.itemName, expect.any(Number), expect.any(Number), expect.any(Object));
-      expect(mockDoc.text).toHaveBeenCalledWith(item.quantity.toString(), expect.any(Number), expect.any(Number));
+      expect(pdfItem.quantity).toBe(2);
+      expect(pdfItem.unitPrice).toEqual(new Prisma.Decimal('1000'));
+      expect(pdfItem.taxRate).toEqual(new Prisma.Decimal('0.1')); // 10% → 0.1
+      expect(pdfItem.category).toBe(ItemCategory.ELECTRONICS);
     });
 
-    // 軽減税率の注記の検証
-    expect(mockDoc.text).toHaveBeenCalledWith(
-      '※ 軽減税率対象品目には軽減税率(8%)が適用されています。',
-      expect.any(Object)
-    );
+    it('金額計算メソッドが正しく動作する', () => {
+      const item = createTestInvoiceItem({
+        quantity: 2,
+        unitPrice: '1000',
+        taxRate: 10,
+        category: ItemCategory.ELECTRONICS
+      });
 
-    // インボイス制度対応の注記の検証
-    expect(mockDoc.text).toHaveBeenCalledWith(
-      '※ この請求書は「適格請求書等保存方式」に対応した請求書です。',
-      expect.any(Object)
-    );
+      const pdfItem = convertToPdfInvoiceItem(item);
+
+      expect(pdfItem.calculateTaxableAmount().toString()).toBe('2000');
+      expect(pdfItem.calculateTaxAmount().toString()).toBe('200');
+      expect(pdfItem.calculateTotalAmount().toString()).toBe('2200');
+    });
+
+    it('カテゴリーが未設定の場合はエラーを投げる', () => {
+      const item = createTestInvoiceItem();
+      delete (item as any).category;
+
+      expect(() => convertToPdfInvoiceItem(item)).toThrow(PdfValidationError);
+    });
   });
 
-  it('should handle missing optional data', async () => {
-    const mockInvoice = {
-      id: '1',
-      invoiceNumber: 'INV-001',
-      issueDate: new Date('2025-02-01'),
-      dueDate: new Date('2025-02-28'),
-      vendor: {
-        name: 'テスト取引先'
-      },
-      items: [
-        {
-          id: '1',
-          itemName: 'テスト商品1',
-          quantity: 1,
-          unitPrice: new Prisma.Decimal(1000),
-          taxRate: new Prisma.Decimal(0.1)
-        }
-      ]
-    };
+  describe('convertToPdfInvoice', () => {
+    it('正しく請求書を変換できる', () => {
+      const invoice = createTestInvoice();
+      const pdfInvoice = convertToPdfInvoice(invoice);
 
-    const mockCompanyInfo = {
-      name: 'テスト株式会社',
-      postalCode: '123-4567',
-      address: '東京都千代田区...',
-      tel: '03-1234-5678',
-      email: 'test@example.com'
-    };
+      expect(pdfInvoice.invoiceNumber).toBe(invoice.invoiceNumber);
+      expect(pdfInvoice.issueDate).toBe(invoice.issueDate);
+      expect(pdfInvoice.vendor.registrationNumber).toBe(invoice.vendor.registrationNumber);
+      expect(pdfInvoice.issuer.registrationNumber).toBe(invoice.issuer.registrationNumber);
+      expect(pdfInvoice.items).toHaveLength(invoice.items.length);
+    });
 
-    await generateInvoicePDF(mockDoc, mockInvoice as any, mockCompanyInfo);
+    it('金額の集計が正しく行われる', () => {
+      const invoice = createTestInvoice({
+        items: [
+          createTestInvoiceItem({
+            quantity: 2,
+            unitPrice: '1000',
+            taxRate: 10,
+            category: ItemCategory.ELECTRONICS
+          }),
+          createTestInvoiceItem({
+            quantity: 1,
+            unitPrice: '2000',
+            taxRate: 8,
+            category: ItemCategory.FOOD
+          })
+        ]
+      });
 
-    // 基本情報の検証
-    expect(mockDoc.text).toHaveBeenCalledWith('請求書', expect.any(Object));
-    expect(mockDoc.text).toHaveBeenCalledWith(`請求書番号: ${mockInvoice.invoiceNumber}`, expect.any(Object));
+      const pdfInvoice = convertToPdfInvoice(invoice);
 
-    // オプショナルな情報が省略されていることの検証
-    expect(mockDoc.text).not.toHaveBeenCalledWith('※適格請求書等', expect.any(Object));
-    expect(mockDoc.text).not.toHaveBeenCalledWith('登録番号:', expect.any(Object));
+      // 2 * 1000 + 1 * 2000 = 4000
+      expect(pdfInvoice.subtotal.toString()).toBe('4000');
+      // (2000 * 0.1) + (2000 * 0.08) = 200 + 160 = 360
+      expect(pdfInvoice.taxAmount.toString()).toBe('360');
+      // 4000 + 360 = 4360
+      expect(pdfInvoice.totalAmount.toString()).toBe('4360');
+    });
+
+    it('バリデーションが正しく動作する', () => {
+      const invoice = createTestInvoice();
+      const pdfInvoice = convertToPdfInvoice(invoice);
+
+      expect(pdfInvoice.validate()).toBe(true);
+    });
+
+    it('必須項目が不足している場合はエラーを投げる', () => {
+      const invoice = createTestInvoice();
+      delete (invoice as any).invoiceNumber;
+
+      expect(() => {
+        const pdfInvoice = convertToPdfInvoice(invoice);
+        pdfInvoice.validate();
+      }).toThrow(PdfValidationError);
+    });
+
+    it('金額の整合性チェックが正しく動作する', () => {
+      const invoice = createTestInvoice();
+      const pdfInvoice = convertToPdfInvoice(invoice);
+
+      // 金額を不正に変更
+      (pdfInvoice as any).subtotal = new Prisma.Decimal('9999');
+
+      expect(() => pdfInvoice.validate()).toThrow(PdfValidationError);
+    });
   });
 });

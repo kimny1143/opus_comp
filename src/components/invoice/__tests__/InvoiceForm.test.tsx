@@ -3,20 +3,23 @@ import userEvent from '@testing-library/user-event'
 import { vi, expect } from 'vitest'
 import '@testing-library/jest-dom'
 import { InvoiceForm } from '../InvoiceForm'
-import { InvoiceStatus, Prisma } from '@prisma/client'
+import { InvoiceStatus } from '@prisma/client'
 import { AccountType } from '@/types/bankAccount'
+import { ViewInvoiceForm } from '@/types/view/invoice'
 
 // モックデータ
-const mockInitialData = {
+const mockInitialData: ViewInvoiceForm = {
+  id: 'test-invoice-id',
   status: InvoiceStatus.DRAFT,
   issueDate: new Date('2025-02-01'),
   dueDate: new Date('2025-03-01'),
   items: [
     {
+      id: 'test-item-id',
       itemName: 'テスト商品',
       quantity: 1,
-      unitPrice: new Prisma.Decimal(1000),
-      taxRate: new Prisma.Decimal(0.1),
+      unitPrice: 1000,
+      taxRate: 0.1,
       description: 'テスト説明'
     }
   ],
@@ -115,21 +118,22 @@ describe('InvoiceForm', () => {
     })
   })
 
-  it('Decimal型の金額が正しく処理されること', async () => {
-    const decimalInitialData = {
+  it('金額計算が正しく処理されること', async () => {
+    const decimalInitialData: ViewInvoiceForm = {
       ...mockInitialData,
       items: [{
+        id: 'test-decimal-item-id',
         itemName: 'Decimal型テスト',
         quantity: 2,
-        unitPrice: new Prisma.Decimal(1500.50),
-        taxRate: new Prisma.Decimal(0.08),
+        unitPrice: 1500.50,
+        taxRate: 0.08,
         description: 'Decimal型の金額テスト'
       }]
     }
 
     render(<InvoiceForm onSubmit={mockOnSubmit} initialData={decimalInitialData} />)
 
-    // 初期表示時の金額確認(Decimal型から正しく変換されていることを確認)
+    // 初期表示時の金額確認
     await waitFor(() => {
       expect(screen.getByTestId('cy=subtotal')).toHaveTextContent('¥3,001')
       expect(screen.getByTestId('cy=tax')).toHaveTextContent('¥240')
@@ -142,10 +146,8 @@ describe('InvoiceForm', () => {
 
     await waitFor(() => {
       const submittedData = mockOnSubmit.mock.calls[0][0]
-      expect(submittedData.items[0].unitPrice).toBeInstanceOf(Prisma.Decimal)
-      expect(submittedData.items[0].taxRate).toBeInstanceOf(Prisma.Decimal)
-      expect(submittedData.items[0].unitPrice.toString()).toBe('1500.50')
-      expect(submittedData.items[0].taxRate.toString()).toBe('0.08')
+      expect(submittedData.items[0].unitPrice).toBe(1500.50)
+      expect(submittedData.items[0].taxRate).toBe(0.08)
     })
   })
 
@@ -179,27 +181,6 @@ describe('InvoiceForm', () => {
     })
   })
 
-  it('金額計算が正しく行われること', async () => {
-    render(<InvoiceForm onSubmit={mockOnSubmit} initialData={mockInitialData} />)
-
-    // 初期表示時の金額確認
-    expect(screen.getByTestId('cy=subtotal')).toHaveTextContent('¥1,000')
-    expect(screen.getByTestId('cy=tax')).toHaveTextContent('¥100')
-    expect(screen.getByTestId('cy=total')).toHaveTextContent('¥1,100')
-
-    // 数量を変更
-    const quantityInput = screen.getByTestId('cy=item-quantity')
-    await userEvent.clear(quantityInput)
-    await userEvent.type(quantityInput, '2')
-
-    // 金額が更新されることを確認
-    await waitFor(() => {
-      expect(screen.getByTestId('cy=subtotal')).toHaveTextContent('¥2,000')
-      expect(screen.getByTestId('cy=tax')).toHaveTextContent('¥200')
-      expect(screen.getByTestId('cy=total')).toHaveTextContent('¥2,200')
-    })
-  })
-
   it('フォームが正しく送信されること', async () => {
     render(<InvoiceForm onSubmit={mockOnSubmit} initialData={mockInitialData} />)
 
@@ -218,10 +199,11 @@ describe('InvoiceForm', () => {
       status: InvoiceStatus.DRAFT,
       items: expect.arrayContaining([
         expect.objectContaining({
+          id: 'test-item-id',
           itemName: 'テスト商品',
           quantity: 1,
-          unitPrice: expect.any(Prisma.Decimal),
-          taxRate: expect.any(Prisma.Decimal)
+          unitPrice: 1000,
+          taxRate: 0.1
         })
       ]),
       registrationNumber: 'T1234567890123'

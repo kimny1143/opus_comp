@@ -6,6 +6,8 @@ import { createMockRequest } from '@/test/helpers/mockApi'
 import { InvoiceStatus } from '@prisma/client'
 import { addDays } from 'date-fns'
 import { createDecimalMock } from '@/test/helpers/mockDecimal'
+import { ViewUpcomingPayment } from '@/types/view/payment'
+import { DbUpcomingPayment } from '@/types/db/payment'
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
@@ -96,6 +98,21 @@ describe('GET /api/dashboard/upcoming-payments', () => {
       }
     ]
 
+    const expectedPayments: ViewUpcomingPayment[] = [
+      {
+        id: '1',
+        dueDate: addDays(mockToday, 5).toISOString(),
+        amount: 10000,
+        vendorName: 'ベンダー1'
+      },
+      {
+        id: '2',
+        dueDate: addDays(mockToday, 15).toISOString(),
+        amount: 20000,
+        vendorName: 'ベンダー2'
+      }
+    ]
+
     vi.mocked(getServerSession).mockResolvedValue(mockSession)
     vi.mocked(prisma.invoice.findMany).mockResolvedValue(mockInvoices)
 
@@ -103,20 +120,7 @@ describe('GET /api/dashboard/upcoming-payments', () => {
     const data = await response.json()
 
     expect(data.success).toBe(true)
-    expect(data.data).toEqual([
-      {
-        id: '1',
-        dueDate: addDays(mockToday, 5),
-        amount: 10000,
-        vendorName: 'ベンダー1'
-      },
-      {
-        id: '2',
-        dueDate: addDays(mockToday, 15),
-        amount: 20000,
-        vendorName: 'ベンダー2'
-      }
-    ])
+    expect(data.data).toEqual(expectedPayments)
 
     // 検索条件を確認
     expect(prisma.invoice.findMany).toHaveBeenCalledWith({
@@ -169,7 +173,8 @@ describe('GET /api/dashboard/upcoming-payments', () => {
     expect(response.status).toBe(500)
     expect(data).toEqual({
       success: false,
-      error: 'Internal server error'
+      error: 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? expect.any(String) : undefined
     })
   })
 
@@ -187,4 +192,4 @@ describe('GET /api/dashboard/upcoming-payments', () => {
     expect(data.success).toBe(true)
     expect(data.data).toEqual([])
   })
-}) 
+})

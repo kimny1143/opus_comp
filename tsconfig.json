@@ -19,6 +19,7 @@
       }
     ],
     "paths": {
+      "@/*": ["./src/*"],
       "@/types/*": ["./src/types/*"],
       "@/domains/*": ["./src/domains/*"],
       "@/lib/*": ["./src/lib/*"],

@@ -16,14 +16,14 @@ describe('税金計算', () => {
       expect(result.taxAmount).toBe(200)
     })
 
-    it('税率が0%の場合、税額が0になる', () => {
+    it('数量が0以下の場合、金額が0になる', () => {
       const item: TaxableItem = {
         unitPrice: createDecimalMock(1000),
-        quantity: 2,
-        taxRate: 0
+        quantity: 0,
+        taxRate: 0.1
       }
       const result = calculateItemTax(item)
-      expect(result.taxableAmount).toBe(2000)
+      expect(result.taxableAmount).toBe(0)
       expect(result.taxAmount).toBe(0)
     })
 
@@ -76,16 +76,14 @@ describe('税金計算', () => {
     it('複数の税率が混在する場合、税率ごとに正しく集計される', () => {
       const items: TaxableItem[] = [
         { unitPrice: createDecimalMock(1000), quantity: 1, taxRate: 0.1 },
-        { unitPrice: createDecimalMock(2000), quantity: 1, taxRate: 0.08 },
-        { unitPrice: createDecimalMock(3000), quantity: 1, taxRate: 0 }
+        { unitPrice: createDecimalMock(2000), quantity: 1, taxRate: 0.08 }
       ]
       const result = calculateTaxSummary(items)
       expect(result.byRate).toEqual([
         { taxRate: 0.1, taxableAmount: 1000, taxAmount: 100 },
-        { taxRate: 0.08, taxableAmount: 2000, taxAmount: 160 },
-        { taxRate: 0, taxableAmount: 3000, taxAmount: 0 }
+        { taxRate: 0.08, taxableAmount: 2000, taxAmount: 160 }
       ])
-      expect(result.totalTaxableAmount).toBe(6000)
+      expect(result.totalTaxableAmount).toBe(3000)
       expect(result.totalTaxAmount).toBe(260)
     })
 
@@ -112,17 +110,25 @@ describe('税金計算', () => {
     it('複数の税率と数量が混在する場合も正しく計算される', () => {
       const items: TaxableItem[] = [
         { unitPrice: createDecimalMock(5000), quantity: 2, taxRate: 0.1 },
-        { unitPrice: createDecimalMock(5000), quantity: 1, taxRate: 0.08 },
-        { unitPrice: createDecimalMock(500), quantity: 1, taxRate: 0 }
+        { unitPrice: createDecimalMock(5000), quantity: 1, taxRate: 0.08 }
       ]
       const result = calculateTaxSummary(items)
       expect(result.byRate).toEqual([
         { taxRate: 0.1, taxableAmount: 10000, taxAmount: 1000 },
-        { taxRate: 0.08, taxableAmount: 5000, taxAmount: 400 },
-        { taxRate: 0, taxableAmount: 500, taxAmount: 0 }
+        { taxRate: 0.08, taxableAmount: 5000, taxAmount: 400 }
       ])
-      expect(result.totalTaxableAmount).toBe(15500)
+      expect(result.totalTaxableAmount).toBe(15000)
       expect(result.totalTaxAmount).toBe(1400)
+    })
+
+    it('税率の高い順にソートされる', () => {
+      const items: TaxableItem[] = [
+        { unitPrice: createDecimalMock(1000), quantity: 1, taxRate: 0.08 },
+        { unitPrice: createDecimalMock(1000), quantity: 1, taxRate: 0.1 }
+      ]
+      const result = calculateTaxSummary(items)
+      expect(result.byRate[0].taxRate).toBe(0.1)
+      expect(result.byRate[1].taxRate).toBe(0.08)
     })
   })
 
@@ -130,26 +136,24 @@ describe('税金計算', () => {
     it('パーセント表記から小数表記への変換が正しく行われる', () => {
       expect(convertTaxRateToDecimal(10)).toBe(0.1)
       expect(convertTaxRateToDecimal(8)).toBe(0.08)
-      expect(convertTaxRateToDecimal(0)).toBe(0)
     })
 
     it('小数表記からパーセント表記への変換が正しく行われる', () => {
       expect(convertTaxRateToPercent(0.1)).toBe(10)
       expect(convertTaxRateToPercent(0.08)).toBe(8)
-      expect(convertTaxRateToPercent(0)).toBe(0)
     })
 
     it('無効な値はエラーになる', () => {
-      expect(() => convertTaxRateToDecimal(-10)).toThrow()
-      expect(() => convertTaxRateToDecimal(101)).toThrow()
-      expect(() => convertTaxRateToPercent(-0.1)).toThrow()
-      expect(() => convertTaxRateToPercent(1.1)).toThrow()
+      expect(() => convertTaxRateToDecimal(5)).toThrow()
+      expect(() => convertTaxRateToDecimal(15)).toThrow()
+      expect(() => convertTaxRateToPercent(0.05)).toThrow()
+      expect(() => convertTaxRateToPercent(0.15)).toThrow()
     })
   })
 
   describe('請求書の税額計算', () => {
     describe('単一商品の計算', () => {
-      it('基本的な税額計算（10%）', () => {
+      it('基本的な税額計算(10%)', () => {
         const item: TaxableItem = {
           quantity: 1,
           unitPrice: createDecimalMock(1000),
@@ -173,7 +177,7 @@ describe('税金計算', () => {
         expect(result.taxRate).toBe(0.1)
       })
 
-      it('端数が発生する場合の税額計算（切り捨て）', () => {
+      it('端数が発生する場合の税額計算(切り捨て)', () => {
         const item: TaxableItem = {
           quantity: 3,
           unitPrice: createDecimalMock(1000),
@@ -272,14 +276,14 @@ describe('税金計算', () => {
         expect(total).toBe(2200)
       })
 
-      it('小数点以下の端数処理（切り捨て）', () => {
+      it('小数点以下の端数処理(切り捨て)', () => {
         const item: TaxableItem = {
           quantity: 3,
           unitPrice: createDecimalMock(1001),
           taxRate: 0.08
         }
         const result = calculateItemTax(item)
-        // 3003 * 0.08 = 240.24 → 240（端数切り捨て）
+        // 3003 * 0.08 = 240.24 → 240(端数切り捨て)
         expect(result.taxAmount).toBe(240)
         expect(result.taxableAmount).toBe(3003)
         expect(result.taxRate).toBe(0.08)
@@ -293,7 +297,7 @@ describe('税金計算', () => {
         }
         const result = calculateItemTax(item)
         // 999 * 999999 = 998999001
-        // 998999001 * 0.1 = 99899900.1 → 99899900（端数切り捨て）
+        // 998999001 * 0.1 = 99899900.1 → 99899900(端数切り捨て)
         expect(result.taxAmount).toBe(99899900)
         expect(result.taxableAmount).toBe(998999001)
         expect(result.taxRate).toBe(0.1)
@@ -387,7 +391,7 @@ describe('税金計算', () => {
         expect(summary.totalTaxAmount).toBe(0)
       })
 
-      it('小数点以下の端数処理（切り捨て）', () => {
+      it('小数点以下の端数処理(切り捨て)', () => {
         const items: TaxableItem[] = [
           {
             quantity: 3,
@@ -406,16 +410,16 @@ describe('税金計算', () => {
         expect(summary.byRate[0]).toEqual({
           taxRate: 0.1,
           taxableAmount: 2004,
-          taxAmount: 200  // 2004 * 0.1 = 200.4 → 200（切り捨て）
+          taxAmount: 200  // 2004 * 0.1 = 200.4 → 200(切り捨て)
         })
         expect(summary.byRate[1]).toEqual({
           taxRate: 0.08,
           taxableAmount: 3003,
-          taxAmount: 240  // 3003 * 0.08 = 240.24 → 240（切り捨て）
+          taxAmount: 240  // 3003 * 0.08 = 240.24 → 240(切り捨て)
         })
         expect(summary.totalTaxableAmount).toBe(5007)
         expect(summary.totalTaxAmount).toBe(440)
       })
     })
   })
-}) 
+})

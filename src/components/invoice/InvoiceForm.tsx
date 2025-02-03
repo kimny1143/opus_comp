@@ -3,7 +3,7 @@
 import { useForm, FormProvider } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { InvoiceStatus, Prisma } from '@prisma/client'
+import { InvoiceStatus } from '@prisma/client'
 import { BaseFormWrapper } from '@/components/shared/form/BaseFormWrapper'
 import { SelectField } from '@/components/shared/form/SelectField'
 import { InputField } from '@/components/shared/form/InputField'
@@ -16,10 +16,9 @@ import {
   stringValidation
 } from '@/types/validation/commonValidation'
 import { invoiceItemSchema } from '@/types/validation/invoice'
-import type { Item } from '@/types/validation/item'
-import type { InvoiceCreateInput } from '@/types/invoice'
 import { AccountType, ACCOUNT_TYPE_OPTIONS } from '@/types/bankAccount'
 import { useToast } from '@/components/ui/toast/use-toast'
+import { ViewInvoiceForm, ViewInvoiceFormInput } from '@/types/view/invoice'
 
 // 請求書のステータス選択肢
 export const INVOICE_STATUS_OPTIONS = [
@@ -44,70 +43,41 @@ export const invoiceSchema = z.object({
   registrationNumber: stringValidation.registrationNumber
 })
 
-export type InvoiceFormData = z.infer<typeof invoiceSchema>
-
 interface InvoiceFormProps {
   id?: string
-  initialData?: Partial<InvoiceFormData>
-  onSubmit: (data: InvoiceCreateInput) => Promise<void>
+  initialData?: Partial<ViewInvoiceForm>
+  onSubmit: (data: ViewInvoiceFormInput) => Promise<void>
   isSubmitting?: boolean
   onCancel?: () => void
   readOnly?: boolean
 }
 
-// フォームデータの型（必須フィールドを明示）
-type InvoiceFormDataWithRHF = {
-  status: InvoiceStatus;
-  issueDate: Date;
-  dueDate: Date;
-  items: Array<{
-    id?: string;
-    itemName: string;
-    quantity: number;
-    unitPrice: number;
-    taxRate: number;
-    description?: string;
-  }>;
+// フォームデータの初期値
+const baseDefaultValues: Required<ViewInvoiceFormInput> = {
+  status: InvoiceStatus.DRAFT,
+  issueDate: new Date(),
+  dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+  items: [{
+    itemName: '',
+    quantity: 1,
+    unitPrice: 0,
+    taxRate: 0.1,
+    description: ''
+  }],
   bankInfo: {
-    accountType: AccountType;
-    bankName: string;
-    branchName: string;
-    accountNumber: string;
-    accountHolder: string;
-  };
-  notes?: string;
-  vendorId?: string;
-  purchaseOrderId?: string;
-  tags: Array<{ id?: string; name: string }>;
-  registrationNumber: string;
-  invoiceNumber?: string;
-};
-
-// フォームデータをAPIの型に変換する関数
-const toInvoiceCreateInput = (data: InvoiceFormDataWithRHF): InvoiceCreateInput => {
-  if (!data.items.length) {
-    throw new Error('品目は1つ以上必要です');
-  }
-
-  return {
-    status: data.status,
-    issueDate: data.issueDate,
-    dueDate: data.dueDate,
-    items: data.items.map(item => ({
-      id: item.id,
-      itemName: item.itemName,
-      quantity: item.quantity,
-      unitPrice: new Prisma.Decimal(item.unitPrice),
-      taxRate: new Prisma.Decimal(item.taxRate),
-      description: item.description
-    })),
-    bankInfo: data.bankInfo,
-    notes: data.notes,
-    vendorId: data.vendorId,
-    purchaseOrderId: data.purchaseOrderId,
-    invoiceNumber: data.invoiceNumber
-  };
-};
+    accountType: AccountType.ORDINARY,
+    bankName: '',
+    branchName: '',
+    accountNumber: '',
+    accountHolder: ''
+  },
+  notes: '',
+  vendorId: '',
+  purchaseOrderId: '',
+  tags: [{ name: 'タグを入力' }],
+  registrationNumber: 'T0000000000000',
+  invoiceNumber: ''
+}
 
 export function InvoiceForm({
   id,
@@ -118,59 +88,25 @@ export function InvoiceForm({
   readOnly = false
 }: InvoiceFormProps) {
   const { toast } = useToast()
-  
-  // 初期値を設定（必須フィールドは必ず値を持つようにする）
-  const baseDefaultValues: InvoiceFormDataWithRHF = {
-    status: InvoiceStatus.DRAFT,
-    issueDate: new Date(),
-    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    items: [{
-      itemName: '',
-      quantity: 1,
-      unitPrice: 0,
-      // 税率は初期値を設定せず、ユーザーに選択を促す
-      taxRate: 0.1, // 標準税率(10%)を初期値に設定
-      description: ''
-    }],
-    bankInfo: {
-      accountType: AccountType.ORDINARY,
-      bankName: '',
-      branchName: '',
-      accountNumber: '',
-      accountHolder: ''
-    },
-    notes: '',
-    vendorId: '',
-    purchaseOrderId: '',
-    tags: [{ name: 'タグを入力' }],
-    registrationNumber: 'T0000000000000',
-    invoiceNumber: ''
-  }
 
-  // initialDataの値で上書き（必須フィールドは必ず値を持つことを保証）
-  const defaultValues: InvoiceFormDataWithRHF = {
+  // initialDataの値で上書き
+  const defaultValues: Required<ViewInvoiceFormInput> = {
     ...baseDefaultValues,
     ...initialData,
-    // 必須フィールドは初期値を保証
     items: initialData?.items?.length ? initialData.items.map(item => ({
       ...item,
       itemName: item.itemName || baseDefaultValues.items[0].itemName,
       quantity: item.quantity || baseDefaultValues.items[0].quantity,
-      unitPrice: item.unitPrice instanceof Prisma.Decimal
-        ? Number(item.unitPrice.toString())
-        : typeof item.unitPrice === 'number'
-          ? item.unitPrice
-          : baseDefaultValues.items[0].unitPrice,
-      taxRate: item.taxRate instanceof Prisma.Decimal
-        ? Number(item.taxRate.toString())
-        : typeof item.taxRate === 'number'
-          ? item.taxRate
-          : baseDefaultValues.items[0].taxRate
+      unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : baseDefaultValues.items[0].unitPrice,
+      taxRate: typeof item.taxRate === 'number' ? item.taxRate : baseDefaultValues.items[0].taxRate,
+      description: item.description || baseDefaultValues.items[0].description
     })) : baseDefaultValues.items,
     bankInfo: {
-      ...baseDefaultValues.bankInfo,
-      ...initialData?.bankInfo,
-      accountType: initialData?.bankInfo?.accountType || baseDefaultValues.bankInfo.accountType
+      accountType: initialData?.bankInfo?.accountType || baseDefaultValues.bankInfo.accountType,
+      bankName: initialData?.bankInfo?.bankName || baseDefaultValues.bankInfo.bankName,
+      branchName: initialData?.bankInfo?.branchName || baseDefaultValues.bankInfo.branchName,
+      accountNumber: initialData?.bankInfo?.accountNumber || baseDefaultValues.bankInfo.accountNumber,
+      accountHolder: initialData?.bankInfo?.accountHolder || baseDefaultValues.bankInfo.accountHolder
     },
     tags: initialData?.tags?.length ? initialData.tags.map(tag => ({
       ...tag,
@@ -178,15 +114,14 @@ export function InvoiceForm({
     })) : baseDefaultValues.tags
   }
 
-  const methods = useForm<InvoiceFormDataWithRHF>({
+  const methods = useForm<ViewInvoiceFormInput>({
     resolver: zodResolver(invoiceSchema),
     defaultValues
   })
 
-  const handleSubmit = async (data: InvoiceFormDataWithRHF) => {
+  const handleSubmit = async (data: ViewInvoiceFormInput) => {
     try {
-      const apiData = toInvoiceCreateInput(data)
-      await onSubmit(apiData)
+      await onSubmit(data)
     } catch (error) {
       toast({
         title: 'エラー',

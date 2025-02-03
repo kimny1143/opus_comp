@@ -4,7 +4,6 @@ import {
   commonSchemas,
   dateValidation,
   stringValidation,
-  validationMessages,
   arrayValidation,
   numberValidation
 } from '@/types/validation/commonValidation'
@@ -22,31 +21,37 @@ export const DEPARTMENT_LIMITS = {
 // 品目数の上限
 const MAX_ITEMS = 50
 
+// 商品カテゴリー
+const ITEM_CATEGORIES = ['GOODS', 'SERVICE', 'IT_EQUIPMENT', 'SOFTWARE_LICENSE', 'CONSULTING', 'OTHER'] as const
+type ItemCategory = typeof ITEM_CATEGORIES[number]
+
 // 商品カテゴリー別の承認要否
 const CATEGORIES_REQUIRING_APPROVAL = ['IT_EQUIPMENT', 'SOFTWARE_LICENSE', 'CONSULTING'] as const
+type ApprovalRequiredCategory = typeof CATEGORIES_REQUIRING_APPROVAL[number]
 
 // 品目データのバリデーション強化
 const enhancedItemSchema = itemSchema.extend({
   itemName: z.string().min(1, '品目名は必須です').max(100, '品目名は100文字以内で入力してください'),
   quantity: z.number()
+    .int('整数を入力してください')
     .min(1, '数量は1以上を入力してください')
     .max(9999999, '数量が大きすぎます')
     .transform(val => new Prisma.Decimal(val)),
   unitPrice: z.number()
+    .int('整数を入力してください')
     .min(0, '単価は0以上を入力してください')
     .max(999999999, '単価が大きすぎます')
     .transform(val => new Prisma.Decimal(val)),
   taxRate: z.number()
-    .min(0, '税率は0以上を入力してください')
-    .max(1, '税率は1以下を入力してください')
+    .min(0.08, '税率は8%以上を入力してください')
+    .max(0.1, '税率は10%以下を入力してください')
     .transform(val => new Prisma.Decimal(val)),
   description: z.string().max(500, '説明は500文字以内で入力してください').optional(),
   amount: z.number().optional()
     .transform(val => val ? new Prisma.Decimal(val) : undefined),
-  category: z.enum(['GOODS', 'SERVICE', 'IT_EQUIPMENT', 'SOFTWARE_LICENSE', 'CONSULTING', 'OTHER'])
-    .optional()
+  category: z.enum(ITEM_CATEGORIES)
 }).refine(data => {
-  // 軽減税率（8%）が適用される場合、説明が必須
+  // 軽減税率(8%)が適用される場合、説明が必須
   if (data.taxRate.equals(new Prisma.Decimal(0.08)) && !data.description) {
     return false
   }
@@ -80,7 +85,7 @@ export const purchaseOrderSchema = z.object({
   items: arrayValidation.nonEmpty(enhancedItemSchema),
   notes: stringValidation.description,
   tags: z.array(tagSchema),
-  department: z.enum(['GENERAL', 'MANAGEMENT', 'EXECUTIVE']).optional(),
+  department: z.enum(['GENERAL', 'MANAGEMENT', 'EXECUTIVE']).default('GENERAL'),
   creditLimit: z.number().optional().transform(val => val ? new Prisma.Decimal(val) : undefined)
 }).refine(data => {
   // 納期は発注日以降
@@ -103,17 +108,15 @@ export const purchaseOrderSchema = z.object({
   message: `品目数は${MAX_ITEMS}個以内にしてください`,
   path: ['items']
 }).refine(data => {
-  // 合計金額の上限チェック（部門別）
+  // 合計金額の上限チェック(部門別)
   const totalAmount = data.items.reduce((sum, item) => {
     const amount = item.quantity.mul(item.unitPrice)
     const tax = amount.mul(item.taxRate)
     return sum.add(amount).add(tax)
   }, new Prisma.Decimal(0))
-  
-  if (data.department) {
-    return totalAmount.lessThan(DEPARTMENT_LIMITS[data.department])
-  }
-  return totalAmount.lessThan(DEPARTMENT_LIMITS.GENERAL) // デフォルトは一般部門の制限
+
+  const limit = DEPARTMENT_LIMITS[data.department]
+  return totalAmount.lessThanOrEqualTo(limit)
 }, {
   message: '発注総額が部門別の上限を超えています',
   path: ['items']
@@ -125,7 +128,7 @@ export const purchaseOrderSchema = z.object({
       const tax = amount.mul(item.taxRate)
       return sum.add(amount).add(tax)
     }, new Prisma.Decimal(0))
-    return totalAmount.lessThan(data.creditLimit)
+    return totalAmount.lessThanOrEqualTo(data.creditLimit)
   }
   return true
 }, {
@@ -139,7 +142,7 @@ export const purchaseOrderSchema = z.object({
   message: '同じ品目が複数登録されています',
   path: ['items']
 }).refine(data => {
-  // 税率の妥当性チェック（8%と10%のみ許可）
+  // 税率の妥当性チェック(8%と10%のみ許可)
   return data.items.every(item => 
     item.taxRate.equals(new Prisma.Decimal(0.08)) || 
     item.taxRate.equals(new Prisma.Decimal(0.10))
@@ -150,7 +153,7 @@ export const purchaseOrderSchema = z.object({
 }).refine(data => {
   // 特定カテゴリーの承認要否チェック
   const requiresApproval = data.items.some(item => 
-    item.category && CATEGORIES_REQUIRING_APPROVAL.includes(item.category as any)
+    CATEGORIES_REQUIRING_APPROVAL.includes(item.category as ApprovalRequiredCategory)
   )
   if (requiresApproval && data.status === PurchaseOrderStatus.SENT) {
     return false
@@ -178,4 +181,4 @@ export const defaultPurchaseOrderFormData: PurchaseOrderFormData = {
   vendorId: '',
   tags: [],
   department: 'GENERAL'
-} 
+}

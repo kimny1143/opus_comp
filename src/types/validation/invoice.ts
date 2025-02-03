@@ -8,9 +8,13 @@ import { Prisma } from '@prisma/client'
 export const invoiceItemSchema = z.object({
   id: z.string().optional(),
   itemName: z.string().min(1, '品目名は必須です'),
-  quantity: z.number().min(0, '数量は0以上である必要があります'),
+  quantity: z.number()
+    .int('整数を入力してください')
+    .min(1, '数量は0より大きい値を入力してください'),
   unitPrice: z.union([
-    z.number(),
+    z.number()
+      .int('整数を入力してください')
+      .min(1, '単価は0以上を入力してください'),
     z.string(),
     z.any().refine((val) => val instanceof Prisma.Decimal, {
       message: '単価は数値または文字列である必要があります'
@@ -19,7 +23,10 @@ export const invoiceItemSchema = z.object({
     typeof val === 'string' ? parseFloat(val) : val
   ),
   taxRate: z.union([
-    z.number(),
+    z.number()
+      .min(0.08, '税率は8%以上を入力してください')
+      .max(0.1, '税率は10%以下を入力してください')
+      .transform(val => Number(val.toFixed(2))), // 小数点以下2桁に丸める
     z.string(),
     z.any().refine((val) => val instanceof Prisma.Decimal, {
       message: '税率は数値または文字列である必要があります'
@@ -54,17 +61,27 @@ export const tagSchema = z.object({
  */
 export const invoiceSchema = z.object({
   status: z.nativeEnum(InvoiceStatus),
-  issueDate: z.date(),
+  issueDate: z.date({
+    required_error: '日付を入力してください',
+    invalid_type_error: '日付を入力してください'
+  }),
   dueDate: z.date(),
   items: z.array(invoiceItemSchema).min(1, '品目は1つ以上必要です'),
   bankInfo: bankInfoSchema,
   notes: z.string().optional(),
-  vendorId: z.string().min(1, '取引先の選択は必須です'),
-  purchaseOrderId: z.string().min(1, '発注書の選択は必須です'),
+  vendorId: z.string().min(1, '取引先を選択してください'),
+  purchaseOrderId: z.string().optional(),
   tags: z.array(tagSchema).optional(),
-  registrationNumber: z.string().regex(/^T\d{13}$/, '登録番号形式が不正です'),
-  invoiceNumber: z.string().min(1, '請求書番号は必須です')
-})
+  registrationNumber: z.string().regex(/^T\d{13}$/, '登録番号はTで始まる13桁の数字である必要があります'),
+  invoiceNumber: z.string().optional(),
+  allowExtendedTaxRates: z.boolean().optional()
+}).refine(
+  (data) => data.dueDate >= data.issueDate,
+  {
+    message: '支払期限は発行日以降の日付を指定してください',
+    path: ['dueDate']
+  }
+)
 
 /**
  * 請求書の型定義
@@ -74,7 +91,7 @@ export type InvoiceFormData = z.infer<typeof invoiceSchema>
 /**
  * 請求書の初期値
  */
-export const defaultInvoiceFormData: InvoiceFormData = {
+export const defaultInvoiceFormData: Partial<InvoiceFormData> = {
   status: InvoiceStatus.DRAFT,
   issueDate: new Date(),
   dueDate: new Date(),
@@ -88,10 +105,8 @@ export const defaultInvoiceFormData: InvoiceFormData = {
   },
   notes: '',
   vendorId: '',
-  purchaseOrderId: '',
   tags: [],
-  registrationNumber: '',
-  invoiceNumber: ''
+  allowExtendedTaxRates: false
 }
 
 /**
@@ -100,4 +115,4 @@ export const defaultInvoiceFormData: InvoiceFormData = {
 export type InvoiceFormDataRHF = Omit<InvoiceFormData, 'items' | 'tags'> & {
   items: z.infer<typeof invoiceItemSchema>[];
   tags: z.infer<typeof tagSchema>[];
-} 
+}

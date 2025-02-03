@@ -7,8 +7,9 @@ export type InvoiceStatus =
   | 'APPROVED'   // 承認済み
   | 'SENT'       // 送信済み
   | 'PAID'       // 支払済み
-  | 'CANCELED'   // キャンセル
-  | 'REJECTED';  // 却下
+  | 'REJECTED'   // 却下
+  | 'REVIEWING'  // レビュー中
+  | 'OVERDUE';   // 期限超過
 
 /**
  * ステータスの表示名
@@ -19,8 +20,9 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   APPROVED: '承認済み',
   SENT: '送信済み',
   PAID: '支払済み',
-  CANCELED: 'キャンセル',
-  REJECTED: '却下'
+  REJECTED: '却下',
+  REVIEWING: 'レビュー中',
+  OVERDUE: '期限超過'
 };
 
 /**
@@ -29,7 +31,8 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
 export const EDITABLE_STATUSES: InvoiceStatus[] = [
   'DRAFT',
   'PENDING',
-  'REJECTED'
+  'REJECTED',
+  'REVIEWING'
 ];
 
 /**
@@ -38,7 +41,8 @@ export const EDITABLE_STATUSES: InvoiceStatus[] = [
 export const CANCELABLE_STATUSES: InvoiceStatus[] = [
   'DRAFT',
   'PENDING',
-  'APPROVED'
+  'APPROVED',
+  'REVIEWING'
 ];
 
 /**
@@ -63,13 +67,14 @@ export const canTransitionTo = (
   nextStatus: InvoiceStatus
 ): boolean => {
   const allowedTransitions: Record<InvoiceStatus, InvoiceStatus[]> = {
-    DRAFT: ['PENDING', 'CANCELED'],
-    PENDING: ['APPROVED', 'REJECTED', 'CANCELED'],
-    APPROVED: ['SENT', 'CANCELED'],
-    SENT: ['PAID'],
+    DRAFT: ['PENDING', 'REVIEWING'],
+    PENDING: ['APPROVED', 'REJECTED', 'REVIEWING'],
+    APPROVED: ['SENT'],
+    SENT: ['PAID', 'OVERDUE'],
     PAID: [],
-    CANCELED: [],
-    REJECTED: ['DRAFT', 'CANCELED']
+    REJECTED: ['DRAFT'],
+    REVIEWING: ['PENDING', 'REJECTED'],
+    OVERDUE: ['PAID']
   };
 
   return allowedTransitions[currentStatus].includes(nextStatus);
@@ -92,8 +97,13 @@ export const getStatusColor = (status: InvoiceStatus): string => {
     APPROVED: 'green',
     SENT: 'blue',
     PAID: 'purple',
-    CANCELED: 'red',
-    REJECTED: 'red'
+    REJECTED: 'red',
+    REVIEWING: 'orange',
+    OVERDUE: 'red'
   };
   return colors[status];
 };
+
+// 再エクスポート
+export type { UserRole } from '../auth/roles';
+export { InvoiceStatusManager } from './statusManager';

@@ -30,8 +30,6 @@ export class InvoiceStatusManager {
         return hasHigherOrEqualRole(this.userRole, 'ACCOUNTANT');
       case 'PAID':
         return hasHigherOrEqualRole(this.userRole, 'ACCOUNTANT');
-      case 'CANCELED':
-        return hasHigherOrEqualRole(this.userRole, 'MANAGER');
       case 'REJECTED':
         return hasHigherOrEqualRole(this.userRole, 'MANAGER');
       default:
@@ -49,22 +47,8 @@ export class InvoiceStatusManager {
     }
 
     // 特定のステータスのみ編集可能
-    const editableStatuses: InvoiceStatus[] = ['DRAFT', 'PENDING', 'REJECTED'];
+    const editableStatuses: InvoiceStatus[] = ['DRAFT', 'PENDING', 'REJECTED', 'REVIEWING'];
     return editableStatuses.includes(this.currentStatus);
-  }
-
-  /**
-   * キャンセルが可能か確認
-   */
-  canCancel(): boolean {
-    // 管理職以上のみキャンセル可能
-    if (!hasHigherOrEqualRole(this.userRole, 'MANAGER')) {
-      return false;
-    }
-
-    // 特定のステータスのみキャンセル可能
-    const cancelableStatuses: InvoiceStatus[] = ['DRAFT', 'PENDING', 'APPROVED'];
-    return cancelableStatuses.includes(this.currentStatus);
   }
 
   /**
@@ -105,5 +89,68 @@ export class InvoiceStatusManager {
    */
   getUserRole(): UserRole {
     return this.userRole;
+  }
+
+  /**
+   * 権限チェック
+   */
+  static hasPermission(role: UserRole, action: 'approve' | 'send' | 'pay' | 'reject'): boolean {
+    switch (action) {
+      case 'approve':
+      case 'reject':
+        return hasHigherOrEqualRole(role, 'MANAGER');
+      case 'send':
+      case 'pay':
+        return hasHigherOrEqualRole(role, 'ACCOUNTANT');
+      default:
+        return hasHigherOrEqualRole(role, 'STAFF');
+    }
+  }
+
+  /**
+   * ステータス遷移の検証
+   */
+  static validateTransition(currentStatus: InvoiceStatus, nextStatus: InvoiceStatus): boolean {
+    return canTransitionTo(currentStatus, nextStatus);
+  }
+
+  /**
+   * 通知が必要かどうかを判定
+   */
+  static needsNotification(status: InvoiceStatus): boolean {
+    return ['APPROVED', 'SENT', 'PAID', 'REJECTED'].includes(status);
+  }
+
+  /**
+   * 次の可能なステータスを取得
+   */
+  static getNextPossibleStatuses(currentStatus: InvoiceStatus, role: UserRole): InvoiceStatus[] {
+    const allStatuses: InvoiceStatus[] = ['DRAFT', 'PENDING', 'APPROVED', 'SENT', 'PAID', 'REJECTED', 'REVIEWING', 'OVERDUE'];
+    return allStatuses.filter(nextStatus => {
+      if (!canTransitionTo(currentStatus, nextStatus)) {
+        return false;
+      }
+
+      switch (nextStatus) {
+        case 'APPROVED':
+        case 'REJECTED':
+          return hasHigherOrEqualRole(role, 'MANAGER');
+        case 'SENT':
+        case 'PAID':
+          return hasHigherOrEqualRole(role, 'ACCOUNTANT');
+        default:
+          return hasHigherOrEqualRole(role, 'STAFF');
+      }
+    });
+  }
+
+  /**
+   * 期限切れかどうかを判定
+   */
+  static isOverdue(status: InvoiceStatus, dueDate: Date): boolean {
+    if (status === 'PAID' || status === 'OVERDUE') {
+      return false;
+    }
+    return new Date() > dueDate;
   }
 }

@@ -20,6 +20,10 @@ export const createDecimalMock = (value: number): Prisma.Decimal => {
     minus: (other: Prisma.Decimal) => createDecimalMock(value - other.toNumber()),
     plus: (other: Prisma.Decimal) => createDecimalMock(value + other.toNumber()),
     times: (other: Prisma.Decimal) => createDecimalMock(value * other.toNumber()),
+    mul: (other: number | Prisma.Decimal) => {
+      const otherValue = typeof other === 'number' ? other : other.toNumber()
+      return createDecimalMock(value * otherValue)
+    },
     div: (other: Prisma.Decimal) => createDecimalMock(value / other.toNumber()),
     toFixed: (precision?: number) => value.toFixed(precision),
     abs: () => createDecimalMock(Math.abs(value)),
@@ -45,4 +49,4 @@ export const createDecimalMock = (value: number): Prisma.Decimal => {
   }
 
   return decimal as unknown as Prisma.Decimal
-} 
+}

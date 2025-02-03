@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AccountType } from '../bankAccount';
 import { getMessage, createRegistrationNumberError } from './messages';
+import { Prisma } from '@prisma/client';
 
 /**
  * 数値関連の共通バリデーション
@@ -10,14 +11,28 @@ const numberValidation = {
     .positive(getMessage('positiveNumber'))
     .int(getMessage('integerNumber')),
   
-  taxRate: z.number()
-    .refine(
-      (value) => value === 0.08 || (value >= 0.1 && value <= 1),
-      {
-        message: getMessage('taxRate')
+  taxRate: z.union([
+    z.number(),
+    z.string(),
+    z.any().refine((val) => val instanceof Prisma.Decimal, {
+      message: '税率は数値または文字列である必要があります'
+    })
+  ]).transform(val => 
+    typeof val === 'string' ? parseFloat(val) : val
+  ).refine(
+    (value) => {
+      if (value instanceof Prisma.Decimal) {
+        return value.equals(new Prisma.Decimal(0.08)) || value.equals(new Prisma.Decimal(0.1));
       }
-    )
-    .transform(value => Number(value.toFixed(2))),
+      return value === 0.08 || value === 0.1;
+    },
+    {
+      message: '税率は8%(軽減税率)または10%である必要があります'
+    }
+  ).transform(value => {
+    if (value instanceof Prisma.Decimal) return value;
+    return new Prisma.Decimal(Number(value.toFixed(2)));
+  }),
   
   price: z.number()
     .min(0, getMessage('nonNegativeNumber'))

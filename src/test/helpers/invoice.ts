@@ -80,16 +80,11 @@ export const createTestInvoice = (
 /**
  * テスト用の会社情報を生成
  */
+import { PdfCompanyInfo } from '@/lib/pdf/types';
+
 export const createTestCompanyInfo = (
-  overrides: Partial<{
-    name: string;
-    postalCode: string;
-    address: string;
-    tel: string;
-    email: string;
-    registrationNumber?: string;
-  }> = {}
-) => ({
+  overrides: Partial<PdfCompanyInfo> = {}
+): PdfCompanyInfo => ({
   name: 'テスト株式会社',
   postalCode: '123-4567',
   address: '東京都千代田区...',

@@ -1,4 +1,6 @@
+import { Prisma } from '@prisma/client';
 import { QualifiedInvoice } from '@/types/invoice';
+import { InvoiceStatus } from '@/domains/invoice/status';
 
 /**
  * メール送信者情報
@@ -7,6 +9,43 @@ export interface MailSenderInfo {
   name: string;
   email: string;
   registrationNumber?: string;
+}
+
+/**
+ * メール送信用の請求書明細項目
+ */
+export interface MailInvoiceItem {
+  id: string;
+  invoiceId: string;
+  itemName: string;
+  description?: string | null;
+  quantity: number;
+  unitPrice: Prisma.Decimal;
+  taxRate: Prisma.Decimal;
+  taxAmount: Prisma.Decimal;
+  taxableAmount: Prisma.Decimal;
+}
+
+/**
+ * メール送信用の請求書
+ */
+export interface MailInvoice {
+  id: string;
+  invoiceNumber: string;
+  issueDate: Date;
+  dueDate?: Date | null;
+  notes?: string | null;
+  status: InvoiceStatus;
+  vendor: {
+    id: string;
+    name: string;
+    address: string;
+    registrationNumber: string;
+  };
+  items: MailInvoiceItem[];
+  subtotal: Prisma.Decimal;
+  taxAmount: Prisma.Decimal;
+  totalAmount: Prisma.Decimal;
 }
 
 /**

@@ -1,168 +1,92 @@
 import { describe, expect, it } from 'vitest';
-import { InvoiceStatus } from '@prisma/client';
-import { InvoiceStatusManager, UserRole } from '../status';
+import { InvoiceStatus, canTransitionTo } from '../status';
+import { InvoiceStatusManager } from '../statusManager';
+import { UserRole } from '../../auth/roles';
 
-describe('InvoiceStatusManager', () => {
-  describe('validateTransition', () => {
+describe('Invoice Status Management', () => {
+  describe('canTransitionTo', () => {
     it('should allow valid transitions', () => {
-      const validTransitions = [
-        {
-          from: InvoiceStatus.DRAFT,
-          to: InvoiceStatus.PENDING
-        },
-        {
-          from: InvoiceStatus.PENDING,
-          to: InvoiceStatus.REVIEWING
-        },
-        {
-          from: InvoiceStatus.REVIEWING,
-          to: InvoiceStatus.APPROVED
-        },
-        {
-          from: InvoiceStatus.APPROVED,
-          to: InvoiceStatus.PAID
-        }
-      ];
-
-      validTransitions.forEach(({ from, to }) => {
-        expect(InvoiceStatusManager.validateTransition(from, to)).toBe(true);
-      });
+      expect(canTransitionTo('DRAFT', 'PENDING')).toBe(true);
+      expect(canTransitionTo('PENDING', 'APPROVED')).toBe(true);
+      expect(canTransitionTo('APPROVED', 'SENT')).toBe(true);
+      expect(canTransitionTo('SENT', 'PAID')).toBe(true);
     });
 
-    it('should reject invalid transitions', () => {
-      const invalidTransitions = [
-        {
-          from: InvoiceStatus.DRAFT,
-          to: InvoiceStatus.PAID
-        },
-        {
-          from: InvoiceStatus.PAID,
-          to: InvoiceStatus.DRAFT
-        },
-        {
-          from: InvoiceStatus.APPROVED,
-          to: InvoiceStatus.REVIEWING
-        }
-      ];
+    it('should not allow invalid transitions', () => {
+      expect(canTransitionTo('DRAFT', 'PAID')).toBe(false);
+      expect(canTransitionTo('PAID', 'DRAFT')).toBe(false);
+      expect(canTransitionTo('REJECTED', 'APPROVED')).toBe(false);
+    });
 
-      invalidTransitions.forEach(({ from, to }) => {
-        expect(InvoiceStatusManager.validateTransition(from, to)).toBe(false);
-      });
+    it('should allow transition to REVIEWING from appropriate statuses', () => {
+      expect(canTransitionTo('DRAFT', 'REVIEWING')).toBe(true);
+      expect(canTransitionTo('PENDING', 'REVIEWING')).toBe(true);
+      expect(canTransitionTo('REVIEWING', 'PENDING')).toBe(true);
     });
   });
 
-  describe('hasPermission', () => {
-    it('should allow users with correct permissions', () => {
-      const cases = [
-        {
-          status: InvoiceStatus.DRAFT,
-          roles: ['user' as UserRole],
-          expected: true
-        },
-        {
-          status: InvoiceStatus.REVIEWING,
-          roles: ['admin' as UserRole],
-          expected: true
-        },
-        {
-          status: InvoiceStatus.OVERDUE,
-          roles: ['system' as UserRole, 'admin' as UserRole],
-          expected: true
-        }
-      ];
+  describe('InvoiceStatusManager', () => {
+    describe('hasPermission', () => {
+      it('should check permissions correctly for staff', () => {
+        expect(InvoiceStatusManager.hasPermission('STAFF', 'approve')).toBe(false);
+        expect(InvoiceStatusManager.hasPermission('STAFF', 'send')).toBe(false);
+      });
 
-      cases.forEach(({ status, roles, expected }) => {
-        expect(InvoiceStatusManager.hasPermission(status, roles)).toBe(expected);
+      it('should check permissions correctly for manager', () => {
+        expect(InvoiceStatusManager.hasPermission('MANAGER', 'approve')).toBe(true);
+        expect(InvoiceStatusManager.hasPermission('MANAGER', 'reject')).toBe(true);
+      });
+
+      it('should check permissions correctly for accountant', () => {
+        expect(InvoiceStatusManager.hasPermission('ACCOUNTANT', 'send')).toBe(true);
+        expect(InvoiceStatusManager.hasPermission('ACCOUNTANT', 'pay')).toBe(true);
       });
     });
 
-    it('should reject users without correct permissions', () => {
-      const cases = [
-        {
-          status: InvoiceStatus.REVIEWING,
-          roles: ['user' as UserRole],
-          expected: false
-        },
-        {
-          status: InvoiceStatus.APPROVED,
-          roles: ['user' as UserRole],
-          expected: false
-        },
-        {
-          status: InvoiceStatus.OVERDUE,
-          roles: ['user' as UserRole],
-          expected: false
-        }
-      ];
-
-      cases.forEach(({ status, roles, expected }) => {
-        expect(InvoiceStatusManager.hasPermission(status, roles)).toBe(expected);
+    describe('getNextPossibleStatuses', () => {
+      it('should return correct statuses for staff', () => {
+        const statuses = InvoiceStatusManager.getNextPossibleStatuses('DRAFT', 'STAFF');
+        expect(statuses).toContain('PENDING');
+        expect(statuses).not.toContain('APPROVED');
       });
-    });
-  });
 
-  describe('getNextPossibleStatuses', () => {
-    it('should return correct next statuses for user role', () => {
-      const userRoles: UserRole[] = ['user'];
-      const nextStatuses = InvoiceStatusManager.getNextPossibleStatuses(
-        InvoiceStatus.DRAFT,
-        userRoles
-      );
-
-      expect(nextStatuses).toContain(InvoiceStatus.PENDING);
-      expect(nextStatuses).not.toContain(InvoiceStatus.REVIEWING);
-    });
-
-    it('should return correct next statuses for admin role', () => {
-      const adminRoles: UserRole[] = ['admin'];
-      const nextStatuses = InvoiceStatusManager.getNextPossibleStatuses(
-        InvoiceStatus.REVIEWING,
-        adminRoles
-      );
-
-      expect(nextStatuses).toContain(InvoiceStatus.APPROVED);
-      expect(nextStatuses).toContain(InvoiceStatus.REJECTED);
-    });
-  });
-
-  describe('needsNotification', () => {
-    it('should return true for statuses requiring notification', () => {
-      const notificationStatuses = [
-        InvoiceStatus.APPROVED,
-        InvoiceStatus.REJECTED,
-        InvoiceStatus.OVERDUE,
-        InvoiceStatus.PAID
-      ];
-
-      notificationStatuses.forEach(status => {
-        expect(InvoiceStatusManager.needsNotification(status)).toBe(true);
+      it('should return correct statuses for manager', () => {
+        const statuses = InvoiceStatusManager.getNextPossibleStatuses('PENDING', 'MANAGER');
+        expect(statuses).toContain('APPROVED');
+        expect(statuses).toContain('REJECTED');
       });
     });
 
-    it('should return false for statuses not requiring notification', () => {
-      const nonNotificationStatuses = [
-        InvoiceStatus.DRAFT,
-        InvoiceStatus.PENDING,
-        InvoiceStatus.REVIEWING
-      ];
+    describe('needsNotification', () => {
+      it('should return true for status changes that need notification', () => {
+        expect(InvoiceStatusManager.needsNotification('APPROVED')).toBe(true);
+        expect(InvoiceStatusManager.needsNotification('PAID')).toBe(true);
+        expect(InvoiceStatusManager.needsNotification('REJECTED')).toBe(true);
+      });
 
-      nonNotificationStatuses.forEach(status => {
-        expect(InvoiceStatusManager.needsNotification(status)).toBe(false);
+      it('should return false for status changes that do not need notification', () => {
+        expect(InvoiceStatusManager.needsNotification('DRAFT')).toBe(false);
+        expect(InvoiceStatusManager.needsNotification('PENDING')).toBe(false);
+        expect(InvoiceStatusManager.needsNotification('REVIEWING')).toBe(false);
       });
     });
-  });
 
-  describe('isOverdue', () => {
-    it('should return true for past due dates', () => {
-      const pastDate = new Date();
-      pastDate.setDate(pastDate.getDate() - 1);
-      expect(InvoiceStatusManager.isOverdue(pastDate)).toBe(true);
-    });
+    describe('isOverdue', () => {
+      const pastDate = new Date('2024-01-01');
+      const futureDate = new Date('2026-01-01');
 
-    it('should return false for future due dates', () => {
-      const futureDate = new Date();
-      futureDate.setDate(futureDate.getDate() + 1);
-      expect(InvoiceStatusManager.isOverdue(futureDate)).toBe(false);
+      it('should return true for overdue invoices', () => {
+        expect(InvoiceStatusManager.isOverdue('SENT', pastDate)).toBe(true);
+      });
+
+      it('should return false for non-overdue invoices', () => {
+        expect(InvoiceStatusManager.isOverdue('SENT', futureDate)).toBe(false);
+      });
+
+      it('should return false for paid or overdue invoices', () => {
+        expect(InvoiceStatusManager.isOverdue('PAID', pastDate)).toBe(false);
+        expect(InvoiceStatusManager.isOverdue('OVERDUE', pastDate)).toBe(false);
+      });
     });
   });
 });

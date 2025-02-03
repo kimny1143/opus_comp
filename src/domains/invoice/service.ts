@@ -1,4 +1,4 @@
-import { Prisma, InvoiceStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { prisma } from '@/lib/prisma';
 import { generateInvoicePDF } from '@/infrastructure/pdf/invoice';
@@ -7,14 +7,13 @@ import { calculateTaxSummary } from './tax';
 import type { TaxableItem } from './tax';
 import {
   QualifiedInvoice,
-  InvoiceStatusType,
   InvoiceTemplate,
   QualifiedInvoiceItem,
   BankInfo,
   QualifiedVendor,
   InvoiceTaxSummary
 } from './types';
-import { InvoiceStatusManager, UserRole } from './status';
+import { InvoiceStatus, InvoiceStatusManager, UserRole } from './status';
 import { InvoiceItem as PrismaInvoiceItem } from '@prisma/client';
 
 const invoiceInclude = {
@@ -44,7 +43,7 @@ export class InvoiceService {
 
   static async updateStatus(
     invoiceId: string,
-    nextStatus: InvoiceStatusType,
+    nextStatus: InvoiceStatus,
     userRoles: UserRole[],
     emailData?: {
       to: string;
@@ -58,7 +57,10 @@ export class InvoiceService {
     }
 
     // 権限の検証
-    if (!InvoiceStatusManager.hasPermission(nextStatus, userRoles)) {
+    const hasPermission = userRoles.some(role =>
+      InvoiceStatusManager.hasPermission(role, this.getActionForStatus(nextStatus))
+    );
+    if (!hasPermission) {
       throw new Error('Permission denied for status update');
     }
 
@@ -70,15 +72,16 @@ export class InvoiceService {
     // ステータスを更新
     const updatedInvoice = await prisma.invoice.update({
       where: { id: invoiceId },
-      data: { status: nextStatus },
+      data: { status: { set: nextStatus } },
       include: invoiceInclude
     });
 
     // 通知が必要な場合はメール送信
     if (InvoiceStatusManager.needsNotification(nextStatus) && emailData) {
-      const pdfBuffer = await generateInvoicePDF(invoice);
+      const qualifiedInvoice = this.convertToQualifiedInvoice(updatedInvoice);
+      const pdfBuffer = await generateInvoicePDF(qualifiedInvoice);
       const emailParams: SendInvoiceEmailParams = {
-        invoice,
+        invoice: qualifiedInvoice,
         pdfBuffer,
         ...emailData
       };
@@ -95,8 +98,8 @@ export class InvoiceService {
   }): Promise<void> {
     await this.updateStatus(
       invoiceId,
-      InvoiceStatus.SENT,
-      ['user' as UserRole, 'admin' as UserRole],
+      'SENT',
+      ['ACCOUNTANT', 'MANAGER', 'ADMIN'],
       emailData
     );
   }
@@ -116,7 +119,7 @@ export class InvoiceService {
     const overdueInvoices = await prisma.invoice.findMany({
       where: {
         status: {
-          in: [InvoiceStatus.APPROVED, InvoiceStatus.OVERDUE]
+          in: ['APPROVED', 'OVERDUE']
         },
         dueDate: {
           lt: new Date()
@@ -183,7 +186,7 @@ export class InvoiceService {
       templateId: invoice.templateId,
       purchaseOrderId: invoice.purchaseOrderId,
       invoiceNumber: invoice.invoiceNumber,
-      status: invoice.status as InvoiceStatusType,
+      status: invoice.status,
       issueDate: invoice.issueDate,
       dueDate: invoice.dueDate,
       notes: invoice.notes,
@@ -216,4 +219,19 @@ export class InvoiceService {
     }));
     return calculateTaxSummary(taxableItems);
   }
-} 
+
+  private static getActionForStatus(status: InvoiceStatus): 'approve' | 'send' | 'pay' | 'reject' {
+    switch (status) {
+      case 'APPROVED':
+        return 'approve';
+      case 'SENT':
+        return 'send';
+      case 'PAID':
+        return 'pay';
+      case 'REJECTED':
+        return 'reject';
+      default:
+        throw new Error(`No action defined for status: ${status}`);
+    }
+  }
+}

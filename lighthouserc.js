@@ -45,11 +45,23 @@ module.exports = {
         'server-response-time': ['error', { maxNumericValue: 100 }],
         'mainthread-work-breakdown': ['error', { maxNumericValue: 2000 }],
         
-        // Security
+        // Security & Best Practices
         'installable-manifest': ['error', { minScore: 1 }],
         'uses-http2': ['error', { minScore: 1 }],
         'uses-long-cache-ttl': ['error', { minScore: 0.9 }],
         'dom-size': ['error', { maxNumericValue: 1000 }],
+        'no-vulnerable-libraries': ['error', { minScore: 1 }],
+        'csp-xss': ['error', { minScore: 1 }],
+        'strict-csp': ['error', { minScore: 1 }],
+        'uses-text-compression': ['error', { minScore: 1 }],
+        'uses-responsive-images': ['error', { minScore: 1 }],
+        'efficient-animated-content': ['error', { minScore: 1 }],
+        
+        // Server Components Performance
+        'server-response-time': ['error', { maxNumericValue: 80 }],  // 100ms→80msに厳格化
+        'mainthread-work-breakdown': ['error', { maxNumericValue: 1500 }],  // 2000ms→1500msに厳格化
+        'total-byte-weight': ['error', { maxNumericValue: 1600000 }],  // 1.6MB制限
+        'modern-image-formats': ['error', { minScore: 1 }],
       },
     },
     upload: {

@@ -1,4 +1,4 @@
-import { BankInfo, StatusHistory, Tag, TaxCalculation } from './common'
+import { BankInfo, StatusHistory, Tag, TaxCalculation, MonetaryAmount } from './common'
 
 /**
  * 請求書ステータス
@@ -15,6 +15,13 @@ export enum InvoiceStatus {
 }
 
 /**
+ * 登録番号のフォーマット検証
+ */
+export function isValidRegistrationNumber(number: string): boolean {
+  return /^T\d{13}$/.test(number)
+}
+
+/**
  * 請求書の基本アイテム
  */
 export interface BaseInvoiceItem {
@@ -22,9 +29,10 @@ export interface BaseInvoiceItem {
   itemName: string
   description?: string | null
   quantity: number
-  unitPrice: number
+  unitPrice: MonetaryAmount
   taxRate: number
-  amount?: number
+  amount?: MonetaryAmount
+  category?: string
 }
 
 /**
@@ -82,8 +90,8 @@ export interface InvoiceTaxSummary {
     [rate: string]: TaxCalculation
   }
   total: {
-    taxableAmount: number
-    taxAmount: number
+    taxableAmount: MonetaryAmount
+    taxAmount: MonetaryAmount
   }
 }
 

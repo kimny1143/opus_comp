@@ -6,7 +6,7 @@ import {
   convertFormToDbInput
 } from '../invoice'
 import { AccountType } from '@/types/base/common'
-import { InvoiceStatus } from '@/types/base/invoice'
+import { InvoiceStatus, InvoiceTaxSummary } from '@/types/base/invoice'
 
 describe('Invoice Type Converters', () => {
   describe('convertDbItemToViewItem', () => {
@@ -17,26 +17,27 @@ describe('Invoice Type Converters', () => {
         itemName: 'Test Item',
         description: 'Test Description',
         quantity: 2,
-        unitPrice: 1000,
+        unitPrice: { amount: 1000, currency: 'JPY' },
         taxRate: 10,
-        amount: 2000,
+        amount: { amount: 2000, currency: 'JPY' },
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        category: 'Test Category'
       }
 
       const viewItem = convertDbItemToViewItem(dbItem)
-
       expect(viewItem).toEqual({
         id: '1',
         invoiceId: 'inv-1',
         itemName: 'Test Item',
         description: 'Test Description',
         quantity: 2,
-        unitPrice: 1000,
+        unitPrice: { amount: 1000, currency: 'JPY' },
         taxRate: 10,
-        amount: 2000,
+        amount: { amount: 2000, currency: 'JPY' },
         taxAmount: '200.00',
-        taxableAmount: '2000.00'
+        taxableAmount: '2000.00',
+        category: 'Test Category'
       })
     })
 
@@ -47,11 +48,12 @@ describe('Invoice Type Converters', () => {
         itemName: 'Test Item',
         description: null,
         quantity: 2,
-        unitPrice: 1000,
+        unitPrice: { amount: 1000, currency: 'JPY' },
         taxRate: 10,
-        amount: 2000,
+        amount: { amount: 2000, currency: 'JPY' },
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        category: 'Test Category'
       }
 
       const viewItem = convertDbItemToViewItem(dbItem)
@@ -85,11 +87,12 @@ describe('Invoice Type Converters', () => {
           itemName: 'Test Item',
           description: 'Test Description',
           quantity: 2,
-          unitPrice: 1000,
+          unitPrice: { amount: 1000, currency: 'JPY' },
           taxRate: 10,
-          amount: 2000,
+          amount: { amount: 2000, currency: 'JPY' },
           createdAt: now,
-          updatedAt: now
+          updatedAt: now,
+          category: 'Test Category'
         }],
         vendor: {
           id: '1',
@@ -103,15 +106,15 @@ describe('Invoice Type Converters', () => {
           byRate: {
             '10': {
               taxRate: 10,
-              taxableAmount: 2000,
-              taxAmount: 200
+              taxableAmount: { amount: 2000, currency: 'JPY' },
+              taxAmount: { amount: 200, currency: 'JPY' }
             }
           },
           total: {
-            taxableAmount: 2000,
-            taxAmount: 200
+            taxableAmount: { amount: 2000, currency: 'JPY' },
+            taxAmount: { amount: 200, currency: 'JPY' }
           }
-        },
+        } as InvoiceTaxSummary,
         tags: [],
         statusHistory: [{
           id: '1',
@@ -163,11 +166,12 @@ describe('Invoice Type Converters', () => {
           itemName: 'Test Item',
           description: 'Test Description',
           quantity: 2,
-          unitPrice: 1000,
+          unitPrice: { amount: 1000, currency: 'JPY' },
           taxRate: 10,
-          amount: 2000,
+          amount: { amount: 2000, currency: 'JPY' },
           taxAmount: '200.00',
-          taxableAmount: '2000.00'
+          taxableAmount: '2000.00',
+          category: 'Test Category'
         }],
         bankInfo: {
           bankName: 'Test Bank',

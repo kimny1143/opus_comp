@@ -68,8 +68,8 @@ export interface MonetaryAmount {
  */
 export interface TaxCalculation {
   taxRate: number
-  taxableAmount: number
-  taxAmount: number
+  taxableAmount: MonetaryAmount
+  taxAmount: MonetaryAmount
 }
 
 /**

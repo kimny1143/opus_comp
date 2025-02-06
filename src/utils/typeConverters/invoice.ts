@@ -2,8 +2,98 @@ import { Prisma } from '@prisma/client'
 import type { DbInvoice, DbInvoiceCreateInput, DbInvoiceItem } from '@/types/db/invoice'
 import type { ViewInvoice, ViewInvoiceItem, ViewInvoiceForm } from '@/types/view/invoice'
 import type { BaseInvoiceItem, InvoiceStatus } from '@/types/base/invoice'
-import type { BankInfo } from '@/types/base/common'
+import type { BankInfo, MonetaryAmount } from '@/types/base/common'
 import { AccountType } from '@/types/base/common'
+
+/**
+ * MonetaryAmountをJSONに変換
+ */
+function monetaryAmountToJson(amount: MonetaryAmount): Prisma.JsonValue {
+  return {
+    amount: amount.amount,
+    currency: amount.currency
+  }
+}
+
+/**
+ * JSONからMonetaryAmountに変換
+ */
+function jsonToMonetaryAmount(json: Prisma.JsonValue): MonetaryAmount {
+  if (typeof json !== 'object' || json === null) {
+    throw new Error('Invalid monetary amount format')
+  }
+
+  const amount = json as Record<string, unknown>
+  
+  if (
+    typeof amount.amount !== 'number' ||
+    typeof amount.currency !== 'string'
+  ) {
+    throw new Error('Invalid monetary amount data')
+  }
+
+  return {
+    amount: amount.amount,
+    currency: amount.currency
+  }
+}
+
+/**
+ * 税計算サマリーをJSONに変換
+ */
+function taxSummaryToJson(summary: {
+  byRate: Record<string, {
+    taxRate: number;
+    taxableAmount: MonetaryAmount;
+    taxAmount: MonetaryAmount
+  }>;
+  total: {
+    taxableAmount: MonetaryAmount;
+    taxAmount: MonetaryAmount;
+  };
+}): Prisma.JsonValue {
+  return {
+    byRate: Object.entries(summary.byRate).reduce((acc, [rate, data]) => ({
+      ...acc,
+      [rate]: {
+        taxRate: data.taxRate,
+        taxableAmount: monetaryAmountToJson(data.taxableAmount),
+        taxAmount: monetaryAmountToJson(data.taxAmount)
+      }
+    }), {}),
+    total: {
+      taxableAmount: monetaryAmountToJson(summary.total.taxableAmount),
+      taxAmount: monetaryAmountToJson(summary.total.taxAmount)
+    }
+  }
+}
+
+/**
+ * MonetaryAmountをDecimalに変換
+ */
+function monetaryAmountToDecimal(amount: MonetaryAmount): Prisma.Decimal {
+  return new Prisma.Decimal(amount.amount)
+}
+
+/**
+ * DecimalをMonetaryAmountに変換
+ */
+function decimalToMonetaryAmount(decimal: Prisma.Decimal, currency: string = 'JPY'): MonetaryAmount {
+  return {
+    amount: decimal.toNumber(),
+    currency
+  }
+}
+
+/**
+ * 数値をMonetaryAmountに変換
+ */
+function numberToMonetaryAmount(amount: number, currency: string = 'JPY'): MonetaryAmount {
+  return {
+    amount,
+    currency
+  }
+}
 
 /**
  * BankInfoをJSONに変換
@@ -51,6 +141,16 @@ function jsonToBankInfo(json: Prisma.JsonValue): BankInfo {
  * DBのアイテムをViewのアイテムに変換
  */
 export function convertDbItemToViewItem(dbItem: DbInvoiceItem): ViewInvoiceItem {
+  const amount = dbItem.amount ?? {
+    amount: dbItem.quantity * dbItem.unitPrice.amount,
+    currency: dbItem.unitPrice.currency
+  };
+
+  const taxAmount = numberToMonetaryAmount(
+    (amount.amount * dbItem.taxRate) / 100,
+    amount.currency
+  );
+
   return {
     id: dbItem.id,
     invoiceId: dbItem.invoiceId,
@@ -59,9 +159,10 @@ export function convertDbItemToViewItem(dbItem: DbInvoiceItem): ViewInvoiceItem 
     quantity: dbItem.quantity,
     unitPrice: dbItem.unitPrice,
     taxRate: dbItem.taxRate,
-    amount: dbItem.amount,
-    taxAmount: dbItem.amount ? ((dbItem.amount * dbItem.taxRate) / 100).toFixed(2) : '0',
-    taxableAmount: dbItem.amount ? dbItem.amount.toFixed(2) : '0'
+    amount,
+    taxAmount: taxAmount.amount.toFixed(2),
+    taxableAmount: amount.amount.toFixed(2),
+    category: dbItem.category
   }
 }
 
@@ -133,8 +234,26 @@ export function convertFormToDbInput(
   form: ViewInvoiceForm,
   userId: string
 ): DbInvoiceCreateInput {
+  const defaultCurrency = form.items[0]?.unitPrice.currency ?? 'JPY';
+
+  // 合計金額の計算
+  const totalAmountValue = form.items.reduce((sum, item) => {
+    return sum + (item.quantity * item.unitPrice.amount);
+  }, 0);
+  const totalAmount = numberToMonetaryAmount(totalAmountValue, defaultCurrency);
+
+  // 税額の計算
+  const taxAmountValue = form.items.reduce((sum, item) => {
+    const itemAmount = item.quantity * item.unitPrice.amount;
+    return sum + (itemAmount * item.taxRate / 100);
+  }, 0);
+  const taxAmount = numberToMonetaryAmount(taxAmountValue, defaultCurrency);
+
+  // 税計算サマリーの生成
+  const taxSummary = calculateTaxSummary(form.items);
+
   return {
-    invoiceNumber: generateInvoiceNumber(), // Note: 実際の生成ロジックは別途実装
+    invoiceNumber: generateInvoiceNumber(),
     status: form.status,
     issueDate: form.issueDate,
     dueDate: form.dueDate,
@@ -143,27 +262,28 @@ export function convertFormToDbInput(
     vendorId: form.vendorId,
     purchaseOrderId: form.purchaseOrderId,
     items: {
-      create: form.items.map(item => ({
-        itemName: item.itemName,
-        description: item.description,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        taxRate: item.taxRate
-      }))
+      create: form.items.map(item => {
+        const unitPrice = item.unitPrice;
+        return {
+          itemName: item.itemName,
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice,  // MonetaryAmount型として直接使用
+          taxRate: item.taxRate,
+          category: item.category,
+          amount: numberToMonetaryAmount(
+            item.quantity * item.unitPrice.amount,
+            item.unitPrice.currency
+          )
+        };
+      })
     },
     tags: form.tags.length > 0 ? {
       connect: form.tags.map(tag => ({ id: tag.id }))
     } : undefined,
-    totalAmount: new Prisma.Decimal(
-      form.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
-    ),
-    taxAmount: new Prisma.Decimal(
-      form.items.reduce((sum, item) => {
-        const itemAmount = item.quantity * item.unitPrice
-        return sum + (itemAmount * item.taxRate / 100)
-      }, 0)
-    ),
-    taxSummary: calculateTaxSummary(form.items),
+    totalAmount: monetaryAmountToDecimal(totalAmount),
+    taxAmount: monetaryAmountToDecimal(taxAmount),
+    taxSummary: taxSummaryToJson(taxSummary),
     createdById: userId,
     updatedById: userId
   }
@@ -175,28 +295,41 @@ export function convertFormToDbInput(
 function calculateTaxSummary(items: BaseInvoiceItem[]) {
   const summary = items.reduce((acc, item) => {
     const taxRate = item.taxRate.toString()
-    const amount = item.quantity * item.unitPrice
+    const amount = item.quantity * item.unitPrice.amount
     const taxAmount = (amount * item.taxRate) / 100
+    const currency = item.unitPrice.currency
 
     if (!acc[taxRate]) {
       acc[taxRate] = {
         taxRate: item.taxRate,
-        taxableAmount: amount,
-        taxAmount: taxAmount
+        taxableAmount: numberToMonetaryAmount(amount, currency),
+        taxAmount: numberToMonetaryAmount(taxAmount, currency)
       }
     } else {
-      acc[taxRate].taxableAmount += amount
-      acc[taxRate].taxAmount += taxAmount
+      acc[taxRate].taxableAmount.amount += amount
+      acc[taxRate].taxAmount.amount += taxAmount
     }
 
     return acc
-  }, {} as Record<string, { taxRate: number; taxableAmount: number; taxAmount: number }>)
+  }, {} as Record<string, {
+    taxRate: number;
+    taxableAmount: MonetaryAmount;
+    taxAmount: MonetaryAmount
+  }>)
+
+  const defaultCurrency = Object.values(summary)[0]?.taxableAmount.currency ?? 'JPY'
 
   return {
     byRate: summary,
     total: {
-      taxableAmount: Object.values(summary).reduce((sum, { taxableAmount }) => sum + taxableAmount, 0),
-      taxAmount: Object.values(summary).reduce((sum, { taxAmount }) => sum + taxAmount, 0)
+      taxableAmount: numberToMonetaryAmount(
+        Object.values(summary).reduce((sum, { taxableAmount }) => sum + taxableAmount.amount, 0),
+        defaultCurrency
+      ),
+      taxAmount: numberToMonetaryAmount(
+        Object.values(summary).reduce((sum, { taxAmount }) => sum + taxAmount.amount, 0),
+        defaultCurrency
+      )
     }
   }
 }

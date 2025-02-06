@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { ZodError } from 'zod'
 import { Prisma } from '@prisma/client'
-import { ViewApiResponse, ViewApiSuccessResponse, ViewApiErrorResponse } from '@/types/view/payment'
-import { createSuccessResponse, createErrorResponse } from '@/utils/typeConverters'
+import { ViewApiSuccessResponse, ViewApiErrorResponse } from '@/types/view/payment'
+import { ApiErrorCode, createApiError } from '@/types/base/api'
+import { createSuccessResponse } from '@/utils/typeConverters'
 
 /**
  * APIレスポンスを作成
@@ -27,15 +28,18 @@ export function handleApiError(error: unknown): NextResponse<ViewApiErrorRespons
 
   if (error instanceof ZodError) {
     return NextResponse.json(
-      createErrorResponse('入力データが不正です', JSON.stringify(error.errors)),
+      createApiError(
+        ApiErrorCode.INVALID_INPUT,
+        JSON.stringify(error.errors)
+      ),
       { status: 400 }
     )
   }
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     return NextResponse.json(
-      createErrorResponse(
-        'データベースエラーが発生しました',
+      createApiError(
+        ApiErrorCode.DATABASE_ERROR,
         JSON.stringify({ code: error.code, meta: error.meta })
       ),
       { status: 400 }
@@ -44,14 +48,17 @@ export function handleApiError(error: unknown): NextResponse<ViewApiErrorRespons
 
   if (error instanceof Prisma.PrismaClientValidationError) {
     return NextResponse.json(
-      createErrorResponse('データの検証エラーが発生しました', errorMessage),
+      createApiError(
+        ApiErrorCode.VALIDATION_ERROR,
+        errorMessage
+      ),
       { status: 400 }
     )
   }
 
   return NextResponse.json(
-    createErrorResponse(
-      'Internal server error',
+    createApiError(
+      ApiErrorCode.INTERNAL_ERROR,
       process.env.NODE_ENV === 'development' ? errorDetails : undefined
     ),
     { status: 500 }

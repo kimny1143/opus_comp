@@ -7192,4 +7192,34 @@ Ignored nodes: comments, script, style
  FAIL  Tests failed. Watching for file changes...
        press h to show help, press q to quit
        rerun x4
+[2K[1A[2K[G[3Jc
+ RERUN  src/domains/invoice/__tests__/tax.test.ts x5
+
+ ❯ src/domains/invoice/__tests__/tax.test.ts  (28 tests | 8 failed) 13ms
+   ❯ src/domains/invoice/__tests__/tax.test.ts > 税金計算 > 税率別の集計 > 複数の税率が混在する場合、税率ごとに正しく集計される
+     → [DecimalError] Invalid argument: 1000
+   ❯ src/domains/invoice/__tests__/tax.test.ts > 税金計算 > 税率別の集計 > 同じ税率の明細行は集約される
+     → [DecimalError] Invalid argument: 1000
+   ❯ src/domains/invoice/__tests__/tax.test.ts > 税金計算 > 税率別の集計 > 複数の税率と数量が混在する場合も正しく計算される
+     → [DecimalError] Invalid argument: 10000
+   ❯ src/domains/invoice/__tests__/tax.test.ts > 税金計算 > 税率別の集計 > 税率の高い順にソートされる
+     → [DecimalError] Invalid argument: 1000
+   ❯ src/domains/invoice/__tests__/tax.test.ts > 税金計算 > 請求書の税額計算 > 税率ごとの集計 > 同一税率の商品の集計
+     → [DecimalError] Invalid argument: 2000
+   ❯ src/domains/invoice/__tests__/tax.test.ts > 税金計算 > 請求書の税額計算 > 税率ごとの集計 > 異なる税率の商品の集計
+     → [DecimalError] Invalid argument: 1000
+   ❯ src/domains/invoice/__tests__/tax.test.ts > 税金計算 > 請求書の税額計算 > 税率ごとの集計 > 数量0の商品は集計に含まれない
+     → [DecimalError] Invalid argument: 2000
+   ❯ src/domains/invoice/__tests__/tax.test.ts > 税金計算 > 請求書の税額計算 > 税率ごとの集計 > 小数点以下の端数処理(切り捨て)
+     → [DecimalError] Invalid argument: 2004
+
+ Test Files  1 failed (1)
+      Tests  8 failed | 20 passed (28)
+   Start at  02:38:24
+   Duration  324ms
+
+
+ FAIL  Tests failed. Watching for file changes...
+       press h to show help, press q to quit
+       rerun x5
 [2K[1A[2K[G

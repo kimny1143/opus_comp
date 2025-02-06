@@ -28,20 +28,28 @@ module.exports = {
     assert: {
       // パフォーマンス基準
       assertions: {
-        'categories:performance': ['error', { minScore: 0.8 }],
+        // Core Web Vitals
+        'categories:performance': ['error', { minScore: 0.9 }],
         'categories:accessibility': ['error', { minScore: 0.9 }],
         'categories:best-practices': ['error', { minScore: 0.9 }],
         'categories:seo': ['error', { minScore: 0.9 }],
-        // First Contentful Paint
-        'first-contentful-paint': ['error', { maxNumericValue: 2000 }],
-        // Largest Contentful Paint
-        'largest-contentful-paint': ['error', { maxNumericValue: 2500 }],
-        // Time to Interactive
-        'interactive': ['error', { maxNumericValue: 3000 }],
-        // Total Blocking Time
-        'total-blocking-time': ['error', { maxNumericValue: 300 }],
-        // Cumulative Layout Shift
+        
+        // Performance metrics
+        'first-contentful-paint': ['error', { maxNumericValue: 1500 }],
+        'largest-contentful-paint': ['error', { maxNumericValue: 2000 }],
+        'interactive': ['error', { maxNumericValue: 2500 }],
+        'total-blocking-time': ['error', { maxNumericValue: 200 }],
         'cumulative-layout-shift': ['error', { maxNumericValue: 0.1 }],
+        
+        // Server Components specific
+        'server-response-time': ['error', { maxNumericValue: 100 }],
+        'mainthread-work-breakdown': ['error', { maxNumericValue: 2000 }],
+        
+        // Security
+        'installable-manifest': ['error', { minScore: 1 }],
+        'uses-http2': ['error', { minScore: 1 }],
+        'uses-long-cache-ttl': ['error', { minScore: 0.9 }],
+        'dom-size': ['error', { maxNumericValue: 1000 }],
       },
     },
     upload: {

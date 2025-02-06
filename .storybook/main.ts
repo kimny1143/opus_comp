@@ -1,11 +1,4 @@
-import type { StorybookConfig as StorybookConfigBase } from '@storybook/types'
-
-type StorybookConfig = StorybookConfigBase & {
-  framework: {
-    name: string
-    options: Record<string, any>
-  }
-}
+import type { StorybookConfig } from '@storybook/react-webpack5'
 
 const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(js|jsx|ts|tsx)'],
@@ -25,10 +18,6 @@ const config: StorybookConfig = {
   },
   typescript: {
     check: true,
-    reactDocgen: 'react-docgen-typescript',
-  },
-  features: {
-    interactionsDebugger: true,
   },
   webpackFinal: async (config) => {
     if (config.resolve) {

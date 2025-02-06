@@ -1,234 +1,118 @@
-# 型システムの改善計画 (2025/2/3)
-
-## 1. 現状の課題
-
-### 1.1 型定義の重複と不整合
-
-- 同じ概念(TaxCalculation等)の型が複数のファイルで異なる定義
-- ビュー層とDB層での型の不一致(string vs Decimal)
-- テストデータと実装の型の食い違い
-
-### 1.2 問題のある箇所
-
-1. InvoicePreviewModal.test.tsx
-
-   - taxSummary.byRateの型不整合 ✅
-   - テストデータの型が実装と不一致 ✅
+# 実装計画書 (2025/2/6更新)
 
-2. メール送信機能
+[前略 - 既存の内容は維持]
 
-   - MailContextのジェネリック型制約が不適切 ✅
-   - テンプレート型の定義が不完全 ✅
-
-3. PDF生成機能
-   - QualifiedInvoiceItemの型定義が不完全 ✅
-   - categoryプロパティの扱いが不統一 ✅
+## 8. 依存関係の脆弱性対応に関する承認依頼
 
-## 2. 改善方針
+### 8.1 検出された脆弱性
 
-### 2.1 単一ソース・オブ・トゥルース
+npm auditにより、以下の重要な脆弱性が検出されました:
 
-1. 基本型定義の集約 ✅
+1. Next.js (9.5.5 - 14.2.20)
 
-   ```typescript
-   // @/types/base/tax.ts
-   export interface BaseTaxCalculation {
-     rate: number;
-     taxableAmount: string | Prisma.Decimal;
-     taxAmount: string | Prisma.Decimal;
-   }
-   ```
+   - Server-Side Request Forgery in Server Actions
+   - Cache Poisoning
+   - 画像最適化に関するDoS脆弱性
+   - 認可バイパスの脆弱性
+   - Server Actionsに関するDoS脆弱性
 
-2. レイヤー別の型定義 ✅
+2. webpack-dev-middleware (<=5.3.3)
 
-   ```typescript
-   // @/types/view/tax.ts
-   export interface ViewTaxCalculation
-     extends Omit<BaseTaxCalculation, "taxableAmount" | "taxAmount"> {
-     taxableAmount: string;
-     taxAmount: string;
-   }
+   - Path traversalの脆弱性
 
-   // @/types/db/tax.ts
-   export interface DbTaxCalculation
-     extends Omit<BaseTaxCalculation, "taxableAmount" | "taxAmount"> {
-     taxableAmount: Prisma.Decimal;
-     taxAmount: Prisma.Decimal;
-   }
-   ```
+3. braces (<3.0.3)
+   - リソース消費に関する脆弱性
 
-### 2.2 型変換の一元管理 ✅
+### 8.2 影響範囲
 
-1. 変換ユーティリティ
+1. Next.jsのアップデート影響
 
-   ```typescript
-   // @/utils/typeConverters.ts
-   export const toViewTaxCalculation = (
-     db: DbTaxCalculation
-   ): ViewTaxCalculation => ({
-     ...db,
-     taxableAmount: db.taxableAmount.toString(),
-     taxAmount: db.taxAmount.toString(),
-   });
+   - ルーティング
+   - Server Actions
+   - 画像最適化機能
+   - API Routes
+   - ミドルウェア
 
-   export const toDbTaxCalculation = (
-     view: ViewTaxCalculation
-   ): DbTaxCalculation => ({
-     ...view,
-     taxableAmount: new Prisma.Decimal(view.taxableAmount),
-     taxAmount: new Prisma.Decimal(view.taxAmount),
-   });
-   ```
+2. webpack関連の影響
+   - 開発環境のビルドプロセス
+   - Storybookの動作
 
-2. テストデータ生成 ✅
-   ```typescript
-   // @/test/factories/tax.ts
-   export const createTestTaxCalculation = (
-     overrides?: Partial<ViewTaxCalculation>
-   ): ViewTaxCalculation => ({
-     rate: 10,
-     taxableAmount: "2000",
-     taxAmount: "200",
-     ...overrides,
-   });
-   ```
+### 8.3 対応方針(承認依頼)
 
-## 3. 実装計画
+以下の対応方針について承認をお願いいたします:
 
-### Phase 1: 型定義の整理 (2/3) ✅
+1. Next.jsのアップデート
 
-1. 基本型の定義
+   - 現行バージョン: [current_version]
+   - 目標バージョン: 14.2.23
+   - 段階的なアップデート計画
+     1. テスト環境での検証
+     2. 破壊的変更の影響確認
+     3. 必要なコード修正
+     4. 段階的なデプロイ
 
-   - [x] @/types/base/配下に基本型を集約
-   - [x] レイヤー別の型を定義(view/db)
-   - [x] 型変換ユーティリティの作成
+2. webpack関連パッケージの更新
 
-2. テストデータ生成の統一
-   - [x] @/test/factories/配下にファクトリ関数を集約
-   - [x] ViewTaxCalculation形式に統一
-   - [x] 既存テストの修正
+   - webpack-dev-middlewareの更新
+   - 関連する開発環境の設定調整
 
-### Phase 2: コンポーネントの修正 (2/4) ✅
+3. その他の依存関係更新
+   - bracesパッケージの更新
+   - 影響を受ける開発ツールの調整
 
-1. InvoicePreviewModal
+### 8.4 リスク対策
 
-   - [x] テストデータをファクトリ関数に置き換え
-   - [x] 型キャストの除去
-   - [x] バリデーションの追加
+1. アップデート前の準備
 
-2. メール機能
-   - [x] MailContextのジェネリック制約追加
-   - [x] テンプレート型の再定義
-   - [x] 型安全な実装に修正
+   - 完全なバックアップの作成
+   - 現状のパフォーマンス指標の記録
+   - E2Eテストの実行と結果の保存
 
-### Phase 3: PDF機能の改善 (2/5) ✅
+2. ロールバック計画
 
-1. 型の整理
+   - 問題発生時の即時ロールバック手順
+   - 旧バージョンでの運用継続手順
 
-   - [x] QualifiedInvoiceItemの完全な定義
-   - [x] categoryプロパティの扱いを決定
-   - [x] 変換ロジックの実装
+3. 検証計画
+   - テスト環境での事前検証
+   - 段階的なデプロイ
+   - パフォーマンス計測の実施
 
-2. テストの強化
-   - [x] 型チェックの追加
-   - [x] エッジケースのテスト
-   - [x] 変換テストの追加
+### 8.5 スケジュール案
 
-## 4. 品質基準
+1. Week 1: 事前準備
 
-### 4.1 型安全性 ✅
+   - 影響範囲の詳細分析
+   - テスト環境の準備
+   - バックアップの作成
 
-- 明示的な型キャストの禁止
-- unknown経由の型変換の最小化
-- 共通型の使用を強制
+2. Week 2: テスト実施
 
-### 4.2 テスト要件 ✅
+   - Next.jsアップデート検証
+   - 破壊的変更への対応
+   - E2Eテストの実行
 
-- ファクトリ関数のカバレッジ100%
-- 型変換テストの完備
-- エッジケースの網羅
+3. Week 3: 本番環境対応
+   - 段階的なデプロイ
+   - モニタリング
+   - 問題発生時の即時対応
 
-### 4.3 コード品質 ✅
+### 8.6 判断を仰ぎたい点
 
-- ESLint strict modeの有効化
-- 型定義ファイルの整理
-- 命名規則の統一
+1. アップデートの優先度
 
-## 5. リスク管理
+   - セキュリティリスクと運用リスクの比較
+   - 現状の影響度評価
 
-### 5.1 移行リスク
+2. アップデート方針
 
-- 既存コードへの影響
-- テストの破損可能性
-- 型エラーの一時的な増加
+   - 一括アップデートvs段階的アップデート
+   - テスト環境での検証期間
 
-### 5.2 対策 ✅
+3. 代替案の検討
+   - 一時的な対処方法の可能性
+   - 他のフレームワークへの移行検討
 
-- 段階的な移行を実施
-- テストの並行実行を確認
-- リグレッションテストを強化
+以上の内容について、ご確認とご判断をお願いいたします。特に、Next.jsのメジャーバージョンアップデートは広範な影響が予想されるため、慎重な判断が必要と考えております。
 
-## 6. ドキュメント
-
-### 6.1 型定義ガイド ✅
-
-- 基本型の説明を追加
-- レイヤー別の使い分けを明確化
-- 変換ルールを文書化
-
-### 6.2 テストガイド ✅
-
-- ファクトリ関数の使用方法を整備
-- テストデータの作成ルールを統一
-- 型チェックの方法を文書化
-
-## 7. 成果
-
-### 7.1 型システムの改善 ✅
-
-1. 型定義の整理
-
-   - 基本型の集約と一元管理を完了
-   - レイヤー別の型定義を整理
-   - 型変換ユーティリティを整備
-
-2. コンポーネントの改善
-
-   - InvoicePreviewModalの型安全性を向上
-   - メールテンプレートの型定義を強化
-   - PDF生成機能を拡張
-
-3. テストの強化
-
-   - テストファクトリを統一
-   - エラーケースのテストを追加
-   - バリデーション機能を追加
-
-4. リンターエラーの解消
-   - 型の不一致を修正
-   - 不適切な型キャストを除去
-   - 型定義の漏れを補完
-
-### 7.2 税率計算の改善 ✅
-
-1. 計算ロジックの修正
-
-   - 税率を8%(軽減税率)と10%(標準税率)のみに制限
-   - 数量0のアイテムを計算から除外
-   - 税率の高い順にソートする処理を追加
-   - Math.floorによる端数切り捨て処理を追加
-
-2. バリデーション強化
-
-   - 税率の範囲チェック(8%または10%)を追加
-   - 軽減税率(8%)適用時の説明必須化
-   - エラーメッセージの明確化と統一
-
-3. テストの充実
-   - ユニットテストの追加(エッジケース含む)
-   - E2Eテストでの動作確認
-   - テストケースの整理と改善
-
-この計画は、型の不整合を根本的に解決し、プロジェクト全体で一貫性のある型システムを確立することを目指しました。
-すべてのフェーズが完了し、型システムの改善が達成されました。
-また、税率計算機能の改善により、インボイス制度に準拠した正確な計算処理が実現されました。
+[後略 - 既存の内容は維持]

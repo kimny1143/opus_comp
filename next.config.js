@@ -6,10 +6,13 @@ const nextConfig = {
   experimental: {
     // パフォーマンス最適化
     optimizeCss: true,
-    optimizePackageImports: ['@/components']
+    optimizePackageImports: ['@/components'],
+    // Server Actionsのセキュリティ強化
+    serverActions: {
+      bodySizeLimit: '2mb',
+      allowedOrigins: process.env.ALLOWED_ORIGINS?.split(',') || []
+    }
   },
-  // SWC設定を最適化
-  swcMinify: true,
   compiler: {
     // 本番環境でのみconsole.logを削除
     removeConsole: process.env.NODE_ENV === 'production'

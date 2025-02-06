@@ -8,6 +8,7 @@ import { addDays } from 'date-fns'
 import { createDecimalMock } from '@/test/helpers/mockDecimal'
 import { ViewUpcomingPayment } from '@/types/view/payment'
 import { DbUpcomingPayment } from '@/types/db/payment'
+import { ApiErrorCode } from '@/types/base/api'
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
@@ -154,7 +155,8 @@ describe('GET /api/dashboard/upcoming-payments', () => {
     expect(response.status).toBe(401)
     expect(data).toEqual({
       success: false,
-      error: '認証が必要です'
+      error: '認証が必要です',
+      code: ApiErrorCode.UNAUTHORIZED
     })
     expect(prisma.invoice.findMany).not.toHaveBeenCalled()
   })
@@ -173,8 +175,9 @@ describe('GET /api/dashboard/upcoming-payments', () => {
     expect(response.status).toBe(500)
     expect(data).toEqual({
       success: false,
-      error: 'Internal server error',
-      details: process.env.NODE_ENV === 'development' ? expect.any(String) : undefined
+      error: 'システムエラーが発生しました',
+      code: ApiErrorCode.INTERNAL_ERROR,
+      details: process.env.NODE_ENV === 'development' ? 'Database error' : undefined
     })
   })
 

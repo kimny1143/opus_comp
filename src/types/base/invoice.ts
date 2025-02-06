@@ -1,107 +1,118 @@
-import { Prisma } from '@prisma/client';
-import { TagFormData } from '../tag';
-import { AccountType } from '@/types/bankAccount';
+import { BankInfo, StatusHistory, Tag, TaxCalculation } from './common'
 
-// 基本的な請求書ステータス定義
-export const INVOICE_STATUS = {
-  DRAFT: '下書き',
-  PENDING: '承認待ち',
-  SENT: '送信済み',
-  REJECTED: '却下',
-  OVERDUE: '期限超過',
-  APPROVED: '承認済み',
-  PAID: '支払済み',
-  REVIEWING: '確認中'
-} as const;
+/**
+ * 請求書ステータス
+ */
+export enum InvoiceStatus {
+  DRAFT = "DRAFT",
+  PENDING = "PENDING",
+  REVIEWING = "REVIEWING",
+  APPROVED = "APPROVED",
+  PAID = "PAID",
+  REJECTED = "REJECTED",
+  OVERDUE = "OVERDUE",
+  SENT = "SENT"
+}
 
-export type InvoiceStatus = keyof typeof INVOICE_STATUS;
-
-// 基本的な請求書アイテム型
+/**
+ * 請求書の基本アイテム
+ */
 export interface BaseInvoiceItem {
-  id?: string;
-  itemName: string;
-  quantity: number;
-  unitPrice: number | string | Prisma.Decimal;
-  taxRate: number | string | Prisma.Decimal;
-  description: string;
-  invoiceId?: string;
+  id: string
+  itemName: string
+  description?: string | null
+  quantity: number
+  unitPrice: number
+  taxRate: number
+  amount?: number
 }
 
-// 基本的な請求書型
+/**
+ * 請求書テンプレートの基本型
+ */
+export interface BaseInvoiceTemplate {
+  id: string
+  name: string
+  description?: string
+  bankInfo: BankInfo
+  notes: string
+  paymentTerms: string
+  defaultItems?: BaseInvoiceItem[]
+}
+
+/**
+ * 請求書発行者の基本情報
+ */
+export interface BaseIssuer {
+  id: string
+  name: string
+  registrationNumber: string
+  address: string
+  contactInfo: {
+    email: string
+    phone: string
+  }
+}
+
+/**
+ * 請求書の基本型
+ */
 export interface BaseInvoice {
-  id?: string;
-  status: InvoiceStatus;
-  issueDate: Date;
-  dueDate: Date;
-  items: BaseInvoiceItem[];
-  notes?: string;
-  bankInfo?: {
-    accountType: AccountType;
-    bankName: string;
-    branchName: string;
-    accountNumber: string;
-    accountHolder: string;
-  };
-  vendorId: string;
-  tags?: TagFormData[];
-  registrationNumber: string;
-  totalAmount?: number | string | Prisma.Decimal;
-  createdAt?: Date;
-  updatedAt?: Date;
-  purchaseOrderId?: string;
-  invoiceNumber?: string;
-  templateId?: string;
-  createdById?: string;
-  updatedById?: string;
+  id: string
+  invoiceNumber: string
+  issueDate: Date
+  dueDate: Date
+  status: InvoiceStatus
+  items: BaseInvoiceItem[]
+  totalAmount: number
+  taxAmount: number
+  notes: string
+  tags: Tag[]
+  statusHistory: StatusHistory[]
+  bankInfo: BankInfo
+  template?: BaseInvoiceTemplate
+  issuer: BaseIssuer
 }
 
-// 税計算関連の基本型
-export interface BaseTaxSummary {
+/**
+ * 請求書の税計算サマリー
+ */
+export interface InvoiceTaxSummary {
   byRate: {
-    taxRate: number;
-    taxableAmount: number | string | Prisma.Decimal;
-    taxAmount: number | string | Prisma.Decimal;
-  }[];
-  totalTaxableAmount: number | string | Prisma.Decimal;
-  totalTaxAmount: number | string | Prisma.Decimal;
+    [rate: string]: TaxCalculation
+  }
+  total: {
+    taxableAmount: number
+    taxAmount: number
+  }
 }
 
-// 型変換ユーティリティのための共通インターフェース
-export interface BaseInvoiceConversion {
-  toBaseInvoice: (data: any) => BaseInvoice;
-  fromBaseInvoice: (base: BaseInvoice) => any;
+/**
+ * 請求書フォームデータの基本型
+ */
+export interface BaseInvoiceFormData {
+  status: InvoiceStatus
+  issueDate: Date
+  dueDate: Date
+  items: BaseInvoiceItem[]
+  bankInfo: BankInfo
+  notes: string
+  tags: Tag[]
+  template?: BaseInvoiceTemplate
 }
 
-// テスト用ファクトリ関数
-export const createTestInvoiceItem = (overrides?: Partial<BaseInvoiceItem>): BaseInvoiceItem => ({
-  id: 'test-item-id',
-  itemName: 'テスト商品',
-  quantity: 1,
-  unitPrice: new Prisma.Decimal(1000),
-  taxRate: new Prisma.Decimal(0.1),
-  description: 'テスト説明',
-  ...overrides
-});
-
-export const createTestInvoice = (overrides?: Partial<BaseInvoice>): BaseInvoice => ({
-  id: 'test-invoice-id',
-  status: 'DRAFT',
-  issueDate: new Date('2025-02-01'),
-  dueDate: new Date('2025-03-01'),
-  items: [createTestInvoiceItem()],
-  bankInfo: {
-    accountType: AccountType.ORDINARY,
-    bankName: 'テスト銀行',
-    branchName: 'テスト支店',
-    accountNumber: '1234567',
-    accountHolder: 'テスト太郎'
-  },
-  notes: 'テスト備考',
-  vendorId: 'test-vendor-id',
-  tags: [{ name: 'テストタグ' }],
-  registrationNumber: 'T1234567890123',
-  templateId: undefined,
-  createdById: undefined,
-  updatedById: undefined,
-  ...overrides
-});
+/**
+ * 請求書検索パラメータ
+ */
+export interface InvoiceSearchParams {
+  status?: InvoiceStatus[]
+  dateRange?: {
+    start: Date
+    end: Date
+  }
+  keyword?: string
+  tags?: string[]
+  issuerId?: string
+  minAmount?: number
+  maxAmount?: number
+}

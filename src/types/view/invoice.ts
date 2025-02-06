@@ -1,132 +1,139 @@
-import { BaseInvoice, BaseInvoiceItem, InvoiceStatus } from '../base/invoice';
-import { TagFormData } from '../tag';
-import { AccountType } from '@/types/bankAccount';
+import type { BankInfo, Tag } from '../base/common'
+import type { BaseInvoiceItem, InvoiceStatus, InvoiceTaxSummary } from '../base/invoice'
 
-// View層の請求書アイテム型(新規作成時)
-export interface ViewInvoiceItemInput {
-  itemName: string;
-  quantity: number;
-  unitPrice: number;
-  taxRate: number;
-  description: string;
+/**
+ * ビュー層の請求書アイテム
+ */
+export interface ViewInvoiceItem extends BaseInvoiceItem {
+  id: string
+  invoiceId: string
+  description: string | null
+  taxAmount: string
+  taxableAmount: string
 }
 
-// View層の請求書アイテム型(表示・編集時)
-export interface ViewInvoiceItem extends ViewInvoiceItemInput {
-  id: string;
+/**
+ * ビュー層の請求書テンプレート
+ */
+export interface ViewInvoiceTemplate {
+  id: string
+  name: string
+  description: string | undefined
+  bankInfo: BankInfo
+  notes: string
+  paymentTerms: string
+  defaultItems?: ViewInvoiceItem[]
+  registrationNumber: string
+  contractorName: string
+  contractorAddress: string
 }
 
-// View層の請求書フォーム型(新規作成時)
-export interface ViewInvoiceFormInput {
-  status: InvoiceStatus;
-  issueDate: Date;
-  dueDate: Date;
-  items: ViewInvoiceItemInput[];
-  notes?: string;
-  bankInfo?: {
-    accountType: AccountType;
-    bankName: string;
-    branchName: string;
-    accountNumber: string;
-    accountHolder: string;
-  };
-  vendorId: string;
-  tags?: TagFormData[];
-  registrationNumber: string;
-  purchaseOrderId?: string;
-  invoiceNumber?: string;
-}
-
-// View層の請求書フォーム型(編集時)
-export interface ViewInvoiceForm extends Omit<ViewInvoiceFormInput, 'items'> {
-  id?: string;
-  items: ViewInvoiceItem[];
-}
-
-// View層の請求書表示型
+/**
+ * ビュー層の請求書
+ */
 export interface ViewInvoice {
-  id: string;
-  status: InvoiceStatus;
-  issueDate: string;
-  dueDate: string;
-  items: ViewInvoiceItem[];
-  notes: string;
-  bankInfo: {
-    accountType: AccountType;
-    bankName: string;
-    branchName: string;
-    accountNumber: string;
-    accountHolder: string;
-  };
-  vendorId: string;
-  tags: TagFormData[];
-  registrationNumber: string;
-  totalAmount: number;
-  createdAt: string;
-  updatedAt: string;
-  purchaseOrderId: string;
-  invoiceNumber: string;
+  id: string
+  invoiceNumber: string
+  status: InvoiceStatus
+  issueDate: string
+  dueDate: string
+  notes: string
+  bankInfo: BankInfo
+  template?: ViewInvoiceTemplate
+  items: ViewInvoiceItem[]
+  vendor: {
+    id: string
+    name: string
+    registrationNumber: string
+  }
+  totalAmount: string
+  taxAmount: string
+  taxSummary: InvoiceTaxSummary
+  tags: Tag[]
+  statusHistory: {
+    id: string
+    status: InvoiceStatus
+    createdAt: string
+    comment?: string
+    user: {
+      id: string
+      name: string
+    }
+  }[]
+  createdAt: string
+  updatedAt: string
+  createdBy: {
+    id: string
+    name: string
+  }
+  updatedBy: {
+    id: string
+    name: string
+  }
 }
 
-// View層の税計算型
-export interface ViewTaxSummary {
-  byRate: {
-    taxRate: number;
-    taxableAmount: number;
-    taxAmount: number;
-  }[];
-  totalTaxableAmount: number;
-  totalTaxAmount: number;
+/**
+ * ビュー層の請求書フォームデータ
+ */
+export interface ViewInvoiceForm {
+  status: InvoiceStatus
+  registrationNumber: string
+  vendorId: string
+  issueDate: Date
+  dueDate: Date
+  items: ViewInvoiceItem[]
+  bankInfo: BankInfo
+  notes: string
+  tags: Tag[]
+  purchaseOrderId?: string
 }
 
-// 型変換ユーティリティ
-export const toViewInvoice = (base: BaseInvoice): ViewInvoiceForm => ({
-  id: base.id,
-  status: base.status,
-  issueDate: base.issueDate,
-  dueDate: base.dueDate,
-  items: base.items.map(item => ({
-    id: item.id || crypto.randomUUID(),
-    itemName: item.itemName,
-    description: item.description || '',
-    quantity: item.quantity,
-    unitPrice: Number(item.unitPrice),
-    taxRate: Number(item.taxRate)
-  })),
-  notes: base.notes || '',
-  bankInfo: base.bankInfo || {
-    accountType: AccountType.ORDINARY,
-    bankName: '',
-    branchName: '',
-    accountNumber: '',
-    accountHolder: ''
-  },
-  vendorId: base.vendorId,
-  tags: base.tags || [],
-  registrationNumber: base.registrationNumber,
-  purchaseOrderId: base.purchaseOrderId,
-  invoiceNumber: base.invoiceNumber || ''
-});
+/**
+ * ビュー層の請求書一覧アイテム
+ */
+export interface ViewInvoiceListItem {
+  id: string
+  invoiceNumber: string
+  status: InvoiceStatus
+  issueDate: string
+  dueDate: string
+  vendor: {
+    id: string
+    name: string
+  }
+  totalAmount: string
+  tags: Tag[]
+  isOverdue: boolean
+}
 
-// フォームデータをベース型に変換
-export const toBaseInvoice = (form: ViewInvoiceForm): BaseInvoice => ({
-  id: form.id,
-  status: form.status,
-  issueDate: form.issueDate,
-  dueDate: form.dueDate,
-  items: form.items.map(item => ({
-    id: item.id,
-    itemName: item.itemName,
-    description: item.description,
-    quantity: item.quantity,
-    unitPrice: item.unitPrice.toString(),
-    taxRate: item.taxRate.toString()
-  })),
-  notes: form.notes,
-  bankInfo: form.bankInfo,
-  vendorId: form.vendorId,
-  tags: form.tags,
-  registrationNumber: form.registrationNumber,
-  purchaseOrderId: form.purchaseOrderId,
-  invoiceNumber: form.invoiceNumber
-});
+/**
+ * ビュー層の請求書フィルター
+ */
+export interface ViewInvoiceFilters {
+  status: InvoiceStatus[]
+  dateRange: {
+    start: Date | null
+    end: Date | null
+  }
+  vendorId?: string
+  tags: string[]
+  searchText: string
+}
+
+/**
+ * ビュー層の請求書ソート
+ */
+export interface ViewInvoiceSort {
+  field: 'issueDate' | 'dueDate' | 'totalAmount' | 'status'
+  direction: 'asc' | 'desc'
+}
+
+/**
+ * ビュー層の請求書ページネーション
+ */
+export interface ViewInvoicePagination {
+  page: number
+  limit: number
+  total: number
+  hasMore: boolean
+}

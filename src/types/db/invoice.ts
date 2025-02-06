@@ -1,90 +1,135 @@
-import { Prisma, Invoice as PrismaInvoice, Vendor } from '@prisma/client';
-import { BaseInvoice, BaseInvoiceItem, InvoiceStatus } from '../base/invoice';
-import { TagFormData } from '../tag';
-import { AccountType } from '@/types/bankAccount';
+import { Prisma } from '@prisma/client'
+import type { BankInfo, StatusHistory, Tag } from '../base/common'
+import type { BaseInvoiceItem, InvoiceStatus, InvoiceTaxSummary } from '../base/invoice'
 
-// DB層の請求書アイテム型
-export interface DbInvoiceItem {
-  id: string;
-  invoiceId: string;
-  itemName: string;
-  quantity: number;
-  unitPrice: Prisma.Decimal;
-  taxRate: Prisma.Decimal;
-  description: string;
-  amount?: Prisma.Decimal;
+/**
+ * データベース層の請求書アイテム
+ */
+export interface DbInvoiceItem extends BaseInvoiceItem {
+  invoiceId: string
+  createdAt: Date
+  updatedAt: Date
 }
 
-// DB層の請求書型
+/**
+ * データベース層の請求書テンプレート
+ */
+export interface DbInvoiceTemplate {
+  id: string
+  registrationNumber: string
+  name: string
+  description: string | null
+  notes: string
+  paymentTerms: string
+  createdAt: Date
+  updatedAt: Date
+  userId: string
+  contractorName: string
+  contractorAddress: string
+  bankInfo: BankInfo
+  defaultItems: Prisma.JsonValue
+}
+
+/**
+ * データベース層の請求書
+ */
 export interface DbInvoice {
-  id: string;
-  status: InvoiceStatus;
-  issueDate: Date;
-  dueDate: Date;
-  totalAmount: Prisma.Decimal;
-  vendor: Vendor;
-  items: DbInvoiceItem[];
-  notes: string;
-  bankInfo: {
-    accountType: AccountType;
-    bankName: string;
-    branchName: string;
-    accountNumber: string;
-    accountHolder: string;
-  };
-  vendorId: string;
-  tags: TagFormData[];
-  registrationNumber: string;
-  createdAt: Date;
-  updatedAt: Date;
-  purchaseOrderId: string;
-  templateId: string;
-  invoiceNumber: string;
-  createdById: string;
-  updatedById: string;
+  id: string
+  invoiceNumber: string
+  status: InvoiceStatus
+  issueDate: Date
+  dueDate: Date
+  notes: string
+  templateId: string | null
+  purchaseOrderId: string | null
+  bankInfo: Prisma.JsonValue | null
+  template: DbInvoiceTemplate | null
+  items: DbInvoiceItem[]
+  vendor: {
+    id: string
+    name: string
+    registrationNumber: string
+  }
+  vendorId: string
+  totalAmount: Prisma.Decimal
+  taxAmount: Prisma.Decimal
+  taxSummary: InvoiceTaxSummary
+  tags: Tag[]
+  statusHistory: StatusHistory[]
+  createdAt: Date
+  updatedAt: Date
+  createdById: string
+  updatedById: string
 }
 
-// DB層の税計算型
-export interface DbTaxSummary {
-  byRate: {
-    taxRate: number;
-    taxableAmount: Prisma.Decimal;
-    taxAmount: Prisma.Decimal;
-  }[];
-  totalTaxableAmount: Prisma.Decimal;
-  totalTaxAmount: Prisma.Decimal;
+/**
+ * データベース層の請求書作成入力
+ */
+export interface DbInvoiceCreateInput {
+  invoiceNumber: string
+  status: InvoiceStatus
+  issueDate: Date
+  dueDate: Date
+  notes: string
+  templateId?: string
+  purchaseOrderId?: string
+  bankInfo: Prisma.JsonValue
+  vendorId: string
+  items: {
+    create: Omit<DbInvoiceItem, 'id' | 'invoiceId' | 'createdAt' | 'updatedAt'>[]
+  }
+  tags?: {
+    connect: { id: string }[]
+  }
+  totalAmount: Prisma.Decimal
+  taxAmount: Prisma.Decimal
+  taxSummary: Prisma.JsonValue
+  createdById: string
+  updatedById: string
 }
 
-// 型変換ユーティリティ
-export const toDbInvoice = (base: BaseInvoice): Omit<DbInvoice, 'id' | 'vendor' | 'createdAt' | 'updatedAt'> => ({
-  status: base.status,
-  issueDate: base.issueDate,
-  dueDate: base.dueDate,
-  totalAmount: new Prisma.Decimal(base.totalAmount || 0),
-  items: base.items.map(item => ({
-    id: item.id || crypto.randomUUID(),
-    invoiceId: item.invoiceId || '',
-    itemName: item.itemName,
-    description: item.description,
-    quantity: item.quantity,
-    unitPrice: new Prisma.Decimal(item.unitPrice),
-    taxRate: new Prisma.Decimal(item.taxRate),
-    amount: new Prisma.Decimal(item.quantity).mul(new Prisma.Decimal(item.unitPrice))
-  })),
-  notes: base.notes || '',
-  bankInfo: base.bankInfo || {
-    accountType: AccountType.ORDINARY,
-    bankName: '',
-    branchName: '',
-    accountNumber: '',
-    accountHolder: ''
-  },
-  vendorId: base.vendorId,
-  tags: base.tags || [],
-  registrationNumber: base.registrationNumber,
-  purchaseOrderId: base.purchaseOrderId || '',
-  templateId: base.templateId || '',
-  invoiceNumber: base.invoiceNumber || '',
-  createdById: base.createdById || '',
-  updatedById: base.updatedById || ''
-});
+/**
+ * データベース層の請求書更新入力
+ */
+export interface DbInvoiceUpdateInput {
+  status?: InvoiceStatus
+  issueDate?: Date
+  dueDate?: Date
+  notes?: string
+  bankInfo?: Prisma.JsonValue
+  items?: {
+    deleteMany: {}
+    create: Omit<DbInvoiceItem, 'id' | 'invoiceId' | 'createdAt' | 'updatedAt'>[]
+  }
+  tags?: {
+    set: { id: string }[]
+  }
+  totalAmount?: Prisma.Decimal
+  taxAmount?: Prisma.Decimal
+  taxSummary?: Prisma.JsonValue
+  updatedById: string
+}
+
+/**
+ * データベース層の請求書検索条件
+ */
+export interface DbInvoiceWhereInput {
+  status?: { in: InvoiceStatus[] }
+  issueDate?: { gte: Date }
+  dueDate?: { lte: Date }
+  vendorId?: string
+  totalAmount?: {
+    gte?: number
+    lte?: number
+  }
+  tags?: {
+    some: {
+      id: { in: string[] }
+    }
+  }
+  OR?: [
+    { invoiceNumber: { contains: string } },
+    { notes: { contains: string } },
+    { vendor: { name: { contains: string } } }
+  ]
+}

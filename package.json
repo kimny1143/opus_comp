@@ -16,7 +16,11 @@
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",
     "type-check": "echo '# TypeScript型チェック結果 - '$(date '+%Y-%m-%d %H:%M:%S') > dev_docs/type-check-result.txt && tsc --noEmit >> dev_docs/type-check-result.txt 2>&1 || true",
-    "find-unused-md": "echo '# Unused Exports\\n\\n' > unused-exports.md && find-unused-exports >> unused-exports.md 2>&1"
+    "find-unused-md": "echo '# Unused Exports\\n\\n' > unused-exports.md && find-unused-exports >> unused-exports.md 2>&1",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build",
+    "test-storybook": "test-storybook",
+    "chromatic": "chromatic"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -82,6 +86,16 @@
   "devDependencies": {
     "@playwright/test": "^1.41.2",
     "@shadcn/ui": "^0.0.4",
+    "@storybook/addon-a11y": "^8.5.3",
+    "@storybook/addon-essentials": "^8.5.3",
+    "@storybook/addon-interactions": "^8.5.3",
+    "@storybook/addon-viewport": "^8.5.3",
+    "@storybook/builder-webpack5": "^8.5.3",
+    "@storybook/manager-webpack5": "^6.5.16",
+    "@storybook/react": "^8.5.3",
+    "@storybook/react-webpack5": "^8.5.3",
+    "@storybook/testing-library": "^0.2.1",
+    "@storybook/types": "^8.5.3",
     "@testing-library/cypress": "^10.0.3",
     "@testing-library/jest-dom": "^6.4.2",
     "@testing-library/react": "^14.2.1",

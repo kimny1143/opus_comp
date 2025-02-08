@@ -6,17 +6,32 @@ import fs from 'fs'
 setup('認証セットアップ', async ({ browser }) => {
   console.log('認証セットアップを開始')
 
-  // 新しいコンテキストを作成(最小限の設定)
-  const context = await browser.newContext()
+  // 新しいコンテキストを作成(初期ページの動作を制御)
+  const context = await browser.newContext({
+    baseURL: 'about:blank',
+    viewport: { width: 1280, height: 720 },
+    serviceWorkers: 'block',
+    javaScriptEnabled: true,
+    acceptDownloads: false,
+    extraHTTPHeaders: {
+      'Accept-Language': 'ja-JP'
+    }
+  })
 
   try {
+    // 既存のページをすべて閉じる
+    const pages = await context.pages()
+    await Promise.all(pages.map(page => page.close()))
+
     console.log('新しいページを作成')
     const page = await context.newPage()
 
     // 認証ページに直接移動
     console.log('認証ページへ移動を開始')
-    await page.goto('http://localhost:3000/auth/signin')
-    await page.waitForLoadState('networkidle')
+    await page.goto('http://localhost:3000/auth/signin', {
+      waitUntil: 'networkidle',
+      timeout: 30000
+    })
     
     console.log('認証ページへの移動完了')
 

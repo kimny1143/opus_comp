@@ -5,6 +5,22 @@ import path from 'path'
 // テスト環境の設定を読み込み
 dotenv.config({ path: '.env.test' })
 
+// 共通設定
+const commonConfig = {
+  baseURL: 'http://localhost:3000',
+  viewport: { width: 1280, height: 720 },
+  ignoreHTTPSErrors: true,
+  launchOptions: {
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-startup-window'
+    ]
+  }
+}
+
 export default defineConfig({
   testDir: './e2e',
   
@@ -27,56 +43,18 @@ export default defineConfig({
     ['json', { outputFile: 'test-results/results.json' }]
   ],
 
-  // グローバル設定
-  use: {
-    // ベースURL設定
-    baseURL: 'http://localhost:3000',
-    
-    // ビューポート設定
-    viewport: { width: 1280, height: 720 },
-    
-    // ブラウザ設定
-    launchOptions: {
-      slowMo: 100,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-      ]
-    },
-    
-    // タイムアウト設定
-    actionTimeout: 15000,
-    navigationTimeout: 30000,
-    
-    // トレースとデバッグ (常時有効化)
-    trace: 'on',
-    screenshot: 'on',
-    video: 'on-first-retry',
-    
-    // その他の設定
-    ignoreHTTPSErrors: true,
-    bypassCSP: true,
-  },
-
   // プロジェクト設定
   projects: [
     {
       name: 'setup',
       testMatch: /.*\.setup\.ts/,
       use: {
+        ...commonConfig,
         // セットアッププロジェクト固有の設定
-        baseURL: 'http://localhost:3000',
         launchOptions: {
-          // 初期ページを無効化
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--no-startup-window'
-          ]
+          ...commonConfig.launchOptions,
+          headless: true,
+          handleSIGINT: false
         }
       }
     },
@@ -84,6 +62,7 @@ export default defineConfig({
       name: 'chromium',
       use: { 
         ...devices['Desktop Chrome'],
+        ...commonConfig,
         storageState: path.join(__dirname, 'e2e/.auth/user.json'),
         contextOptions: {
           reducedMotion: 'reduce',
@@ -95,6 +74,18 @@ export default defineConfig({
       testIgnore: ['**/auth.setup.ts'],
     }
   ],
+
+  // グローバル設定
+  use: {
+    // タイムアウト設定
+    actionTimeout: 15000,
+    navigationTimeout: 30000,
+    
+    // トレースとデバッグ (常時有効化)
+    trace: 'on',
+    screenshot: 'on',
+    video: 'on-first-retry',
+  },
 
   // 出力設定
   outputDir: 'test-results/',

@@ -33,7 +33,10 @@ export default defineConfig({
 
   // グローバル設定
   use: {
-    baseURL: process.env.TEST_BASE_URL || 'http://localhost:3000',
+    // ベースURL設定
+    baseURL: 'http://localhost:3000',
+    
+    // ビューポート設定
     viewport: { width: 1280, height: 720 },
     
     // ブラウザ設定

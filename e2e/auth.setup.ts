@@ -6,25 +6,28 @@ import fs from 'fs'
 setup('認証セットアップ', async ({ browser }) => {
   console.log('認証セットアップを開始')
 
-  // 新しいコンテキストを作成(初期ページの動作を制御)
+  // 新しいコンテキストを作成
   const context = await browser.newContext({
     baseURL: 'about:blank',
-    viewport: { width: 1280, height: 720 },
-    serviceWorkers: 'block',
-    javaScriptEnabled: true,
-    acceptDownloads: false,
-    extraHTTPHeaders: {
-      'Accept-Language': 'ja-JP'
-    }
+    viewport: { width: 1280, height: 720 }
   })
 
   try {
-    // 既存のページをすべて閉じる
-    const pages = await context.pages()
-    await Promise.all(pages.map(page => page.close()))
+    // 不要なナビゲーションをハンドリング
+    await context.route('**/*', async (route, request) => {
+      if (request.url().includes('playwright/index.html')) {
+        await route.fulfill({ status: 200, body: '' })
+      } else {
+        await route.continue()
+      }
+    })
 
     console.log('新しいページを作成')
     const page = await context.newPage()
+
+    // 初期ページの読み込み完了を待機
+    console.log('初期ページの読み込み完了を待機')
+    await page.waitForLoadState('domcontentloaded')
 
     // 認証ページに直接移動
     console.log('認証ページへ移動を開始')

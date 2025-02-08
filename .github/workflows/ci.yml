@@ -55,6 +55,8 @@ jobs:
           npm audit --audit-level=high || (echo "High severity vulnerabilities found" && exit 1)
           # 依存関係の分析結果を保存
           npm list --json > dependencies.json
+          # Next.js 15特有の依存関係チェック
+          npx @next/codemod check-dependencies --json > next-deps.json
 
       - name: Snyk security scan
         uses: snyk/actions/node@master
@@ -72,6 +74,7 @@ jobs:
             security-audit.json
             dependencies.json
             snyk-results.json
+            next-deps.json
 
       - name: Run Lighthouse CI
         run: |
@@ -79,6 +82,13 @@ jobs:
           lhci autorun
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+          # Next.js 15のパフォーマンス要件
+          LHCI_PERFORMANCE_BUDGET: |
+            {
+              "serverResponseTime": 80,
+              "mainThreadWork": 1500,
+              "totalByteWeight": 1600000
+            }
 
       - name: Run unit tests
         run: npm run test:ci
@@ -92,15 +102,11 @@ jobs:
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
 
+      - name: Install Playwright
+        run: npx playwright install --with-deps
+
       - name: Run E2E tests
-        uses: cypress-io/github-action@v5
-        with:
-          build: npm run build
-          start: npm run dev
-          wait-on: "http://localhost:3000"
-          config-file: cypress.config.ts
-          record: false
-          browser: chrome
+        run: npm run test:e2e
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
           NEXT_PUBLIC_API_URL: ${{ env.NEXT_PUBLIC_API_URL }}
@@ -111,8 +117,8 @@ jobs:
         with:
           name: test-results
           path: |
-            dev_docs/e2e_results/screenshots
-            dev_docs/e2e_results/videos
+            playwright-report/
+            test-results/
             coverage/
 
   security:
@@ -136,11 +142,14 @@ jobs:
           npx @next/security-scanner . --json > server-components-scan.json
           # Server Actionsのセキュリティチェック
           npx @next/action-validator . --json > server-actions-scan.json
+          # CSP設定の検証
+          npx @next/security-headers-validator . --json > security-headers.json
           # 結果の解析と失敗条件の設定
           node -e "
             const sc = require('./server-components-scan.json');
             const sa = require('./server-actions-scan.json');
-            if (sc.criticalIssues > 0 || sa.criticalIssues > 0) {
+            const sh = require('./security-headers.json');
+            if (sc.criticalIssues > 0 || sa.criticalIssues > 0 || sh.criticalIssues > 0) {
               console.error('Critical security issues found');
               process.exit(1);
             }
@@ -154,6 +163,8 @@ jobs:
           cat server-components-scan.json >> security-report.md
           echo "## Server Actions Scan" >> security-report.md
           cat server-actions-scan.json >> security-report.md
+          echo "## Security Headers Check" >> security-report.md
+          cat security-headers.json >> security-report.md
 
       - name: Upload security scan results
         if: always()
@@ -164,6 +175,7 @@ jobs:
             security-report.md
             server-components-scan.json
             server-actions-scan.json
+            security-headers.json
 
   deploy:
     needs: [test, security]
@@ -194,7 +206,6 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
 
-      # デプロイ処理は環境に応じて適切な方法を選択
       - name: Deploy to production
         id: deploy
         run: |

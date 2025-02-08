@@ -9,10 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { InputField } from '@/components/shared/form/InputField'
 import { signinSchema, type SignInFormData } from '@/components/auth/schemas/signinSchema'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 export default function SignInForm() {
   const router = useRouter()
+  const mounted = useRef(false)
+  
   const methods = useForm<SignInFormData>({
     resolver: zodResolver(signinSchema),
     defaultValues: {
@@ -21,14 +23,16 @@ export default function SignInForm() {
     }
   })
 
-  // デバッグ用：コンポーネントのマウント確認
+  // デバッグ用:コンポーネントのマウント確認(二重マウント防止)
   useEffect(() => {
-    console.log('SignInForm mounted')
+    if (!mounted.current) {
+      mounted.current = true
+      console.log('SignInForm mounted')
+    }
   }, [])
 
   const handleSubmit = async (data: SignInFormData) => {
     try {
-      console.log('Form submitted:', data) // デバッグ用
       const result = await signIn('credentials', {
         email: data.email,
         password: data.password,
@@ -57,7 +61,11 @@ export default function SignInForm() {
         </CardHeader>
         <CardContent>
           <FormProvider {...methods}>
-            <form onSubmit={methods.handleSubmit(handleSubmit)} className="space-y-4" data-testid="signin-form">
+            <form 
+              onSubmit={methods.handleSubmit(handleSubmit)} 
+              className="space-y-4" 
+              data-testid="signin-form"
+            >
               <InputField
                 name="email"
                 label="メールアドレス"
@@ -66,6 +74,8 @@ export default function SignInForm() {
                 required
                 data-testid="email-input"
                 className="w-full"
+                autoComplete="email"
+                aria-label="メールアドレス"
               />
 
               <InputField
@@ -76,9 +86,15 @@ export default function SignInForm() {
                 required
                 data-testid="password-input"
                 className="w-full"
+                autoComplete="current-password"
+                aria-label="パスワード"
               />
 
-              <Button type="submit" className="w-full">
+              <Button 
+                type="submit" 
+                className="w-full"
+                aria-label="サインイン"
+              >
                 サインイン
               </Button>
             </form>
@@ -98,6 +114,7 @@ export default function SignInForm() {
               onClick={handleGoogleSignIn}
               variant="outline"
               className="mt-4 w-full"
+              aria-label="Googleでサインイン"
             >
               Googleでサインイン
             </Button>
@@ -108,6 +125,7 @@ export default function SignInForm() {
             <Link
               href="/auth/signup"
               className="font-medium text-primary hover:text-primary/80 ml-1"
+              aria-label="新規登録ページへ"
             >
               新規登録
             </Link>
@@ -116,4 +134,4 @@ export default function SignInForm() {
       </Card>
     </div>
   )
-} 
+}

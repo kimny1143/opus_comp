@@ -1,10 +1,11 @@
 指示文書：
-docs/prompt/req_def.md
-docs/prompt/req_test.md
-docs/prompt/fromPM.md
+docs/prompt/
 
 実装計画および進捗報告・承認依頼用：
-docs/implementation/implementation-plan.md
+docs/implementation/
+
+セキュリティ関連のプランニングおよび報告文書：
+docs/security/
 
 上記文書の内容に準拠し、実装を進めてください。
 指示内容は絶対とし、指示から逸脱する可能性ある場合は作業を止め、承認依頼文書を作成してください。

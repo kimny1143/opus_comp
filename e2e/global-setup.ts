@@ -45,6 +45,16 @@ async function globalSetup(config: FullConfig) {
           }
         })
 
+        // 関連する取引先を削除
+        await tx.vendor.deleteMany({
+          where: {
+            OR: [
+              { createdById: user.id },
+              { updatedById: user.id }
+            ]
+          }
+        })
+
         // セッションを削除
         await tx.session.deleteMany({
           where: { userId: user.id }

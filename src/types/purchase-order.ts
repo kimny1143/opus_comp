@@ -1,7 +1,7 @@
 import { Prisma, PurchaseOrder as PrismaPurchaseOrder, Vendor } from '@prisma/client'
 import { PurchaseOrderStatus } from './enums'
 import { TagFormData } from '@/types/tag'
-import type { PurchaseOrderFormData, PurchaseOrderFormDataRHF } from '@/types/validation/purchaseOrder'
+import type { PurchaseOrderData } from '@/types/validation/purchaseOrder'
 
 // 基本型定義
 export type PurchaseOrderStatusType = PurchaseOrderStatus;
@@ -19,7 +19,7 @@ export interface PurchaseOrderItem {
 }
 
 // フォーム用の型定義は validation/purchaseOrder から再エクスポート
-export { type PurchaseOrderFormData, type PurchaseOrderFormDataRHF };
+export { type PurchaseOrderData };
 
 // API入力用の型定義
 export interface PurchaseOrderCreateInput {
@@ -57,17 +57,45 @@ export interface PurchaseOrder extends BasePurchaseOrder {
 }
 
 // シリアライズ用の型定義
-export type SerializedPurchaseOrder = Omit<PurchaseOrder, 'totalAmount' | 'items' | 'orderDate' | 'deliveryDate' | 'createdAt' | 'updatedAt'> & {
-  totalAmount: string;
-  items: (Omit<PurchaseOrderItem, 'unitPrice' | 'taxRate'> & {
-    unitPrice: string;
-    taxRate: string;
-  })[];
+export interface SerializedPurchaseOrder {
+  id: string;
+  orderNumber: string;
   orderDate: string;
+  vendorId: string;
   deliveryDate: string | null;
+  status: PurchaseOrderStatusType;
+  totalAmount: string;
+  taxAmount: string;
+  description: string | null;
+  terms: string | null;
   createdAt: string;
   updatedAt: string;
-  tags: TagFormData[];
+  createdById: string;
+  updatedById: string | null;
+  projectId: string | null;
+  items: {
+    id: string;
+    purchaseOrderId: string;
+    itemName: string;
+    description: string | null;
+    quantity: number;
+    unitPrice: string;
+    taxRate: string;
+  }[];
+  vendor: {
+    id: string;
+    name: string;
+    code: string | null;
+    address: string | null;
+  };
+  statusHistory: {
+    id: string;
+    type: string;
+    status: string;
+    comment: string | null;
+    createdAt: string;
+    userId: string;
+  }[];
 }
 
 export type PurchaseOrderWithRelations = PurchaseOrder;
@@ -90,4 +118,4 @@ export const PurchaseOrderStatusDefinition = {
   COMPLETED: '完了',    // 納品・支払完了
   REJECTED: '却下',     // 取引先・承認者による却下
   OVERDUE: '期限超過'   // 納期超過
-} as const 
+} as const

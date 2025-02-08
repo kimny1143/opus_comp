@@ -1,246 +1,196 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { handleApiError } from '@/lib/api-utils'
-import { Prisma, InvoiceStatus } from '@prisma/client'
-import { serializeDecimal } from '@/lib/utils/decimal-serializer'
-import { validationMessages } from '@/lib/validations/messages'
-import { invoiceCreateSchema, type InvoiceCreateInput } from './validation'
+import type { CreateInvoiceInput, UpdateInvoiceInput } from '@/types/invoice'
 
-// GET: 請求書一覧の取得
-export async function GET(request: NextRequest) {
+// 請求書一覧の取得
+export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
-      return NextResponse.json(
-        { error: validationMessages.auth.required },
-        { status: 401 }
-      )
-    }
-
     const { searchParams } = new URL(request.url)
-    const page = Number(searchParams.get('page')) || 1
-    const limit = Number(searchParams.get('limit')) || 10
-    const statusParam = searchParams.get('status')
-    const purchaseOrderId = searchParams.get('purchaseOrderId')
+    const vendorId = searchParams.get('vendorId') || undefined
+    const status = searchParams.get('status') as 'DRAFT' | 'APPROVED' | undefined
 
-    const status = statusParam as InvoiceStatus | undefined
-    const validStatus = status && Object.values(InvoiceStatus).includes(status) ? status : undefined
-
-    const where: Prisma.InvoiceWhereInput = {
-      ...(validStatus && { status: validStatus }),
-      ...(purchaseOrderId && { purchaseOrderId }),
+    const where = {
+      ...(vendorId && { vendorId }),
+      ...(status && { status })
     }
 
-    // 完了済みの発注書で、まだ請求書が作成されていないものを取得
-    const completedPurchaseOrders = await prisma.purchaseOrder.findMany({
-      where: {
-        status: 'COMPLETED',
-        invoices: {
-          none: {}
+    const invoices = await prisma.invoice.findMany({
+      where,
+      include: {
+        vendor: {
+          select: {
+            name: true,
+            email: true
+          }
         }
       },
-      include: {
-        vendor: true,
-        items: true
-      }
+      orderBy: { createdAt: 'desc' }
     })
 
-    const [total, invoices] = await Promise.all([
-      prisma.invoice.count({ where }),
-      prisma.invoice.findMany({
-        where,
-        select: {
-          id: true,
-          invoiceNumber: true,
-          issueDate: true,
-          dueDate: true,
-          status: true,
-          totalAmount: true,
-          createdAt: true,
-          updatedAt: true,
-          vendor: {
-            select: {
-              id: true,
-              name: true,
-              code: true,
-              registrationNumber: true
-            }
-          },
-          items: {
-            select: {
-              id: true,
-              itemName: true,
-              quantity: true,
-              unitPrice: true,
-              taxRate: true,
-              description: true
-            }
-          },
-          purchaseOrder: {
-            select: {
-              id: true,
-              orderNumber: true,
-              status: true,
-              vendor: {
-                select: {
-                  id: true,
-                  name: true,
-                  address: true
-                }
-              }
-            }
-          },
-          template: {
-            select: {
-              id: true,
-              bankInfo: true,
-              contractorName: true,
-              contractorAddress: true,
-              registrationNumber: true,
-              paymentTerms: true
-            }
-          },
-          bankInfo: true,
-          notes: true
-        },
-        orderBy: {
-          createdAt: 'desc'
-        },
-        skip: (page - 1) * limit,
-        take: limit
-      })
-    ])
-
-    // 日付を適切にフォーマット
-    const formattedInvoices = invoices.map(invoice => ({
-      ...invoice,
-      issueDate: invoice.issueDate?.toISOString(),
-      dueDate: invoice.dueDate?.toISOString(),
-      createdAt: invoice.createdAt.toISOString(),
-      updatedAt: invoice.updatedAt.toISOString()
-    }))
-
-    // レスポンスデータをシリアライズ
-    const serializedInvoices = serializeDecimal(formattedInvoices)
-    
-    return NextResponse.json({
-      success: true,
-      data: {
-        invoices: serializedInvoices,
-        completedPurchaseOrders: serializeDecimal(completedPurchaseOrders),
-        metadata: {
-          total,
-          page,
-          limit
-        }
-      }
-    })
+    return NextResponse.json({ invoices, total: invoices.length })
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json(
+      { error: '請求書の取得に失敗しました' },
+      { status: 500 }
+    )
   }
 }
 
-// POST: 請求書の新規作成
-export async function POST(request: NextRequest) {
+// 請求書の新規作成
+export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
-      return NextResponse.json(
-        { error: validationMessages.auth.required },
-        { status: 401 }
-      )
-    }
-
-    const data = await request.json()
+    const body: CreateInvoiceInput = await request.json()
 
     // バリデーション
-    const validationResult = invoiceCreateSchema.safeParse(data)
-    if (!validationResult.success) {
-      console.error('バリデーションエラー:', validationResult.error)
+    if (!body.vendorId || !body.amount) {
       return NextResponse.json(
-        { 
-          error: validationMessages.validation.invalid,
-          details: validationResult.error.errors 
-        },
+        { error: '取引先IDと金額は必須です' },
         { status: 400 }
       )
     }
 
-    const {
-      items,
-      tags = [],
-      bankInfo,
-      vendorId,
-      purchaseOrderId,
-      issueDate,
-      dueDate,
-      status,
-      ...restData
-    } = validationResult.data
+    // 取引先の存在確認
+    const vendor = await prisma.vendor.findUnique({
+      where: { id: body.vendorId }
+    })
 
-    // 合計金額の計算
-    const totalAmount = items.reduce((sum, item) => {
-      const amount = item.quantity * item.unitPrice * (1 + item.taxRate)
-      return sum + amount
-    }, 0)
-
-    // Prismaのスキーマに合わせてデータを整形
-    const createData: Prisma.InvoiceCreateInput = {
-      ...restData,
-      issueDate,
-      dueDate,
-      status,
-      bankInfo: bankInfo as Prisma.JsonValue,
-      totalAmount: new Prisma.Decimal(totalAmount),
-      invoiceNumber: `INV-${new Date().getTime()}`,
-      createdBy: {
-        connect: { id: session.user.id }
-      },
-      updatedBy: {
-        connect: { id: session.user.id }
-      },
-      vendor: {
-        connect: { id: vendorId }
-      },
-      purchaseOrder: {
-        connect: { id: purchaseOrderId }
-      },
-      items: {
-        create: items.map(item => ({
-          itemName: item.itemName,
-          quantity: item.quantity,
-          unitPrice: new Prisma.Decimal(item.unitPrice),
-          taxRate: new Prisma.Decimal(item.taxRate),
-          description: item.description || null
-        }))
-      },
-      tags: {
-        create: tags.map(tag => ({ name: tag.name }))
-      }
+    if (!vendor) {
+      return NextResponse.json(
+        { error: '指定された取引先が見つかりません' },
+        { status: 404 }
+      )
     }
 
     const invoice = await prisma.invoice.create({
-      data: createData,
+      data: {
+        vendorId: body.vendorId,
+        totalAmount: body.amount,
+        status: 'DRAFT',
+        createdById: 'user-id' // TODO: 認証済みユーザーのIDを使用
+      },
       include: {
-        vendor: true,
-        items: true,
-        tags: true,
-        purchaseOrder: {
-          include: {
-            vendor: true
+        vendor: {
+          select: {
+            name: true,
+            email: true
           }
         }
       }
     })
 
-    return NextResponse.json({ 
-      success: true, 
-      data: serializeDecimal(invoice)
+    return NextResponse.json({ invoice }, { status: 201 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: '請求書の作成に失敗しました' },
+      { status: 500 }
+    )
+  }
+}
+
+// 請求書の更新
+export async function PUT(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+    
+    if (!id) {
+      return NextResponse.json(
+        { error: '請求書IDは必須です' },
+        { status: 400 }
+      )
+    }
+
+    const body: UpdateInvoiceInput = await request.json()
+
+    // 請求書の存在確認
+    const existingInvoice = await prisma.invoice.findUnique({
+      where: { id }
     })
 
+    if (!existingInvoice) {
+      return NextResponse.json(
+        { error: '請求書が見つかりません' },
+        { status: 404 }
+      )
+    }
+
+    // 承認済みの請求書は編集不可
+    if (existingInvoice.status === 'APPROVED' && body.amount) {
+      return NextResponse.json(
+        { error: '承認済みの請求書は編集できません' },
+        { status: 400 }
+      )
+    }
+
+    const updateData = {
+      ...(body.amount !== undefined && { totalAmount: body.amount }),
+      ...(body.status !== undefined && { status: body.status })
+    }
+
+    const invoice = await prisma.invoice.update({
+      where: { id },
+      data: updateData,
+      include: {
+        vendor: {
+          select: {
+            name: true,
+            email: true
+          }
+        }
+      }
+    })
+
+    return NextResponse.json({ invoice })
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json(
+      { error: '請求書の更新に失敗しました' },
+      { status: 500 }
+    )
+  }
+}
+
+// 請求書の削除
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+    
+    if (!id) {
+      return NextResponse.json(
+        { error: '請求書IDは必須です' },
+        { status: 400 }
+      )
+    }
+
+    // 請求書の存在確認
+    const invoice = await prisma.invoice.findUnique({
+      where: { id }
+    })
+
+    if (!invoice) {
+      return NextResponse.json(
+        { error: '請求書が見つかりません' },
+        { status: 404 }
+      )
+    }
+
+    // 承認済みの請求書は削除不可
+    if (invoice.status === 'APPROVED') {
+      return NextResponse.json(
+        { error: '承認済みの請求書は削除できません' },
+        { status: 400 }
+      )
+    }
+
+    await prisma.invoice.delete({
+      where: { id }
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    return NextResponse.json(
+      { error: '請求書の削除に失敗しました' },
+      { status: 500 }
+    )
   }
 }

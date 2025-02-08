@@ -1,76 +1,16 @@
 {
-  "validInvoices": [
+  "invoices": [
     {
-      "registrationNumber": "T1234567890123",
-      "vendorId": "test-vendor-id",
+      "id": "test-invoice-1",
+      "vendorId": "test-vendor-1",
       "status": "DRAFT",
-      "issueDate": "2024-03-20",
-      "dueDate": "2024-04-20",
-      "items": [
-        {
-          "itemName": "標準税率商品",
-          "quantity": 1,
-          "unitPrice": 1000,
-          "taxRate": 0.10
-        }
-      ]
-    },
-    {
-      "registrationNumber": "T9876543210987",
-      "vendorId": "test-vendor-id-2",
-      "status": "PENDING",
-      "issueDate": "2024-03-21",
-      "dueDate": "2024-04-21",
-      "items": [
-        {
-          "itemName": "軽減税率商品",
-          "quantity": 2,
-          "unitPrice": 500,
-          "taxRate": 0.08
-        },
-        {
-          "itemName": "標準税率商品",
-          "quantity": 1,
-          "unitPrice": 1000,
-          "taxRate": 0.10
-        }
-      ]
+      "totalAmount": 10000,
+      "createdAt": "2025-02-09T00:00:00.000Z",
+      "updatedAt": "2025-02-09T00:00:00.000Z",
+      "vendor": {
+        "name": "テスト株式会社",
+        "email": "test-vendor@example.com"
+      }
     }
-  ],
-  "invalidInvoices": {
-    "missingRequired": {
-      "vendorId": "test-vendor-id",
-      "items": []
-    },
-    "invalidRegistrationNumber": {
-      "registrationNumber": "12345",
-      "vendorId": "test-vendor-id",
-      "status": "DRAFT",
-      "issueDate": "2024-03-20",
-      "dueDate": "2024-04-20",
-      "items": [
-        {
-          "itemName": "テスト商品",
-          "quantity": 1,
-          "unitPrice": 1000,
-          "taxRate": 0.10
-        }
-      ]
-    },
-    "invalidTaxRate": {
-      "registrationNumber": "T1234567890123",
-      "vendorId": "test-vendor-id",
-      "status": "DRAFT",
-      "issueDate": "2024-03-20",
-      "dueDate": "2024-04-20",
-      "items": [
-        {
-          "itemName": "不正税率商品",
-          "quantity": 1,
-          "unitPrice": 1000,
-          "taxRate": 0.05
-        }
-      ]
-    }
-  }
-} 
+  ]
+}

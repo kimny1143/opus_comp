@@ -7,16 +7,16 @@ import {
   type PurchaseOrderFormData, 
   PURCHASE_ORDER_STATUS_OPTIONS 
 } from './schemas/purchaseOrderSchema'
-import { BaseFormWrapper } from '@/components/shared/form/BaseFormWrapper'
 import { SelectField } from '@/components/shared/form/SelectField'
 import { InputField } from '@/components/shared/form/InputField'
 import { DateField } from '@/components/shared/form/DateField'
 import { TagField } from '@/components/shared/form/TagField'
 import { OrderItemsForm } from '@/components/shared/form/OrderItemsForm'
-import { type Item } from '@/types/validation/commonValidation'
 import { useToast } from '@/components/ui/toast/use-toast'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Prisma } from '@prisma/client'
+import { useSession } from 'next-auth/react'
+import { BaseFormWrapper } from '@/components/shared/form/BaseFormWrapper'
 
 interface Vendor {
   id: string
@@ -27,7 +27,7 @@ interface Vendor {
 interface PurchaseOrderFormProps {
   mode: 'create' | 'edit'
   id?: string
-  initialData?: Partial<PurchaseOrderFormDataWithRHF>
+  initialData?: Partial<PurchaseOrderFormData>
   initialVendors?: Vendor[]
   onSubmit?: (data: PurchaseOrderFormData) => Promise<void>
   isSubmitting?: boolean
@@ -35,26 +35,18 @@ interface PurchaseOrderFormProps {
   readOnly?: boolean
 }
 
-// PurchaseOrderFormDataを拡張して、itemsをItem[]として定義
-type PurchaseOrderFormDataWithRHF = Omit<PurchaseOrderFormData, 'items'> & {
-  items: Array<Omit<Item, 'quantity' | 'unitPrice' | 'taxRate' | 'amount'> & {
-    quantity: number
-    unitPrice: number
-    taxRate: number
-    amount?: number
-  }>
-}
-
-const baseDefaultValues: PurchaseOrderFormDataWithRHF = {
+const baseDefaultValues: PurchaseOrderFormData = {
+  orderNumber: '',
   status: 'DRAFT',
   orderDate: new Date(),
   deliveryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   items: [{
     itemName: '',
-    quantity: 1,
-    unitPrice: 0,
-    taxRate: 0.1,
-    description: ''
+    quantity: new Prisma.Decimal(1),
+    unitPrice: new Prisma.Decimal(0),
+    taxRate: new Prisma.Decimal(0.1),
+    description: '',
+    category: 'GOODS'
   }],
   notes: '',
   tags: [],
@@ -66,78 +58,86 @@ export function PurchaseOrderForm({
   id,
   initialData,
   initialVendors = [],
-  onSubmit,
+  onSubmit: propOnSubmit,
   isSubmitting = false,
   onCancel,
   readOnly = false
 }: PurchaseOrderFormProps) {
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
+  const { data: session } = useSession()
 
   const defaultValues = {
     ...baseDefaultValues,
-    ...initialData
+    ...initialData,
+    orderNumber: initialData?.orderNumber || `PO-${Date.now()}`
   }
 
-  const form = useForm<PurchaseOrderFormDataWithRHF>({
+  const form = useForm<PurchaseOrderFormData>({
     resolver: zodResolver(purchaseOrderSchema),
     defaultValues
   })
 
-  // フォームの状態変更を監視
-  useEffect(() => {
-    const subscription = form.watch((value, { name, type }) => {
-      // vendorIdが変更された場合の処理
-      if (name === 'vendorId' && value.vendorId) {
-        // 取引先情報の取得など
-      }
-    })
-    return () => subscription.unsubscribe()
-  }, [form])
+  const handleSubmit = async (formData: PurchaseOrderFormData) => {
+    if (!session?.user?.id) {
+      toast({
+        title: 'エラー',
+        description: 'セッションが無効です。再度ログインしてください。',
+        variant: 'destructive'
+      })
+      return
+    }
 
-  const handleSubmit = async (data: PurchaseOrderFormDataWithRHF) => {
     try {
       setIsLoading(true)
 
-      // フォームデータをAPIに送信する形式に変換
-      const apiData: PurchaseOrderFormData = {
-        ...data,
-        items: data.items.map(item => ({
-          ...item,
+      // APIに送信するデータを整形
+      const apiData = {
+        ...formData,
+        items: formData.items.map(item => ({
+          ...(item.id && { id: item.id }),
+          itemName: item.itemName,
           quantity: new Prisma.Decimal(item.quantity),
           unitPrice: new Prisma.Decimal(item.unitPrice),
           taxRate: new Prisma.Decimal(item.taxRate),
-          amount: item.amount ? new Prisma.Decimal(item.amount) : undefined
+          description: item.description,
+          category: item.category
         }))
       }
 
-      if (!onSubmit) {
+      if (!propOnSubmit) {
         // create modeの場合は、APIに直接送信
         const response = await fetch('/api/purchase-orders', {
-          method: 'POST',
+          method: mode === 'create' ? 'POST' : 'PATCH',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(apiData)
+          body: JSON.stringify(mode === 'edit' ? { id, ...apiData } : apiData)
         })
 
+        const responseData = await response.json()
+
         if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.message || '発注書の作成に失敗しました')
+          console.error('APIエラーレスポンス:', responseData)
+          throw new Error(responseData.error || responseData.message || '発注書の保存に失敗しました')
+        }
+
+        if (responseData.error || !responseData.success) {
+          throw new Error(responseData.error || '発注書の保存に失敗しました')
         }
 
         toast({
           title: '成功',
-          description: '発注書を作成しました',
+          description: `発注書を${mode === 'create' ? '作成' : '更新'}しました`,
         })
 
         // 一覧ページにリダイレクト
         window.location.href = '/purchase-orders'
       } else {
-        await onSubmit(apiData)
+        await propOnSubmit(formData)
       }
     } catch (error) {
-      console.error('発注書作成エラー:', error)
+      console.error('発注書保存エラー:', error)
       toast({
         title: 'エラー',
         description: error instanceof Error ? error.message : '予期せぬエラーが発生しました',
@@ -154,12 +154,18 @@ export function PurchaseOrderForm({
     <BaseFormWrapper
       form={form}
       onSubmit={handleSubmit}
-      isSubmitting={isDisabled}
       onCancel={onCancel}
-      data-testid="purchase-order-form"
+      isSubmitting={isDisabled}
     >
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <InputField
+            name="orderNumber"
+            label="発注番号"
+            control={form.control}
+            disabled={isDisabled || mode === 'edit'}
+          />
+
           <SelectField
             name="vendorId"
             label="取引先"

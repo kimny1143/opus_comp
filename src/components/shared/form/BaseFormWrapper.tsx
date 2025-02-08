@@ -1,8 +1,8 @@
 import { ReactNode } from 'react'
-import { UseFormReturn } from 'react-hook-form'
+import { UseFormReturn, FormProvider, FieldValues } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 
-interface BaseFormWrapperProps<T> {
+interface BaseFormWrapperProps<T extends FieldValues> {
   form: UseFormReturn<T>
   onSubmit: (data: T) => Promise<void>
   isSubmitting?: boolean
@@ -11,7 +11,7 @@ interface BaseFormWrapperProps<T> {
   'data-testid'?: string
 }
 
-export function BaseFormWrapper<T>({
+export function BaseFormWrapper<T extends FieldValues>({
   form,
   onSubmit,
   isSubmitting = false,
@@ -20,28 +20,30 @@ export function BaseFormWrapper<T>({
   'data-testid': dataTestId
 }: BaseFormWrapperProps<T>) {
   return (
-    <form 
-      onSubmit={form.handleSubmit(onSubmit)} 
-      className="space-y-6"
-      data-testid={dataTestId}
-    >
-      {typeof children === 'function' ? children(form) : children}
-      
-      <div className="flex justify-end space-x-4">
-        {onCancel && (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            disabled={isSubmitting}
-          >
-            キャンセル
+    <FormProvider {...form}>
+      <form 
+        onSubmit={form.handleSubmit(onSubmit)} 
+        className="space-y-6"
+        data-testid={dataTestId}
+      >
+        {typeof children === 'function' ? children(form) : children}
+        
+        <div className="flex justify-end space-x-4">
+          {onCancel && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onCancel}
+              disabled={isSubmitting}
+            >
+              キャンセル
+            </Button>
+          )}
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? '保存中...' : '保存'}
           </Button>
-        )}
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? '保存中...' : '保存'}
-        </Button>
-      </div>
-    </form>
+        </div>
+      </form>
+    </FormProvider>
   )
-} 
+}

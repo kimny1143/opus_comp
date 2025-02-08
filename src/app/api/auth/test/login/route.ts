@@ -1,58 +1,54 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getRedisClient } from '@/lib/redis/client'
-import { createLogger } from '@/lib/logger'
+import { encode } from 'next-auth/jwt'
 
-const logger = createLogger('auth:test')
-
-export async function POST(request: Request) {
-  // 開発環境またはテスト環境でのみ有効
-  if (process.env.NODE_ENV === 'production') {
-    return new NextResponse(
-      JSON.stringify({ error: 'Not available in production' }),
-      { status: 403 }
-    )
-  }
-
+export async function POST() {
   try {
-    const body = await request.json()
-    const { email, role } = body
-
-    // テストユーザーの取得または作成
+    // テストユーザーの作成/更新
     const user = await prisma.user.upsert({
-      where: { email },
-      update: { role },
+      where: { email: 'test@example.com' },
+      update: {
+        role: 'ADMIN',
+        hashedPassword: 'password123'
+      },
       create: {
-        email,
-        role,
-        hashedPassword: 'test-hash' // テスト用なので実際のハッシュは不要
+        email: 'test@example.com',
+        role: 'ADMIN',
+        hashedPassword: 'password123'
       }
     })
 
-    // Redisのログイン試行回数をリセット
-    const redis = await getRedisClient()
-    await redis.del(`login-attempts:${email}`)
-
-    logger.info('テストユーザーでログイン', {
-      userId: user.id,
-      email: user.email,
-      role: user.role
+    // JWTトークンの生成
+    const token = await encode({
+      token: {
+        userId: user.id,
+        email: user.email,
+        role: user.role
+      },
+      secret: process.env.NEXTAUTH_SECRET || 'mvp-secret',
     })
 
-    return NextResponse.json({
-      success: true,
+    // レスポンスの作成
+    const response = NextResponse.json({
       user: {
         id: user.id,
         email: user.email,
         role: user.role
       }
     })
-  } catch (error) {
-    logger.error('テストログインエラー', {
-      error: error instanceof Error ? error.message : 'Unknown error'
+
+    // Cookieの設定
+    response.cookies.set('auth-token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
     })
-    return new NextResponse(
-      JSON.stringify({ error: 'Internal server error' }),
+
+    return response
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Login failed' },
       { status: 500 }
     )
   }

@@ -1,11 +1,11 @@
-# テストガイド
+# テストガイド [Cypress版]
 
 ## 1. テストフレームワーク構成
 
 ### 1.1 使用するフレームワーク
 
 - **Vitest**: ユニット/コンポーネントテスト用
-- **Playwright**: E2Eテスト用
+- **Cypress**: E2Eテスト用
 - **React Testing Library**: コンポーネントテスト用
 
 ※ Jestは使用しない(既存のJest環境は廃止)
@@ -16,6 +16,8 @@
 
 ```typescript
 // vitest.config.ts
+import { defineConfig } from "vitest/config";
+
 export default defineConfig({
   test: {
     environment: "jsdom",
@@ -26,21 +28,20 @@ export default defineConfig({
 });
 ```
 
-#### Playwright設定
+#### Cypress設定
 
-```typescript
-// playwright.config.ts
-export default defineConfig({
-  testDir: "e2e",
-  timeout: 30000,
-  expect: {
-    timeout: 10000,
+```javascript
+// cypress.config.js (もしくは cypress.config.ts)
+module.exports = {
+  e2e: {
+    baseUrl: "http://localhost:3000",
+    specPattern: "cypress/e2e/**/*.cy.{js,jsx,ts,tsx}",
+    supportFile: "cypress/support/e2e.js",
+    screenshotsFolder: "cypress/screenshots",
+    videosFolder: "cypress/videos",
+    defaultCommandTimeout: 10000,
   },
-  reporter: [
-    ["html", { outputFolder: "playwright-report" }],
-    ["json", { outputFile: "test-results/results.json" }],
-  ],
-});
+};
 ```
 
 ## 2. テストの種類と役割
@@ -61,19 +62,21 @@ describe('InvoiceForm', () => {
 });
 ```
 
-### 2.2 E2Eテスト (Playwright)
+### 2.2 E2Eテスト (Cypress)
 
 - ユーザーフローの検証
 - 実際のブラウザ環境での動作確認
-- テストファイルは e2e/ ディレクトリに配置
+- テストファイルは `cypress/e2e/` ディレクトリに配置
 
-```typescript
-// 例: e2e/invoice.spec.ts
-test("請求書作成フロー", async ({ page }) => {
-  await page.goto("/invoices/new");
-  await page.fill('[name="itemName"]', "テスト商品");
-  await page.click('button[type="submit"]');
-  await expect(page).toHaveURL(/\/invoices\/\w+/);
+```javascript
+// 例: cypress/e2e/invoice.cy.js
+describe("請求書作成フロー", () => {
+  it("新規請求書を作成", () => {
+    cy.visit("/invoices/new");
+    cy.get('[name="itemName"]').type("テスト商品");
+    cy.get('button[type="submit"]').click();
+    cy.url().should("match", /\/invoices\/\w+/);
+  });
 });
 ```
 
@@ -114,13 +117,16 @@ export const createTestInvoice = (
 ### 4.2 実行コマンド
 
 ```bash
-# ユニット/コンポーネントテスト
+# ユニット/コンポーネントテスト (Vitest)
 npm run test
 
-# E2Eテスト
-npm run test:e2e
+# E2Eテスト (Cypress ※Headless実行)
+npx cypress run
 
-# カバレッジレポート生成
+# E2Eテスト (Cypress ※GUI実行)
+npx cypress open
+
+# カバレッジレポート (Vitest)
 npm run test:coverage
 ```
 
@@ -128,7 +134,7 @@ npm run test:coverage
 
 ### 5.1 命名規則
 
-- テストファイル: `*.test.ts(x)` または `*.spec.ts(x)`
+- テストファイル: `*.test.ts(x)` または `*.spec.ts(x)`（Vitest）、`*.cy.ts(x)`（Cypress）
 - テストケース: 期待する動作を日本語で明確に
 - モック関数: `mock` プレフィックスを使用
 
@@ -163,30 +169,30 @@ describe("コンポーネント/機能名", () => {
 
 ### 6.1 認証処理
 
-- auth.setup.ts を使用
-- 認証状態の再利用
-- テスト間の独立性を確保
+- ログイン用のカスタムコマンド (例: `Cypress.Commands.add("login", ...)`) を作っておく
+- sessionStorage / localStorage / cookies による認証情報の再利用
+- テスト間の独立性を確保するため、できるだけ各テストでログイン手順を完結させる or before() で一括実行
 
 ### 6.2 待機処理
 
-```typescript
-// 推奨される待機方法
-await page.waitForLoadState("networkidle");
-await page.waitForSelector('button[type="submit"]');
-await expect(page.locator("h1")).toBeVisible();
+```javascript
+// Cypressの例
+cy.visit("/dashboard");
+// 何らかの要素が表示されるまで待機
+cy.get("h1").should("be.visible");
 ```
 
-### 6.3 スクリーンショット
+### 6.3 スクリーンショットやビデオ記録
 
-- 失敗時のみ自動取得
-- test-results/ ディレクトリに保存
-- CIでの再現性を確保
+- 失敗時のみ自動取得設定が可能 (`video: true/false` など)
+- `cypress/screenshots/` ディレクトリに保存
+- CIでの再現性を確保するため、バージョン固定や環境整合性を意識
 
 ## 7. パフォーマンステスト
 
 ### 7.1 基本方針
 
-- Vitestの範囲内で実施
+- Vitestの範囲内で実施(軽負荷)
 - 重要な機能の処理時間を計測
 - ベースラインを設定
 
@@ -207,8 +213,8 @@ await expect(page.locator("h1")).toBeVisible();
 ### 8.2 CI/CD統合
 
 - プルリクエスト時に全テスト実行
-- カバレッジレポートの自動生成
-- テスト失敗時の通知
+- カバレッジレポートの自動生成 (Vitest側)
+- テスト失敗時の通知 (Cypress runの結果含む)
 
 ## 9. トラブルシューティング
 
@@ -216,7 +222,7 @@ await expect(page.locator("h1")).toBeVisible();
 
 1. フレイキーテスト(不安定なテスト)
 
-   - 待機処理の見直し
+   - 適切な`.should()` や `.wait()` を挟む
    - テスト間の依存関係の除去
 
 2. パフォーマンス問題
@@ -230,10 +236,10 @@ await expect(page.locator("h1")).toBeVisible();
 
 ### 9.2 デバッグ方法
 
-1. Playwright
+1. Cypress
 
-   - `PWDEBUG=1` での実行
-   - スクリーンショットの活用
+   - `npx cypress open` でGUI実行、操作しながらウォークスルー
+   - スクリーンショットとビデオを有効にして詳細を確認
 
 2. Vitest
    - `--inspect` フラグの使用

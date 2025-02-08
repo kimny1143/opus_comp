@@ -9,12 +9,14 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
 interface PurchaseOrdersResponse {
-  purchaseOrders: Order[];
-  pagination: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
+  success: boolean;
+  data: {
+    purchaseOrders: Order[];
+    metadata: {
+      total: number;
+      page: number;
+      limit: number;
+    };
   };
 }
 
@@ -41,7 +43,7 @@ export const DashboardContent: React.FC = () => {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data: PurchaseOrdersResponse = await response.json();
-        setOrders(data.purchaseOrders || []);
+        setOrders(data.data.purchaseOrders || []);
       } catch (error) {
         const message = error instanceof Error ? error.message : '発注データの取得に失敗しました';
         console.error('Failed to fetch orders:', error);

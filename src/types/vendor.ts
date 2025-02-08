@@ -1,87 +1,54 @@
-import { Vendor as PrismaVendor, VendorCategory, VendorStatus } from '@prisma/client'
-import { TagFormData } from '@/types/tag'
-import type { VendorFormData, VendorFormDataRHF } from '@/types/validation/vendor'
-import { AccountType } from './bankAccount'
-
-// 基本型定義
-export type VendorStatusType = VendorStatus;
-export type VendorCategoryType = VendorCategory;
-
-// DBモデル用の型定義
-export interface VendorContact {
-  id?: string;
-  vendorId?: string;
-  name: string;
-  email?: string | null;
-  phone?: string | null;
-  department?: string | null;
+/**
+ * 取引先の基本情報を定義するインターフェース
+ * MVPの要件に合わせて最小限の項目のみを含む
+ */
+export interface Vendor {
+  id: string
+  name: string
+  email: string
+  phone?: string | null
+  address?: string | null
+  firstTag?: string | null
+  secondTag?: string | null
+  createdAt: Date
+  updatedAt: Date
 }
 
-// フォーム用の型定義は validation/vendor から再エクスポート
-export { type VendorFormData, type VendorFormDataRHF };
-
-// API入力用の型定義
-export interface VendorCreateInput {
-  id?: string;
-  name: string;
-  code?: string;
-  address?: string;
-  contacts?: Array<{
-    id?: string;
-    name: string;
-    email?: string;
-    phone?: string;
-    department?: string;
-  }>;
-  email?: string;
-  phone?: string;
-  fax?: string;
-  website?: string;
-  notes?: string;
-  tags?: TagFormData[];
-  registrationNumber?: string;
-  status?: VendorStatusType;
-  category?: VendorCategoryType;
-  bankInfo?: {
-    bankName: string;
-    branchName: string;
-    accountType: AccountType;
-    accountNumber: string;
-    accountHolder: string;
-  };
+/**
+ * 取引先作成時のデータ型
+ * 必須項目のみを含む
+ */
+export type CreateVendorInput = {
+  name: string
+  email: string
+  phone?: string
+  address?: string
+  tags?: string[] // APIレベルでは配列として受け取り、内部で分割して保存
 }
 
-// 拡張取引先型定義
-export interface ExtendedVendor extends PrismaVendor {
-  contacts: VendorContact[];
-  tags: TagFormData[];
+/**
+ * 取引先更新時のデータ型
+ * すべてのフィールドをオプショナルに
+ */
+export type UpdateVendorInput = Partial<CreateVendorInput>
+
+/**
+ * 取引先の検索パラメータ
+ * MVPではシンプルな検索のみをサポート
+ */
+export interface VendorSearchParams {
+  query?: string // 名前による検索
+  tag?: string  // 単一のタグによる検索
 }
 
-// シリアライズ用の型定義
-export type SerializedVendor = Omit<ExtendedVendor, 'createdAt' | 'updatedAt'> & {
-  createdAt: string;
-  updatedAt: string;
+/**
+ * APIレスポンスの型
+ */
+export interface VendorResponse {
+  vendor: Vendor
 }
 
-export type VendorWithContacts = ExtendedVendor;
-
-// ステータス定義
-export const VendorStatusDefinition = {
-  ACTIVE: '取引中',
-  INACTIVE: '取引停止',
-  PENDING: '審査中',
-  REJECTED: '却下'
-} as const;
-
-// カテゴリー定義
-export const VendorCategoryDefinition = {
-  SUPPLIER: '仕入先',
-  CONTRACTOR: '外注先',
-  OTHER: 'その他'
-} as const;
-
-export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
-  [AccountType.ORDINARY]: '普通',
-  [AccountType.CURRENT]: '当座',
-  [AccountType.SAVINGS]: '貯蓄'
-} as const 
+export interface VendorListResponse {
+  vendors: Vendor[]
+  total: number
+}

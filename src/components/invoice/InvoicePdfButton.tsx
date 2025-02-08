@@ -8,7 +8,6 @@ import { QualifiedInvoice, TaxableItem } from "@/types"
 import { SerializedInvoice } from "@/types/invoice"
 import { formatDate } from "@/lib/utils/date"
 import { calculateTaxSummary } from '@/domains/invoice/tax'
-import { Decimal } from '@prisma/client/runtime/library'
 import { convertBankInfoToString } from '@/lib/utils/bankInfo'
 
 // 日本語フォントの登録
@@ -153,11 +152,11 @@ const InvoicePDF = React.memo<{ invoice: QualifiedInvoice | SerializedInvoice }>
   const calculateTaxTotal = useCallback((items: typeof invoice.items) => {
     const taxableItems: TaxableItem[] = items.map(item => ({
       taxRate: Number(item.taxRate),
-      unitPrice: new Decimal(item.unitPrice),
+      unitPrice: Number(item.unitPrice),
       quantity: item.quantity
     }));
     const { totalTaxAmount } = calculateTaxSummary(taxableItems);
-    return totalTaxAmount;
+    return Number(totalTaxAmount);
   }, [])
 
   if (!invoice.bankInfo) {

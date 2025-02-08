@@ -1,118 +1,106 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { handleApiError } from '@/lib/api-utils'
-import { generateInvoiceHtml } from '@/lib/invoice-generator'
-import puppeteer from 'puppeteer'
+import PDFDocument from 'pdfkit'
 
-interface RouteContext {
-  params: Promise<{ id: string }>
-}
-
-interface BankInfo {
-  bankName: string
-  branchName: string
-  accountType: string
-  accountNumber: string
-  accountHolder: string
-}
-
-export async function POST(
-  request: NextRequest,
-  context: RouteContext
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
-      return NextResponse.json(
-        { success: false, error: '認証が必要です' },
-        { status: 401 }
-      )
-    }
-
-    // 請求書データの取得
+    // 請求書の取得
     const invoice = await prisma.invoice.findUnique({
-      where: { id: (await context.params).id },
+      where: { id: params.id },
       include: {
-        items: true,
-        vendor: true,
-        purchaseOrder: true,
-        template: true
+        vendor: true
       }
     })
 
     if (!invoice) {
       return NextResponse.json(
-        { success: false, error: '請求書が見つかりません' },
+        { error: '請求書が見つかりません' },
         { status: 404 }
       )
     }
 
-    // デフォルトの銀行情報
-    const defaultBankInfo: BankInfo = {
-      bankName: '',
-      branchName: '',
-      accountType: '普通',
-      accountNumber: '',
-      accountHolder: ''
-    }
-
-    // 銀行情報の型変換
-    const bankInfo = invoice.bankInfo && typeof invoice.bankInfo === 'object' ? {
-      bankName: String((invoice.bankInfo as any).bankName || ''),
-      branchName: String((invoice.bankInfo as any).branchName || ''),
-      accountType: String((invoice.bankInfo as any).accountType || '普通'),
-      accountNumber: String((invoice.bankInfo as any).accountNumber || ''),
-      accountHolder: String((invoice.bankInfo as any).accountHolder || '')
-    } : defaultBankInfo
-
-    // HTMLの生成
-    const html = await generateInvoiceHtml({
-      issueDate: invoice.issueDate.toISOString(),
-      dueDate: invoice.dueDate.toISOString(),
-      items: invoice.items.map(item => ({
-        itemName: item.itemName,
-        description: item.description,
-        quantity: item.quantity,
-        unitPrice: Number(item.unitPrice),
-        taxRate: Number(item.taxRate)
-      })),
-      vendor: {
-        name: invoice.vendor.name,
-        address: invoice.vendor.address || '',
-        registrationNumber: invoice.vendor.registrationNumber || ''
-      },
-      bankInfo
-    })
-
     // PDFの生成
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox']
+    const doc = new PDFDocument({
+      size: 'A4',
+      margin: 50
     })
-    const page = await browser.newPage()
-    await page.setContent(html, { waitUntil: 'networkidle0' })
-    const pdf = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: {
-        top: '20mm',
-        right: '20mm',
-        bottom: '20mm',
-        left: '20mm'
-      }
-    })
-    await browser.close()
 
-    // PDFのレスポンス
-    return new NextResponse(pdf, {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="invoice-${invoice.id}.pdf"`
-      }
+    // ストリームの設定
+    const chunks: Buffer[] = []
+    doc.on('data', chunks.push.bind(chunks))
+    
+    // PDFの内容を生成
+    generatePDF(doc, invoice)
+
+    // PDFの生成完了を待つ
+    await new Promise<void>((resolve) => {
+      doc.on('end', () => resolve())
+      doc.end()
     })
+
+    // レスポンスの作成
+    const pdfBuffer = Buffer.concat(chunks)
+    const response = new NextResponse(pdfBuffer)
+
+    // ヘッダーの設定
+    response.headers.set('Content-Type', 'application/pdf')
+    response.headers.set(
+      'Content-Disposition',
+      `attachment; filename="invoice-${invoice.id}.pdf"`
+    )
+
+    return response
   } catch (error) {
-    return handleApiError(error)
+    return NextResponse.json(
+      { error: 'PDFの生成に失敗しました' },
+      { status: 500 }
+    )
   }
-} 
+}
+
+function generatePDF(doc: PDFKit.PDFDocument, invoice: any) {
+  // ヘッダー
+  doc.fontSize(20)
+    .text('請求書', { align: 'center' })
+    .moveDown()
+
+  // 基本情報
+  doc.fontSize(12)
+    .text(`請求書番号: ${invoice.id}`)
+    .text(`発行日: ${formatDate(invoice.createdAt)}`)
+    .moveDown()
+
+  // 取引先情報
+  doc.text('請求先:')
+    .text(invoice.vendor.name)
+    .text(invoice.vendor.email)
+    .text(invoice.vendor.address || '')
+    .moveDown()
+
+  // 金額
+  doc.fontSize(14)
+    .text('請求金額:', { continued: true })
+    .text(`¥${invoice.totalAmount.toLocaleString()}`, { align: 'right' })
+    .moveDown()
+
+  // ステータス
+  doc.fontSize(12)
+    .text('ステータス:', { continued: true })
+    .text(invoice.status === 'APPROVED' ? '承認済み' : '下書き', { align: 'right' })
+    .moveDown()
+
+  // フッター
+  doc.fontSize(10)
+    .text('本請求書はMVPシステムにより自動生成されました。', { align: 'center' })
+}
+
+function formatDate(date: Date): string {
+  return new Date(date).toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
+}

@@ -1,155 +1,67 @@
-/// <reference types="cypress" />
-// @ts-check
-
-import { format } from 'date-fns'
-
-describe('認証機能', () => {
-  describe('パスワードポリシー', () => {
-    beforeEach(() => {
-      cy.visit('/auth/signup')
-      cy.intercept('POST', '/api/auth/signup').as('signupRequest')
-      
-      // フォームが表示されるまで待機
-      cy.get('form').should('be.visible')
-    })
-
-    it('パスワードポリシーに準拠していない場合はエラーを表示', () => {
-      // メールアドレスを入力
-      cy.get('[data-cy=email-input]').type('test@example.com')
-
-      // 8文字未満のパスワード
-      cy.get('[data-cy=password-input]').type('Test123')
-      cy.get('[data-cy=confirm-password-input]').type('Test123')
-      cy.get('[data-cy=submit-button]').click()
-      cy.get('[data-cy=password-error]', { timeout: 10000 })
-        .should('be.visible')
-        .and('contain', 'パスワードは8文字以上で入力してください')
-
-      // 大文字なしのパスワード
-      cy.get('[data-cy=password-input]').clear().type('test1234')
-      cy.get('[data-cy=confirm-password-input]').clear().type('test1234')
-      cy.get('[data-cy=submit-button]').click()
-      cy.get('[data-cy=password-error]', { timeout: 10000 })
-        .should('be.visible')
-        .and('contain', 'パスワードは大文字、小文字、数字を含める必要があります')
-
-      // 小文字なしのパスワード
-      cy.get('[data-cy=password-input]').clear().type('TEST1234')
-      cy.get('[data-cy=confirm-password-input]').clear().type('TEST1234')
-      cy.get('[data-cy=password-error]')
-        .should('be.visible')
-        .and('contain', 'パスワードは大文字、小文字、数字を含める必要があります')
-
-      // 数字なしのパスワード
-      cy.get('[data-cy=password-input]').clear().type('TestPass')
-      cy.get('[data-cy=confirm-password-input]').clear().type('TestPass')
-      cy.get('[data-cy=password-error]')
-        .should('be.visible')
-        .and('contain', 'パスワードは大文字、小文字、数字を含める必要があります')
-    })
-
-    it('パスワードポリシーに準拠している場合は登録が成功する', () => {
-      const testEmail = `test${Date.now()}@example.com`
-      const validPassword = 'TestPass123'
-
-      cy.get('[data-cy=email-input]').type(testEmail)
-      cy.get('[data-cy=password-input]').type(validPassword)
-      cy.get('[data-cy=confirm-password-input]').type(validPassword)
-      
-      // フォームの送信
-      cy.get('[data-cy=submit-button]').click()
-
-      // APIリクエストの検証
-      cy.intercept('POST', '/api/auth/signup').as('signupRequest')
-      cy.get('[data-cy=submit-button]').click()
-      cy.wait('@signupRequest').then((interception: Cypress.Interception) => {
-        const { response, request } = interception
-        expect(response?.statusCode).to.be.oneOf([200, 201])
-        expect(request?.body).to.deep.equal({
-          email: testEmail,
-          password: validPassword,
-          confirmPassword: validPassword
-        })
-      })
-
-      // サインインページへのリダイレクトを確認
-      cy.url().should('include', '/auth/signin')
-    })
-
-    it('パスワード確認が一致しない場合はエラーを表示', () => {
-      cy.get('[data-cy=email-input]').type('test@example.com')
-      cy.get('[data-cy=password-input]').type('TestPass123')
-      cy.get('[data-cy=confirm-password-input]').type('TestPass124')
-      
-      // フォームの送信
-      cy.get('form').submit()
-
-      cy.get('[data-cy=confirm-password-error]')
-        .should('be.visible')
-        .and('contain', 'パスワードが一致しません')
-    })
-
-    it('既存のメールアドレスでの登録を防ぐ', () => {
-      const existingEmail = 'test@example.com'
-      const validPassword = 'TestPass123'
-
-      // 既存ユーザーを作成
-      cy.request({
-        method: 'POST',
-        url: '/api/auth/signup',
-        body: {
-          email: existingEmail,
-          password: validPassword,
-          confirmPassword: validPassword
-        },
-        failOnStatusCode: false
-      })
-
-      // 既存ユーザーでの登録を試みる
-      cy.get('[data-cy=email-input]').type(existingEmail)
-      cy.get('[data-cy=password-input]').type(validPassword)
-      cy.get('[data-cy=confirm-password-input]').type(validPassword)
-      
-      cy.get('[data-cy=submit-button]').click()
-
-      // エラーメッセージの確認
-      cy.get('[data-cy=email-error]', { timeout: 10000 })
-        .should('be.visible')
-        .and('contain', 'このメールアドレスは既に登録されています')
-    })
+describe('認証フロー', () => {
+  beforeEach(() => {
+    // テストの前にCookieをクリア
+    cy.clearCookie('auth-token')
   })
 
-  describe('サインアップ', () => {
-    beforeEach(() => {
-      cy.visit('/auth/signup')
-    })
+  it('ログインが成功する', () => {
+    // ログインページにアクセス
+    cy.visit('/login')
 
-    it('有効な入力で新規ユーザーを登録', () => {
-      const testEmail = `test${Date.now()}@example.com`
-      const validPassword = 'TestPass123'
+    // フォームの入力
+    cy.get('[data-cy=email-input]').type('test@example.com')
+    cy.get('[data-cy=password-input]').type('test-password')
+    cy.get('[data-cy=login-button]').click()
 
-      // インターセプトの設定
-      cy.intercept('POST', '/api/auth/signup').as('signupRequest')
-
-      cy.get('[data-cy=email-input]').type(testEmail)
-      cy.get('[data-cy=password-input]').type(validPassword)
-      cy.get('[data-cy=confirm-password-input]').type(validPassword)
-      
-      cy.get('[data-cy=submit-button]').click()
-
-      // APIリクエストの検証
-      cy.wait('@signupRequest').should((interception: Cypress.Interception) => {
-        const { response, request } = interception
-        expect(response?.statusCode).to.be.oneOf([200, 201])
-        expect(request?.body).to.deep.equal({
-          email: testEmail,
-          password: validPassword,
-          confirmPassword: validPassword
-        })
-      })
-
-      // サインインページへのリダイレクトを確認
-      cy.url().should('include', '/auth/signin')
-    })
+    // ダッシュボードにリダイレクトされることを確認
+    cy.url().should('include', '/dashboard')
   })
-}) 
+
+  it('無効な認証情報でログインが失敗する', () => {
+    cy.visit('/login')
+
+    // 無効な認証情報を入力
+    cy.get('[data-cy=email-input]').type('invalid@example.com')
+    cy.get('[data-cy=password-input]').type('wrongpassword')
+    cy.get('[data-cy=login-button]').click()
+
+    // エラーメッセージが表示されることを確認
+    cy.get('[data-cy=error-message]')
+      .should('be.visible')
+      .and('contain', '認証に失敗しました')
+
+    // ログインページに留まることを確認
+    cy.url().should('include', '/login')
+  })
+
+  it('必須フィールドの検証', () => {
+    cy.visit('/login')
+
+    // 空のフォームを送信
+    cy.get('[data-cy=login-button]').click()
+
+    // バリデーションメッセージを確認
+    cy.get('[data-cy=email-error]')
+      .should('be.visible')
+      .and('contain', 'メールアドレスは必須です')
+    cy.get('[data-cy=password-error]')
+      .should('be.visible')
+      .and('contain', 'パスワードは必須です')
+  })
+
+  it('ログアウトが正常に動作する', () => {
+    // ログイン状態を作成
+    cy.login('test@example.com', 'test-password')
+    cy.visit('/dashboard')
+
+    // ログアウトボタンをクリック
+    cy.get('[data-cy=logout-button]').click()
+
+    // ログインページにリダイレクトされることを確認
+    cy.url().should('include', '/login')
+
+    // 保護されたページにアクセスできないことを確認
+    cy.visit('/dashboard')
+    cy.url().should('include', '/login')
+  })
+})

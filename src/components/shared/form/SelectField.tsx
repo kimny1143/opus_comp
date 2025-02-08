@@ -3,6 +3,7 @@
 import { Control, FieldValues, Path, useController } from 'react-hook-form'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 
 export type SelectOption = {
   value: string | number
@@ -41,36 +42,45 @@ export function SelectField<T extends FieldValues>({
 
   const handleChange = (newValue: string) => {
     // 数値なら parseFloat, 文字列ならそのまま
-    const parsedValue = isNaN(Number(newValue)) ? newValue : Number(newValue);
-    fieldOnChange(parsedValue);
-    onChange?.(parsedValue);
+    const parsedValue = isNaN(Number(newValue)) ? newValue : Number(newValue)
+    fieldOnChange(parsedValue)
+    onChange?.(parsedValue)
   }
 
   return (
-    <div className={className}>
-      <Label>
+    <div className={cn('space-y-2', className)}>
+      <Label htmlFor={name}>
         {label}
         {required && <span className="text-red-500 ml-1">*</span>}
       </Label>
       <Select
-        value={String(value)}
+        value={value ? String(value) : undefined}
         onValueChange={handleChange}
         disabled={disabled}
       >
-        <SelectTrigger>
-          <SelectValue />
+        <SelectTrigger id={name} className="w-full">
+          <SelectValue placeholder="選択してください" />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent
+          position="popper"
+          sideOffset={4}
+          align="start"
+          className="w-full min-w-[200px]"
+        >
           {options.map((option) => (
-            <SelectItem key={option.value} value={String(option.value)}>
+            <SelectItem
+              key={option.value}
+              value={String(option.value)}
+              className="cursor-pointer"
+            >
               {option.label}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
       {error && (
-        <p className="text-sm text-red-500">{error.message}</p>
+        <p className="text-sm text-red-500 mt-1">{error.message}</p>
       )}
     </div>
   )
-} 
+}

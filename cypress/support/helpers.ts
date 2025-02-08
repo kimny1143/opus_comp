@@ -1,104 +1,62 @@
 import { PrismaClient } from '@prisma/client'
-import * as crypto from 'crypto'
 
-declare global {
-  namespace Cypress {
-    interface Chainable {
-      /**
-       * テストデータをセットアップします
-       * @example cy.setupTestData()
-       */
-      setupTestData(): Chainable<void>
-      /**
-       * テストデータをクリーンアップします
-       * @example cy.cleanupTestData()
-       */
-      cleanupTestData(): Chainable<void>
+const prisma = new PrismaClient()
+
+/**
+ * テストデータのセットアップ用ヘルパー関数
+ * MVPの要件に合わせてシンプル化
+ */
+export async function setupTestVendor() {
+  const vendor = await prisma.vendor.create({
+    data: {
+      name: 'テスト株式会社',
+      email: 'test-vendor@example.com',
+      phone: '03-1234-5678',
+      address: '東京都千代田区...',
+      firstTag: '重要',
+      secondTag: '取引先',
+      createdBy: {
+        connect: { id: 'test-user-id' }
+      }
     }
-  }
+  })
+  return vendor
 }
 
-// テスト用のPrismaクライアント
-const prisma = new PrismaClient({
-  log: ['error']
-})
-
-// テスト用のパスワードハッシュ化(簡略化版)
-function hashPassword(password: string): string {
-  return crypto.createHash('sha256').update(password).digest('hex')
+/**
+ * テストデータのクリーンアップ用ヘルパー関数
+ */
+export async function cleanupTestData() {
+  await prisma.invoice.deleteMany({})
+  await prisma.vendor.deleteMany({})
+  await prisma.user.deleteMany({})
 }
 
-export async function setupTestDatabase() {
-  try {
-    // テストユーザーの作成
-    const hashedPassword = hashPassword('TestPassword123!')
-    await prisma.user.upsert({
-      where: { email: 'test@example.com' },
-      update: {
-        hashedPassword,
-        role: 'ADMIN'
-      },
-      create: {
-        email: 'test@example.com',
-        hashedPassword,
-        role: 'ADMIN'
-      }
-    })
-
-    // ベンダーユーザーの作成
-    const vendorHashedPassword = hashPassword('VendorPass123!')
-    await prisma.user.upsert({
-      where: { email: 'vendor@example.com' },
-      update: {
-        hashedPassword: vendorHashedPassword,
-        role: 'VENDOR'
-      },
-      create: {
-        email: 'vendor@example.com',
-        hashedPassword: vendorHashedPassword,
-        role: 'VENDOR'
-      }
-    })
-
-    console.log('テストデータベースのセットアップが完了しました')
-    return null
-  } catch (error) {
-    console.error('テストデータベースのセットアップに失敗:', error)
-    throw error
-  }
+/**
+ * テストユーザーのセットアップ用ヘルパー関数
+ */
+export async function setupTestUser() {
+  const user = await prisma.user.create({
+    data: {
+      email: 'test@example.com',
+      hashedPassword: 'test-hash',
+      role: 'ADMIN'
+    }
+  })
+  return user
 }
 
-export async function cleanupTestDatabase() {
-  try {
-    // テストデータのクリーンアップ
-    await prisma.user.deleteMany({
-      where: {
-        email: {
-          in: ['test@example.com', 'vendor@example.com']
-        }
-      }
-    })
-    console.log('テストデータベースのクリーンアップが完了しました')
-    return null
-  } catch (error) {
-    console.error('テストデータベースのクリーンアップに失敗:', error)
-    throw error
-  }
-}
-
-export function getMockOrderItem(overrides: Partial<OrderItem> = {}): OrderItem {
-  return {
-    name: 'テスト商品',
-    quantity: 1,
-    unitPrice: 1000,
-    taxRate: 0.10,
-    ...overrides
-  }
-}
-
-interface OrderItem {
-  name: string
-  quantity: number
-  unitPrice: number
-  taxRate: number
+/**
+ * テスト用請求書の作成ヘルパー関数
+ */
+export async function setupTestInvoice(vendorId: string, userId: string) {
+  const invoice = await prisma.invoice.create({
+    data: {
+      vendorId,
+      totalAmount: 10000,
+      status: 'DRAFT',
+      createdById: userId
+    }
+  })
+  return invoice
 }

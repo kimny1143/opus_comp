@@ -1,17 +1,15 @@
 {
-  "extends": "../tsconfig.json",
   "compilerOptions": {
-    "types": ["cypress", "@testing-library/cypress", "node"],
-    "isolatedModules": false,
-    "baseUrl": ".",
+    "target": "es5",
+    "lib": ["es5", "dom"],
+    "types": ["cypress", "node"],
+    "baseUrl": "..",
     "paths": {
-      "@/*": ["../*"]
+      "@/*": ["src/*"]
     }
   },
   "include": [
     "**/*.ts",
-    "../node_modules/cypress",
-    "../cypress.config.ts",
-    "support/**/*.ts"
+    "../cypress.d.ts"
   ]
 }

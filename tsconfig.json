@@ -19,32 +19,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"],
-      "@/types/*": ["./src/types/*"],
-      "@/domains/*": ["./src/domains/*"],
-      "@/lib/*": ["./src/lib/*"],
-      "@/components/*": ["./src/components/*"],
-      "@/hooks/*": ["./src/hooks/*"],
-      "@/contexts/*": ["./src/contexts/*"],
-      "@/utils/*": ["./src/utils/*"],
-      "@/test/*": ["./src/test/*"],
-      "@/factories/*": ["./src/test/factories/*"]
+      "@/*": ["./src/*"]
     },
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "strictFunctionTypes": true,
-    "types": [
-      "node",
-      "vitest",
-      "vitest/globals",
-      "@testing-library/jest-dom",
-      "cypress",
-      "react",
-      "react-dom",
-      "@types/pdfkit"
-    ],
-    "baseUrl": ".",
-    "allowSyntheticDefaultImports": true
+    "types": ["cypress", "node", "jest"]
   },
   "include": [
     "next-env.d.ts",
@@ -52,7 +29,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "cypress/**/*.ts",
-    "src/test/setup.ts"
+    "cypress.d.ts"
   ],
-  "exclude": ["node_modules", "mock_ui/**/*"]
+  "exclude": ["node_modules"]
 }

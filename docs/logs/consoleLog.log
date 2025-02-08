@@ -1,0 +1,139 @@
+(base) kimny@kimny-M1-MacBook-Pro opus_comp % npm list @playwright
+/test && git add e2e/auth.setup.t
+s && git commit -m "fix: 認証セッ
+トアップの戦略を変更
+cmdand cmdand dquote> 
+cmdand cmdand dquote> - 不要なナ ビゲーションを意図的に待機する方 式に変更
+cmdand cmdand dquote> - networkid
+leも含めて完全な読み込み完了を待 機
+cmdand cmdand dquote> - 読み込み 完了後に本来のURLへ移動
+cmdand cmdand dquote> 
+cmdand cmdand dquote> Issue: #tes
+t-improvement" && ./scripts/reset
+-test-env.sh && (npm run dev & sl
+eep 15 && curl -s http://localhos
+t:3000 > /dev/null && echo "開発 サーバーの起動を確認" && NODE_ENV
+=test DEBUG=pw:api npm run test:e
+2e -- auth.spec.ts --timeout 6000
+0 --retries 1 --debug)
+opus-system@1.0.0 /Volumes/strage/opus_localdev/opus_comp
+├── @playwright/test@1.50.0
+└─┬ next@15.1.6
+  └── @playwright/test@1.50.0 deduped
+
+[feature/operationcheck20250208 7bde072] fix: 認証セットアップの戦略を変更
+ 1 file changed, 3 insertions(+), 11 deletions(-)
+テスト環境の初期化を開始します...
+1. データベースを再作成しています...
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "opus_db", schema "public" at "localhost:5432"
+
+Applying migration `20250124023454_init`
+Applying migration `20250128061804_add_sent_status_to_invoice`
+Applying migration `20250131154320_add_vendor_users_relation`
+Applying migration `20250202083000_add_item_category`
+Applying migration `20250206_optimize_indexes`
+
+Database reset successful
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20250124023454_init/
+    └─ migration.sql
+  └─ 20250128061804_add_sent_status_to_invoice/
+    └─ migration.sql
+  └─ 20250131154320_add_vendor_users_relation/
+    └─ migration.sql
+  └─ 20250202083000_add_item_category/
+    └─ migration.sql
+  └─ 20250206_optimize_indexes/
+    └─ migration.sql
+
+✔ Generated Prisma Client (v6.2.1
+) to ./node_modules/@prisma/clien
+t in 213ms
+
+1.1 スキーマを適用しています...
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "opus_db", schema "public" at "localhost:5432"
+
+🚀  Your database is now in sync with your Prisma schema. Done in 63ms
+
+✔ Generated Prisma Client (v6.2.1
+) to ./node_modules/@prisma/clien
+t in 141ms
+
+2. Redisのキーを削除しています...
+3. テスト関連ディレクトリをクリーンアップしています...
+4. 環境変数を確認しています...
+5. テスト関連プロセスを停止しています...
+初期化が完了しました。テストを開始できます。
+注意: 統合指示文書セクション21に従い、この後テストプロセスを再起動してください。
+
+> opus-system@1.0.0 dev
+> next dev
+
+   ▲ Next.js 15.1.6
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.1.7:3000
+   - Environments: .env
+   - Experiments (use with caution):
+     · optimizeCss
+
+ ✓ Starting...
+ ✓ Ready in 4.4s
+ ○ Compiling / ...
+ ✓ Compiled / in 1695ms (1295 modules)
+[next-auth][warn][DEBUG_ENABLED] 
+https://next-auth.js.org/warnings#debug_enabled
+ GET / 200 in 2411ms
+開発サーバーの起動を確認
+
+> opus-system@1.0.0 test:e2e
+> playwright test auth.spec.ts --timeout 60000 --retries 1 --debug
+
+ ✓ Compiled in 818ms (492 modules)
+テスト環境のセットアップが完了しました
+  pw:api => browserType.launch started +0ms
+  pw:api <= browserType.launch succeeded +96ms
+  pw:api => browser.newContext started +1ms
+  pw:api <= browser.newContext succeeded +3ms
+  pw:api => browserContext.clearCookies started +1ms
+  pw:api <= browserContext.clearCookies succeeded +53ms
+  pw:api => browser.close started +15ms
+  pw:api <= browser.close succeeded +49ms
+
+Running 9 tests using 1 worker
+
+     1 …ts:6:6 › 認証セットアップ
+  pw:api => selectors.setTestIdAttribute started +0ms
+  pw:api => browserType.launch started +2ms
+  pw:api <= selectors.setTestIdAttribute succeeded +1ms
+  pw:api <= browserType.launch succeeded +411ms
+認証セットアップを開始
+  pw:api => browser.newContext started +1ms
+  pw:api   "commit" event fired +545ms
+  pw:api   "domcontentloaded" event fired +0ms
+  pw:api   "load" event fired +0ms
+  pw:api navigating to "https://playwright/index.html", waiting until "load" +24ms
+  pw:api   "commit" event fired +51ms
+  pw:api   navigated to "https://playwright/index.html" +0ms
+  pw:api   "domcontentloaded" event fired +21ms
+  pw:api   "load" event fired +0ms
+  pw:api <= browser.newContext succeeded +40ms
+新しいページを作成
+  pw:api => browserContext.newPage started +8ms
+  pw:api <= browserContext.newPage succeeded +278ms
+初期ページの読み込み完了を待機
+  pw:api => page.waitForLoadState started +2ms
+  pw:api <= page.waitForLoadState succeeded +0ms
+  pw:api => page.waitForLoadState started +1ms
+  pw:api   not waiting, "domcontentloaded" event already fired +3ms
+  pw:api   "networkidle" event fired +229ms
+  pw:api <= page.waitForLoadState succeeded +253ms
+認証ページへ移動を開始
+  pw:api => page.goto started +1ms
+  pw:api   "networkidle" event fired +0ms

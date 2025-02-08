@@ -1,6 +1,5 @@
 'use client'
 
-import { AuthProvider } from '@/providers/AuthProvider'
 import { QueryProvider } from '@/providers/QueryProvider'
 import { MainLayout } from '@/components/layouts/MainLayout'
 import { Toaster } from '@/components/ui/toaster'
@@ -12,11 +11,9 @@ type ClientLayoutProps = {
 
 export function ClientLayout({ children }: ClientLayoutProps) {
   return (
-    <AuthProvider>
-      <QueryProvider>
-        <MainLayout>{children}</MainLayout>
-      </QueryProvider>
+    <QueryProvider>
+      <MainLayout>{children}</MainLayout>
       <Toaster />
-    </AuthProvider>
+    </QueryProvider>
   )
-} 
+}

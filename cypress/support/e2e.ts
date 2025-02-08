@@ -1,79 +1,71 @@
 /// <reference types="cypress" />
-/// <reference types="@testing-library/cypress" />
-
 import './commands'
-import './helpers'
 
 declare global {
   namespace Cypress {
     interface Chainable {
-      task(event: string, arg?: any): Chainable<any>
-      intercept(method: string, url: string, response?: any): Chainable<void>
-      intercept(url: string, response?: any): Chainable<void>
       /**
-       * テスト情報をログ出力します
-       * @example cy.logTestInfo('テスト開始')
+       * ログインを実行するカスタムコマンド
        */
-      logTestInfo(message: string, data?: Record<string, unknown>): Chainable<void>
+      login(email: string, password: string): Chainable<void>
+
+      /**
+       * テストデータをセットアップするカスタムコマンド
+       */
+      setupTestData(): Chainable<void>
+
+      /**
+       * テストデータをクリーンアップするカスタムコマンド
+       */
+      cleanupTestData(): Chainable<void>
+
+      /**
+       * 認証状態をセットアップするカスタムコマンド
+       */
+      setupAuthState(): Chainable<void>
+
+      /**
+       * 要素をクリックするカスタムコマンド
+       */
+      clickElement(selector: string): Chainable<void>
+
+      /**
+       * テキストを入力するカスタムコマンド
+       */
+      typeText(selector: string, text: string): Chainable<void>
+
+      /**
+       * 要素が存在することを確認するカスタムコマンド
+       */
+      shouldExist(selector: string): Chainable<void>
+
+      /**
+       * 要素が存在しないことを確認するカスタムコマンド
+       */
+      shouldNotExist(selector: string): Chainable<void>
     }
   }
 }
 
-// テスト情報のログ出力
-Cypress.Commands.add('logTestInfo', (message: string, data?: Record<string, unknown>) => {
-  const testInfo = {
-    message,
-    ...data,
-    timestamp: new Date().toISOString(),
-    testId: Cypress.currentTest.title,
-    suite: Cypress.currentTest.titlePath[0],
-    browser: Cypress.browser.name,
-    viewport: Cypress.config('viewportWidth') + 'x' + Cypress.config('viewportHeight')
-  };
-  console.log(JSON.stringify(testInfo, null, 2));
-  cy.log(JSON.stringify(testInfo, null, 2));
-});
+// カスタムコマンドの実装
+Cypress.Commands.add('clickElement', (selector: string) => {
+  cy.get(selector).click()
+})
 
-// テスト開始時のログとセットアップ
-beforeEach(() => {
-  // テストデータのセットアップ
-  cy.setupTestData();
+Cypress.Commands.add('typeText', (selector: string, text: string) => {
+  cy.get(selector).type(text)
+})
 
-  // ログ出力
-  cy.logTestInfo('テスト開始', {
-    env: Cypress.env(),
-    baseUrl: Cypress.config('baseUrl')
-  });
-});
+Cypress.Commands.add('shouldExist', (selector: string) => {
+  cy.get(selector).should('exist')
+})
 
-// テスト終了時のログとクリーンアップ
-afterEach(() => {
-  // ログ出力
-  cy.logTestInfo('テスト終了', {
-    status: (cy as any).state('test').state,
-    duration: (cy as any).state('test').duration
-  });
+Cypress.Commands.add('shouldNotExist', (selector: string) => {
+  cy.get(selector).should('not.exist')
+})
 
-  // テストデータのクリーンアップ
-  cy.cleanupTestData();
-});
-
-// エラーハンドリング
-Cypress.on('uncaught:exception', (err) => {
-  // NEXT_REDIRECTエラーは無視
-  if (err.message.includes('NEXT_REDIRECT')) {
-    console.log('[Cypress] NEXT_REDIRECTエラーを無視:', {
-      error: err.message,
-      timestamp: new Date().toISOString()
-    });
-    return false;
-  }
-  
-  // その他のエラーはログに記録
-  console.error('[Cypress] 未捕捉の例外が発生:', {
-    error: err.message,
-    stack: err.stack,
-    timestamp: new Date().toISOString()
-  });
-  return true;
-});
+// Cypressのグローバル設定
+Cypress.on('uncaught:exception', () => {
+  // 未処理の例外を無視
+  return false
+})

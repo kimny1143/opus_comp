@@ -55,7 +55,7 @@ export default function SignInForm() {
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-lg">
+      <Card className="w-full max-w-md shadow-lg" data-testid="signin-card">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">サインイン</CardTitle>
         </CardHeader>
@@ -94,6 +94,7 @@ export default function SignInForm() {
                 type="submit" 
                 className="w-full"
                 aria-label="サインイン"
+                data-testid="signin-button"
               >
                 サインイン
               </Button>
@@ -115,6 +116,7 @@ export default function SignInForm() {
               variant="outline"
               className="mt-4 w-full"
               aria-label="Googleでサインイン"
+              data-testid="google-signin-button"
             >
               Googleでサインイン
             </Button>
@@ -126,6 +128,7 @@ export default function SignInForm() {
               href="/auth/signup"
               className="font-medium text-primary hover:text-primary/80 ml-1"
               aria-label="新規登録ページへ"
+              data-testid="signup-link"
             >
               新規登録
             </Link>

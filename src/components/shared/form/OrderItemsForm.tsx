@@ -1,10 +1,12 @@
+'use client'
+
 import { Control, FieldValues, Path, useFieldArray, ArrayPath, FieldArray, useFormContext } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { InputField } from './InputField'
 import { SelectField } from './SelectField'
 import { type Item } from '@/types/validation/item'
-import { commonValidation } from '@/types/validation/commonValidation'
 import { Prisma } from '@prisma/client'
+import { PlusCircle, Trash2 } from 'lucide-react'
 
 const TAX_RATE_OPTIONS = [
   { value: 0.08, label: '8%(軽減税率)' },
@@ -27,19 +29,21 @@ export function OrderItemsForm<T extends FieldValues>({
     control
   })
 
-  const { setValue } = useFormContext<T>()
+  const { setValue, watch } = useFormContext<T>()
+  const items = watch(name as Path<T>) || []
 
   const getFieldName = (index: number, field: keyof Item) => {
     return `${String(name)}.${index}.${String(field)}` as Path<T>
   }
 
   const handleAddItem = () => {
-    const newItem: Item = {
+    const newItem = {
       itemName: '',
-      quantity: 1,
+      quantity: new Prisma.Decimal(1),
       unitPrice: new Prisma.Decimal(0),
       taxRate: new Prisma.Decimal(0.1),
-      description: ''
+      description: '',
+      category: 'GOODS'
     }
     
     append(newItem as FieldArray<T, ArrayPath<T>>)
@@ -54,7 +58,7 @@ export function OrderItemsForm<T extends FieldValues>({
   const handleQuantityChange = (index: number, value: string) => {
     const fieldName = getFieldName(index, 'quantity');
     const parsed = parseInt(value, 10);
-    setValue(fieldName, (isNaN(parsed) ? 1 : Math.max(1, parsed)) as any);
+    setValue(fieldName, (isNaN(parsed) ? new Prisma.Decimal(1) : new Prisma.Decimal(Math.max(1, parsed))) as any);
   }
 
   const handleTaxRateChange = (index: number, value: number) => {
@@ -63,12 +67,21 @@ export function OrderItemsForm<T extends FieldValues>({
   }
 
   // 数値変換ユーティリティ
-  const toNumber = (value: number | Prisma.Decimal): number => {
-    return value instanceof Prisma.Decimal ? Number(value.toString()) : Number(value);
+  const toNumber = (value: unknown): number => {
+    if (value instanceof Prisma.Decimal) {
+      return Number(value.toString())
+    }
+    if (typeof value === 'string') {
+      return Number(value)
+    }
+    if (typeof value === 'number') {
+      return value
+    }
+    return 0
   }
 
   // 品目ごとの計算
-  const calculateItemValues = (item: Item) => {
+  const calculateItemValues = (item: any) => {
     const quantity = toNumber(item.quantity);
     const unitPrice = toNumber(item.unitPrice);
     const taxRate = toNumber(item.taxRate);
@@ -85,24 +98,24 @@ export function OrderItemsForm<T extends FieldValues>({
 
   // 小計の計算
   const calculateSubtotal = () => {
-    return fields.reduce((total, field) => {
-      const { subtotal } = calculateItemValues(field as unknown as Item);
+    return items.reduce((total, item) => {
+      const { subtotal } = calculateItemValues(item);
       return total + subtotal;
     }, 0).toLocaleString();
   }
 
   // 消費税の計算
   const calculateTax = () => {
-    return fields.reduce((total, field) => {
-      const { tax } = calculateItemValues(field as unknown as Item);
+    return items.reduce((total, item) => {
+      const { tax } = calculateItemValues(item);
       return total + tax;
     }, 0).toLocaleString();
   }
 
   // 合計の計算
   const calculateTotal = () => {
-    return fields.reduce((total, field) => {
-      const { subtotal, tax } = calculateItemValues(field as unknown as Item);
+    return items.reduce((total, item) => {
+      const { subtotal, tax } = calculateItemValues(item);
       return total + subtotal + tax;
     }, 0).toLocaleString();
   }
@@ -111,7 +124,7 @@ export function OrderItemsForm<T extends FieldValues>({
     <div className="space-y-4">
       <div className="space-y-4" data-cy="items-container">
         {fields.map((field, index) => (
-          <div key={field.id} className="grid grid-cols-12 gap-4" data-cy="item-row">
+          <div key={field.id} className="grid grid-cols-12 gap-4 items-start" data-cy="item-row">
             <div className="col-span-4">
               <InputField
                 name={getFieldName(index, 'itemName')}
@@ -168,32 +181,37 @@ export function OrderItemsForm<T extends FieldValues>({
                 <p className="text-xs">上記以外は標準税率(10%)が適用されます</p>
               </div>
             </div>
-            <div className="col-span-2">
+            <div className="col-span-2 flex justify-end">
               {!disabled && (
                 <Button
                   type="button"
                   variant="destructive"
+                  size="icon"
                   onClick={() => remove(index)}
                   className="mt-8"
                   data-cy="delete-item-button"
                 >
-                  削除
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               )}
             </div>
           </div>
         ))}
       </div>
+
       {!disabled && (
         <Button
           type="button"
           variant="outline"
           onClick={handleAddItem}
+          className="w-full"
           data-cy="add-item-button"
         >
+          <PlusCircle className="h-4 w-4 mr-2" />
           品目を追加
         </Button>
       )}
+
       <div className="mt-6 space-y-3 border-t pt-4">
         <div className="flex justify-between items-center text-sm" data-cy="subtotal">
           <span className="text-gray-600">小計</span>

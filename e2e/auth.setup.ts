@@ -1,4 +1,4 @@
-import { test as setup, chromium } from '@playwright/test'
+import { test as setup, chromium, BrowserContext } from '@playwright/test'
 import path from 'path'
 import fs from 'fs'
 
@@ -6,37 +6,49 @@ import fs from 'fs'
 setup('認証セットアップ', async () => {
   console.log('認証セットアップを開始')
 
-  // ブラウザを直接起動
-  const browser = await chromium.launch({
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      'about:blank'
-    ]
-  })
+  let browser
+  let context: BrowserContext | undefined
 
   try {
-    // コンテキストを直接作成(初期ページなし)
-    const context = await browser.newContext({
+    // ブラウザを直接起動
+    browser = await chromium.launch({
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ]
+    })
+
+    // コンテキストを作成
+    context = await browser.newContext({
       baseURL: 'http://localhost:3000',
       viewport: { width: 1280, height: 720 },
       ignoreHTTPSErrors: true,
-      javaScriptEnabled: true,
-      bypassCSP: true,
-      acceptDownloads: false,
-      hasTouch: false,
-      isMobile: false,
       locale: 'ja-JP',
       timezoneId: 'Asia/Tokyo'
     })
+
+    // 既存のページをすべて閉じる
+    const pages = await context.pages()
+    await Promise.all(pages.map(page => page.close()))
 
     console.log('新しいページを作成')
     const page = await context.newPage()
 
     // 認証ページに直接移動
     console.log('認証ページへ移動を開始')
+    await page.route('**/*', route => {
+      // 不要なリソースをブロック
+      if (route.request().resourceType() === 'image' || 
+          route.request().resourceType() === 'font' ||
+          route.request().resourceType() === 'media') {
+        route.abort()
+      } else {
+        route.continue()
+      }
+    })
+
     await page.goto('/auth/signin', {
       waitUntil: 'networkidle'
     })
@@ -91,8 +103,13 @@ setup('認証セットアップ', async () => {
     console.error('認証セットアップ中にエラーが発生:', error)
     throw error
   } finally {
-    // ブラウザを必ず閉じる
-    console.log('ブラウザをクリーンアップ')
-    await browser.close()
+    // リソースを確実に解放
+    if (context) {
+      await context.close()
+    }
+    if (browser) {
+      await browser.close()
+    }
+    console.log('ブラウザをクリーンアップ完了')
   }
 })

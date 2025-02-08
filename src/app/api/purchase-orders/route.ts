@@ -14,11 +14,41 @@ import {
   type PurchaseOrderCreateInput
 } from './validation'
 
+// 許可されているHTTPメソッド
+const ALLOWED_METHODS = ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
+
+// メソッドの許可チェック
+function isMethodAllowed(method: string): boolean {
+  return ALLOWED_METHODS.includes(method.toUpperCase())
+}
+
+// OPTIONS: CORS プリフライトリクエスト対応
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Allow': ALLOWED_METHODS.join(', ')
+    }
+  })
+}
+
 // GET: 発注書一覧の取得
 export async function GET(request: NextRequest) {
+  if (!isMethodAllowed(request.method)) {
+    return NextResponse.json(
+      { error: `Method ${request.method} Not Allowed` },
+      { 
+        status: 405,
+        headers: {
+          'Allow': ALLOWED_METHODS.join(', ')
+        }
+      }
+    )
+  }
+
   try {
     const session = await getServerSession(authOptions)
-    if (!session) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { error: validationMessages.auth.required },
         { status: 401 }
@@ -30,6 +60,7 @@ export async function GET(request: NextRequest) {
     const limit = Number(searchParams.get('limit')) || 10
     const statusParam = searchParams.get('status')
     const vendorId = searchParams.get('vendorId')
+    const searchQuery = searchParams.get('q')
 
     const status = statusParam as PurchaseOrderStatus | undefined
     const validStatus = status && Object.values(PurchaseOrderStatus).includes(status) ? status : undefined
@@ -37,6 +68,12 @@ export async function GET(request: NextRequest) {
     const where: Prisma.PurchaseOrderWhereInput = {
       ...(validStatus && { status: validStatus }),
       ...(vendorId && { vendorId }),
+      ...(searchQuery && {
+        OR: [
+          { orderNumber: { contains: searchQuery, mode: 'insensitive' } },
+          { vendor: { name: { contains: searchQuery, mode: 'insensitive' } } }
+        ]
+      })
     }
 
     const [total, purchaseOrders] = await Promise.all([
@@ -116,26 +153,23 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// itemsのマッピング関数
-const mapItemsForCreate = (items: PurchaseOrderCreateInput['items']) => {
-  return items.map(item => {
-    const amount = item.quantity * item.unitPrice * (1 + item.taxRate)
-    return {
-      itemName: item.itemName,
-      quantity: item.quantity,
-      unitPrice: new Prisma.Decimal(item.unitPrice),
-      taxRate: new Prisma.Decimal(item.taxRate),
-      description: item.description || null,
-      amount: new Prisma.Decimal(amount)
-    }
-  })
-}
-
 // POST: 発注書の新規作成
 export async function POST(request: NextRequest) {
+  if (!isMethodAllowed(request.method)) {
+    return NextResponse.json(
+      { error: `Method ${request.method} Not Allowed` },
+      { 
+        status: 405,
+        headers: {
+          'Allow': ALLOWED_METHODS.join(', ')
+        }
+      }
+    )
+  }
+
   try {
     const session = await getServerSession(authOptions)
-    if (!session) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { error: validationMessages.auth.required },
         { status: 401 }
@@ -164,24 +198,32 @@ export async function POST(request: NextRequest) {
       orderDate,
       deliveryDate,
       status,
+      notes,
+      orderNumber,
       ...restData
     } = validationResult.data
 
     // 合計金額の計算
     const totalAmount = items.reduce((sum, item) => {
-      const amount = item.quantity * item.unitPrice * (1 + item.taxRate)
-      return sum + amount
-    }, 0)
+      const quantity = new Prisma.Decimal(item.quantity)
+      const unitPrice = new Prisma.Decimal(item.unitPrice)
+      const taxRate = new Prisma.Decimal(item.taxRate)
+      const amount = quantity
+        .mul(unitPrice)
+        .mul(new Prisma.Decimal(1).add(taxRate))
+      return sum.add(amount)
+    }, new Prisma.Decimal(0))
 
     // Prismaのスキーマに合わせてデータを整形
     const createData: Prisma.PurchaseOrderCreateInput = {
       ...restData,
+      orderNumber,
+      description: notes || null,
       orderDate: new Date(orderDate),
       deliveryDate: new Date(deliveryDate),
       status,
-      totalAmount: new Prisma.Decimal(totalAmount),
+      totalAmount,
       taxAmount: new Prisma.Decimal(0), // デフォルト値を設定
-      orderNumber: `PO-${new Date().getTime()}`,
       createdBy: {
         connect: { id: session.user.id }
       },
@@ -192,7 +234,16 @@ export async function POST(request: NextRequest) {
         connect: { id: vendorId }
       },
       items: {
-        create: mapItemsForCreate(items)
+        create: items.map(item => ({
+          itemName: item.itemName,
+          quantity: Number(item.quantity),
+          unitPrice: item.unitPrice,
+          taxRate: item.taxRate,
+          description: item.description || null,
+          amount: item.quantity
+            .mul(item.unitPrice)
+            .mul(new Prisma.Decimal(1).add(item.taxRate))
+        }))
       },
       tags: {
         create: tags.map(tag => ({ name: tag.name }))
@@ -220,9 +271,21 @@ export async function POST(request: NextRequest) {
 
 // PATCH: 発注書の更新
 export async function PATCH(request: NextRequest) {
+  if (!isMethodAllowed(request.method)) {
+    return NextResponse.json(
+      { error: `Method ${request.method} Not Allowed` },
+      { 
+        status: 405,
+        headers: {
+          'Allow': ALLOWED_METHODS.join(', ')
+        }
+      }
+    )
+  }
+
   try {
     const session = await getServerSession(authOptions)
-    if (!session) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { error: validationMessages.auth.required },
         { status: 401 }
@@ -259,6 +322,8 @@ export async function PATCH(request: NextRequest) {
       orderDate,
       deliveryDate,
       status,
+      notes,
+      orderNumber,
       ...restData
     } = validationResult.data as {
       items?: PurchaseOrderCreateInput['items']
@@ -267,11 +332,15 @@ export async function PATCH(request: NextRequest) {
       orderDate?: string
       deliveryDate?: string
       status?: PurchaseOrderStatus
+      notes?: string
+      orderNumber?: string
     }
 
     // 更新データの準備
     const updateDataInput: Prisma.PurchaseOrderUpdateInput = {
       ...restData,
+      ...(orderNumber && { orderNumber }),
+      ...(notes !== undefined && { description: notes || null }),
       ...(orderDate && { orderDate: new Date(orderDate) }),
       ...(deliveryDate && { deliveryDate: new Date(deliveryDate) }),
       ...(status && { status: status as PurchaseOrderStatus }),
@@ -289,14 +358,28 @@ export async function PATCH(request: NextRequest) {
     if (items) {
       // 合計金額の再計算
       const totalAmount = items.reduce((sum, item) => {
-        const amount = item.quantity * item.unitPrice * (1 + item.taxRate)
-        return sum + amount
-      }, 0)
+        const quantity = new Prisma.Decimal(item.quantity)
+        const unitPrice = new Prisma.Decimal(item.unitPrice)
+        const taxRate = new Prisma.Decimal(item.taxRate)
+        const amount = quantity
+          .mul(unitPrice)
+          .mul(new Prisma.Decimal(1).add(taxRate))
+        return sum.add(amount)
+      }, new Prisma.Decimal(0))
 
-      updateDataInput.totalAmount = new Prisma.Decimal(totalAmount)
+      updateDataInput.totalAmount = totalAmount
       updateDataInput.items = {
         deleteMany: {},
-        create: mapItemsForCreate(items)
+        create: items.map(item => ({
+          itemName: item.itemName,
+          quantity: Number(item.quantity),
+          unitPrice: item.unitPrice,
+          taxRate: item.taxRate,
+          description: item.description || null,
+          amount: item.quantity
+            .mul(item.unitPrice)
+            .mul(new Prisma.Decimal(1).add(item.taxRate))
+        }))
       }
     }
 
@@ -330,9 +413,21 @@ export async function PATCH(request: NextRequest) {
 
 // DELETE: 発注書の削除
 export async function DELETE(request: NextRequest) {
+  if (!isMethodAllowed(request.method)) {
+    return NextResponse.json(
+      { error: `Method ${request.method} Not Allowed` },
+      { 
+        status: 405,
+        headers: {
+          'Allow': ALLOWED_METHODS.join(', ')
+        }
+      }
+    )
+  }
+
   try {
     const session = await getServerSession(authOptions)
-    if (!session) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { error: validationMessages.auth.required },
         { status: 401 }
@@ -362,4 +457,4 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     return handleApiError(error)
   }
-} 
+}

@@ -18,21 +18,57 @@ import { createLogger } from '@/lib/logger'
 const logger = createLogger('purchase-orders')
 
 // 許可されているHTTPメソッド
-const ALLOWED_METHODS = ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
+const ALLOWED_METHODS = ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] as const
+type AllowedMethod = typeof ALLOWED_METHODS[number]
 
-// メソッドの許可チェック
-function isMethodAllowed(method: string): boolean {
-  return ALLOWED_METHODS.includes(method.toUpperCase())
-}
-
-// OPTIONS: CORS プリフライトリクエスト対応
-export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 204,
-    headers: {
-      'Allow': ALLOWED_METHODS.join(', ')
+// 共通のミドルウェア関数
+async function withErrorHandler(
+  req: NextRequest,
+  handler: () => Promise<NextResponse>
+): Promise<NextResponse> {
+  try {
+    const method = req.method as AllowedMethod
+    if (!ALLOWED_METHODS.includes(method)) {
+      return new NextResponse(
+        JSON.stringify({
+          error: `Method ${method} Not Allowed`
+        }),
+        {
+          status: 405,
+          headers: {
+            'Allow': ALLOWED_METHODS.join(', '),
+            'Content-Type': 'application/json'
+          }
+        }
+      )
     }
-  })
+
+    // 認証チェック(OPTIONSリクエストはスキップ)
+    if (method !== 'OPTIONS') {
+      const session = await getServerSession(authOptions)
+      if (!session?.user?.id) {
+        return new NextResponse(
+          JSON.stringify({
+            error: validationMessages.auth.required
+          }),
+          {
+            status: 401,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        )
+      }
+    }
+
+    return await handler()
+  } catch (error) {
+    logger.error('APIエラーが発生しました', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      path: req.url
+    })
+    return handleApiError(error)
+  }
 }
 
 // 発注書の取得に使用する共通のinclude設定
@@ -83,29 +119,21 @@ const purchaseOrderInclude = {
   }
 } as const
 
+// OPTIONS: CORS プリフライトリクエスト対応
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Allow': ALLOWED_METHODS.join(', '),
+      'Access-Control-Allow-Methods': ALLOWED_METHODS.join(', '),
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+    }
+  })
+}
+
 // GET: 発注書一覧の取得
 export async function GET(request: NextRequest) {
-  if (!isMethodAllowed(request.method)) {
-    return NextResponse.json(
-      { error: `Method ${request.method} Not Allowed` },
-      { 
-        status: 405,
-        headers: {
-          'Allow': ALLOWED_METHODS.join(', ')
-        }
-      }
-    )
-  }
-
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: validationMessages.auth.required },
-        { status: 401 }
-      )
-    }
-
+  return withErrorHandler(request, async () => {
     const { searchParams } = new URL(request.url)
     const page = Number(searchParams.get('page')) || 1
     const limit = Number(searchParams.get('limit')) || 10
@@ -168,37 +196,12 @@ export async function GET(request: NextRequest) {
         }
       }
     })
-  } catch (error) {
-    logger.error('発注書一覧の取得に失敗しました', {
-      error: error instanceof Error ? error.message : 'Unknown error'
-    })
-    return handleApiError(error)
-  }
+  })
 }
 
 // POST: 発注書の新規作成
 export async function POST(request: NextRequest) {
-  if (!isMethodAllowed(request.method)) {
-    return NextResponse.json(
-      { error: `Method ${request.method} Not Allowed` },
-      { 
-        status: 405,
-        headers: {
-          'Allow': ALLOWED_METHODS.join(', ')
-        }
-      }
-    )
-  }
-
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: validationMessages.auth.required },
-        { status: 401 }
-      )
-    }
-
+  return withErrorHandler(request, async () => {
     const data = await request.json()
 
     // バリデーション
@@ -216,6 +219,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const session = await getServerSession(authOptions)
     const {
       items,
       tags = [],
@@ -253,10 +257,10 @@ export async function POST(request: NextRequest) {
           totalAmount,
           taxAmount: new Prisma.Decimal(0),
           createdBy: {
-            connect: { id: session.user.id }
+            connect: { id: session!.user!.id }
           },
           updatedBy: {
-            connect: { id: session.user.id }
+            connect: { id: session!.user!.id }
           },
           vendor: {
             connect: { id: vendorId }
@@ -281,7 +285,7 @@ export async function POST(request: NextRequest) {
               type: 'PURCHASE_ORDER',
               status,
               user: {
-                connect: { id: session.user.id }
+                connect: { id: session!.user!.id }
               }
             }
           }
@@ -301,38 +305,12 @@ export async function POST(request: NextRequest) {
       success: true, 
       data: serializeDecimal(purchaseOrder)
     })
-
-  } catch (error) {
-    logger.error('発注書の作成に失敗しました', {
-      error: error instanceof Error ? error.message : 'Unknown error'
-    })
-    return handleApiError(error)
-  }
+  })
 }
 
 // PATCH: 発注書の更新
 export async function PATCH(request: NextRequest) {
-  if (!isMethodAllowed(request.method)) {
-    return NextResponse.json(
-      { error: `Method ${request.method} Not Allowed` },
-      { 
-        status: 405,
-        headers: {
-          'Allow': ALLOWED_METHODS.join(', ')
-        }
-      }
-    )
-  }
-
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: validationMessages.auth.required },
-        { status: 401 }
-      )
-    }
-
+  return withErrorHandler(request, async () => {
     const data = await request.json()
     const { id, ...updateData } = data
 
@@ -358,6 +336,7 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
+    const session = await getServerSession(authOptions)
     const {
       items,
       tags,
@@ -413,7 +392,7 @@ export async function PATCH(request: NextRequest) {
             }
           }),
           updatedBy: {
-            connect: { id: session.user.id }
+            connect: { id: session!.user!.id }
           },
           ...(items && {
             items: {
@@ -442,7 +421,7 @@ export async function PATCH(request: NextRequest) {
                 type: 'PURCHASE_ORDER',
                 status,
                 user: {
-                  connect: { id: session.user.id }
+                  connect: { id: session!.user!.id }
                 }
               }
             }
@@ -463,38 +442,12 @@ export async function PATCH(request: NextRequest) {
       success: true, 
       data: serializeDecimal(purchaseOrder)
     })
-
-  } catch (error) {
-    logger.error('発注書の更新に失敗しました', {
-      error: error instanceof Error ? error.message : 'Unknown error'
-    })
-    return handleApiError(error)
-  }
+  })
 }
 
 // DELETE: 発注書の削除
 export async function DELETE(request: NextRequest) {
-  if (!isMethodAllowed(request.method)) {
-    return NextResponse.json(
-      { error: `Method ${request.method} Not Allowed` },
-      { 
-        status: 405,
-        headers: {
-          'Allow': ALLOWED_METHODS.join(', ')
-        }
-      }
-    )
-  }
-
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: validationMessages.auth.required },
-        { status: 401 }
-      )
-    }
-
+  return withErrorHandler(request, async () => {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
 
@@ -518,11 +471,5 @@ export async function DELETE(request: NextRequest) {
       success: true,
       message: '発注書が削除されました'
     })
-
-  } catch (error) {
-    logger.error('発注書の削除に失敗しました', {
-      error: error instanceof Error ? error.message : 'Unknown error'
-    })
-    return handleApiError(error)
-  }
+  })
 }

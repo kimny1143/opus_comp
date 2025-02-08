@@ -10,6 +10,7 @@ const OPERATION_RETRY_COUNT = 3
 const MAX_SESSIONS_PER_USER = 5
 const SESSION_RATE_LIMIT_WINDOW = 60 // 1分(秒)
 const MAX_SESSIONS_PER_WINDOW = 10
+const CLEANUP_BATCH_SIZE = 100
 
 interface Session {
   id: string
@@ -17,11 +18,22 @@ interface Session {
   role: string
   createdAt: Date
   expiresAt: Date
+  fingerprint?: string
+  lastActivity?: Date
+  deviceInfo?: {
+    userAgent: string
+    ip: string
+  }
 }
 
 interface SessionCreateParams {
   userId: string
   role: string
+  fingerprint?: string
+  deviceInfo?: {
+    userAgent: string
+    ip: string
+  }
 }
 
 class SessionManager {
@@ -65,25 +77,52 @@ class SessionManager {
   private async checkRateLimit(userId: string): Promise<boolean> {
     const redis = await getRedisClient()
     const key = this.getRateLimitKey(userId)
-    const count = await redis.incr(key)
     
-    if (count === 1) {
-      await redis.expire(key, SESSION_RATE_LIMIT_WINDOW)
-    }
+    // パイプラインを使用して複数のコマンドを一度に実行
+    const pipeline = redis.pipeline()
+    pipeline.incr(key)
+    pipeline.expire(key, SESSION_RATE_LIMIT_WINDOW)
+    
+    const results = await pipeline.exec()
+    if (!results) return false
 
+    const count = results[0][1] as number
     return count <= MAX_SESSIONS_PER_WINDOW
   }
 
   private async getUserSessionCount(userId: string): Promise<number> {
     const redis = await getRedisClient()
     const sessions = await redis.smembers(this.getUserSessionsKey(userId))
-    return sessions.length
+    
+    // 有効なセッションのみをカウント
+    let validCount = 0
+    const pipeline = redis.pipeline()
+    
+    for (const sessionId of sessions) {
+      pipeline.get(this.getKey(sessionId))
+    }
+    
+    const results = await pipeline.exec()
+    if (!results) return 0
+    
+    for (const result of results) {
+      if (result[1]) {
+        const session = JSON.parse(result[1] as string)
+        if (new Date() <= new Date(session.expiresAt)) {
+          validCount++
+        }
+      }
+    }
+    
+    return validCount
   }
 
   private async addUserSession(userId: string, sessionId: string): Promise<void> {
     const redis = await getRedisClient()
-    await redis.sadd(this.getUserSessionsKey(userId), sessionId)
-    await redis.expire(this.getUserSessionsKey(userId), SESSION_TTL)
+    const pipeline = redis.pipeline()
+    pipeline.sadd(this.getUserSessionsKey(userId), sessionId)
+    pipeline.expire(this.getUserSessionsKey(userId), SESSION_TTL)
+    await pipeline.exec()
   }
 
   private async removeUserSession(userId: string, sessionId: string): Promise<void> {
@@ -124,17 +163,23 @@ class SessionManager {
         userId: params.userId,
         role: params.role,
         createdAt: now,
-        expiresAt
+        expiresAt,
+        ...(params.fingerprint && { fingerprint: params.fingerprint }),
+        lastActivity: now,
+        ...(params.deviceInfo && { deviceInfo: params.deviceInfo })
       }
 
       const redis = await getRedisClient()
       await this.retryOperation(async () => {
-        await redis.setex(
+        const pipeline = redis.pipeline()
+        pipeline.setex(
           this.getKey(sessionId),
           SESSION_TTL,
           JSON.stringify(session)
         )
-        await this.addUserSession(params.userId, sessionId)
+        pipeline.sadd(this.getUserSessionsKey(params.userId), sessionId)
+        pipeline.expire(this.getUserSessionsKey(params.userId), SESSION_TTL)
+        await pipeline.exec()
       })
 
       logger.info(`セッションを作成しました: ${sessionId}`, {
@@ -180,6 +225,14 @@ class SessionManager {
         return null
       }
 
+      // 最終アクティビティを更新
+      session.lastActivity = new Date()
+      await redis.setex(
+        this.getKey(sessionId),
+        SESSION_TTL,
+        JSON.stringify(session)
+      )
+
       return session
     } catch (error) {
       const err = error instanceof Error ? error : new Error('Unknown error')
@@ -198,8 +251,10 @@ class SessionManager {
       
       if (session) {
         await this.retryOperation(async () => {
-          await redis.del(this.getKey(sessionId))
-          await this.removeUserSession(session.userId, sessionId)
+          const pipeline = redis.pipeline()
+          pipeline.del(this.getKey(sessionId))
+          pipeline.srem(this.getUserSessionsKey(session.userId), sessionId)
+          await pipeline.exec()
         })
 
         logger.info(`セッションを削除しました: ${sessionId}`, {
@@ -234,17 +289,20 @@ class SessionManager {
       const expiresAt = new Date(now.getTime() + SESSION_TTL * 1000)
       const updatedSession: Session = {
         ...session,
-        expiresAt
+        expiresAt,
+        lastActivity: now
       }
 
       const redis = await getRedisClient()
       await this.retryOperation(async () => {
-        await redis.setex(
+        const pipeline = redis.pipeline()
+        pipeline.setex(
           this.getKey(sessionId),
           SESSION_TTL,
           JSON.stringify(updatedSession)
         )
-        await redis.expire(this.getUserSessionsKey(session.userId), SESSION_TTL)
+        pipeline.expire(this.getUserSessionsKey(session.userId), SESSION_TTL)
+        await pipeline.exec()
       })
 
       logger.info(`セッションをリフレッシュしました: ${sessionId}`, {
@@ -266,23 +324,61 @@ class SessionManager {
   async cleanup(): Promise<void> {
     try {
       const redis = await getRedisClient()
-      const sessionKeys = await redis.keys(`${SESSION_PREFIX}*`)
+      let cursor = '0'
       let cleanedCount = 0
       
-      for (const key of sessionKeys) {
-        const data = await redis.get(key)
-        if (data) {
-          const session: Session = JSON.parse(data)
-          if (new Date() > new Date(session.expiresAt)) {
-            const sessionId = key.replace(SESSION_PREFIX, '')
-            await this.destroy(sessionId)
-            cleanedCount++
+      do {
+        // SCANを使用して効率的にキーを取得
+        const [newCursor, keys] = await redis.scan(
+          cursor,
+          'MATCH',
+          `${SESSION_PREFIX}*`,
+          'COUNT',
+          CLEANUP_BATCH_SIZE
+        )
+        cursor = newCursor
+
+        if (keys.length > 0) {
+          // パイプラインを使用して一括処理
+          const pipeline = redis.pipeline()
+          keys.forEach(key => pipeline.get(key))
+          const results = await pipeline.exec()
+
+          const expiredKeys: string[] = []
+          const expiredUserSessions = new Map<string, string[]>()
+
+          results?.forEach((result, index) => {
+            if (result[1]) {
+              const session: Session = JSON.parse(result[1] as string)
+              if (new Date() > new Date(session.expiresAt)) {
+                const key = keys[index]
+                expiredKeys.push(key)
+                
+                const userSessions = expiredUserSessions.get(session.userId) || []
+                userSessions.push(key.replace(SESSION_PREFIX, ''))
+                expiredUserSessions.set(session.userId, userSessions)
+              }
+            }
+          })
+
+          if (expiredKeys.length > 0) {
+            const cleanupPipeline = redis.pipeline()
+            
+            // 期限切れセッションの削除
+            cleanupPipeline.del(...expiredKeys)
+            
+            // ユーザーセッション参照の削除
+            for (const [userId, sessionIds] of Array.from(expiredUserSessions.entries())) {
+              cleanupPipeline.srem(this.getUserSessionsKey(userId), ...sessionIds)
+            }
+            
+            await cleanupPipeline.exec()
+            cleanedCount += expiredKeys.length
           }
         }
-      }
+      } while (cursor !== '0')
 
       logger.info('期限切れセッションのクリーンアップを完了しました', {
-        totalScanned: sessionKeys.length,
         cleanedCount
       })
     } catch (error) {
@@ -291,6 +387,47 @@ class SessionManager {
         error: err.message
       })
     }
+  }
+
+  // セッションの検証(フィンガープリントと最終アクティビティを含む)
+  async validateSession(sessionId: string, context: {
+    fingerprint?: string
+    deviceInfo?: {
+      userAgent: string
+      ip: string
+    }
+  }): Promise<boolean> {
+    const session = await this.get(sessionId)
+    if (!session) return false
+
+    // フィンガープリントの検証
+    if (session.fingerprint && context.fingerprint) {
+      if (session.fingerprint !== context.fingerprint) {
+        logger.warn('セッションフィンガープリントが一致しません', {
+          sessionId,
+          userId: session.userId
+        })
+        return false
+      }
+    }
+
+    // デバイス情報の検証
+    if (session.deviceInfo && context.deviceInfo) {
+      if (
+        session.deviceInfo.userAgent !== context.deviceInfo.userAgent ||
+        session.deviceInfo.ip !== context.deviceInfo.ip
+      ) {
+        logger.warn('セッションのデバイス情報が一致しません', {
+          sessionId,
+          userId: session.userId
+        })
+        return false
+      }
+    }
+
+    // 最終アクティビティの更新
+    await this.refresh(sessionId)
+    return true
   }
 }
 

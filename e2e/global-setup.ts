@@ -1,44 +1,66 @@
-import { chromium, FullConfig } from '@playwright/test';
-import { login } from './helpers/auth.helper';
+import { chromium, FullConfig } from '@playwright/test'
+import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcryptjs'
+import dotenv from 'dotenv'
 
-async function waitForServer(url: string, timeout: number = 60000) {
-  const startTime = Date.now();
-  while (Date.now() - startTime < timeout) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) return;
-    } catch {
-      // 接続エラーは無視して再試行
-    }
-    await new Promise(resolve => setTimeout(resolve, 1000));
-  }
-  throw new Error(`Server at ${url} did not respond within ${timeout}ms`);
-}
+// テスト環境の設定を読み込み
+dotenv.config({ path: '.env.test' })
+
+const prisma = new PrismaClient()
 
 async function globalSetup(config: FullConfig) {
-  const { baseURL } = config.projects[0].use;
-  if (!baseURL) throw new Error('baseURL is required');
+  // テストユーザーの作成
+  const hashedPassword = await bcrypt.hash(
+    process.env.TEST_USER_PASSWORD || 'TestPassword123!',
+    10
+  )
 
-  // サーバーの準備完了を待つ
-  console.log('Waiting for server to be ready...');
-  await waitForServer(baseURL);
-  console.log('Server is ready');
-
-  const browser = await chromium.launch();
-  const page = await browser.newPage();
-
-  // グローバルな認証状態を作成
   try {
-    await login(page);
-    // 認証状態を保存
-    await page.context().storageState({
-      path: 'playwright/.auth/user.json'
-    });
+    // 既存のテストユーザーを削除
+    await prisma.user.deleteMany({
+      where: {
+        email: process.env.TEST_USER_EMAIL || 'test@example.com'
+      }
+    })
+
+    // テストユーザーを作成
+    await prisma.user.create({
+      data: {
+        email: process.env.TEST_USER_EMAIL || 'test@example.com',
+        name: 'Test User',
+        hashedPassword,
+        role: 'USER'
+      }
+    })
+
+    // テスト用のセッションデータをクリア
+    const redis = await (await import('@/lib/redis/client')).getRedisClient()
+    const sessionKeys = await redis.keys('session:*')
+    if (sessionKeys.length > 0) {
+      await redis.del(...sessionKeys)
+    }
+    const userSessionKeys = await redis.keys('user-sessions:*')
+    if (userSessionKeys.length > 0) {
+      await redis.del(...userSessionKeys)
+    }
+    const loginAttemptKeys = await redis.keys('login-attempt:*')
+    if (loginAttemptKeys.length > 0) {
+      await redis.del(...loginAttemptKeys)
+    }
+
+    console.log('テスト環境のセットアップが完了しました')
   } catch (error) {
-    console.error('認証状態の作成に失敗しました:', error);
+    console.error('テスト環境のセットアップに失敗しました:', error)
+    throw error
   } finally {
-    await browser.close();
+    await prisma.$disconnect()
   }
+
+  // ブラウザの状態をクリア
+  const browser = await chromium.launch()
+  const context = await browser.newContext()
+  await context.clearCookies()
+  await browser.close()
 }
 
-export default globalSetup; 
+export default globalSetup

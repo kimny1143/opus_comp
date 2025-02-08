@@ -14,6 +14,7 @@ setup('認証セットアップ', async ({ browser }) => {
   
   // 新しいコンテキストを毎回作成(再利用しない)
   const context = await browser.newContext({
+    baseURL: 'http://localhost:3000',
     viewport: { width: 1280, height: 720 },
     ignoreHTTPSErrors: true,
     recordVideo: {
@@ -22,6 +23,10 @@ setup('認証セットアップ', async ({ browser }) => {
   })
 
   try {
+    // 既存のページをすべて閉じる
+    const pages = await context.pages()
+    await Promise.all(pages.map(page => page.close()))
+
     console.log('新しいページを作成')
     const page = await context.newPage()
 
@@ -33,12 +38,9 @@ setup('認証セットアップ', async ({ browser }) => {
       )
     })
 
-    // ナビゲーション開始前にページの状態を確認
+    // 認証ページに直接移動
     console.log('認証ページへ移動を開始')
-    await page.waitForLoadState('networkidle')
-    
-    // 認証ページに移動
-    await page.goto('http://localhost:3000/auth/signin', {
+    await page.goto('/auth/signin', {
       waitUntil: 'networkidle',
       timeout: 30000
     })
@@ -63,9 +65,6 @@ setup('認証セットアップ', async ({ browser }) => {
     
     console.log('認証情報を入力完了')
 
-    // フォーム送信前の状態を確認
-    await page.waitForLoadState('networkidle')
-
     // フォーム送信とナビゲーション完了を待機
     console.log('ログインボタンをクリック')
     await Promise.all([
@@ -79,7 +78,7 @@ setup('認証セットアップ', async ({ browser }) => {
     console.log('ナビゲーション完了を待機')
 
     // ログイン後のページ遷移を確認
-    await page.waitForURL('http://localhost:3000/', {
+    await page.waitForURL('/', {
       timeout: 30000,
       waitUntil: 'networkidle'
     })

@@ -13,23 +13,15 @@ setup('認証セットアップ', async ({ browser }) => {
   })
 
   try {
-    // 不要なナビゲーションをハンドリング
-    await context.route('**/*', async (route, request) => {
-      if (request.url().includes('playwright/index.html')) {
-        await route.fulfill({ status: 200, body: '' })
-      } else {
-        await route.continue()
-      }
-    })
-
     console.log('新しいページを作成')
     const page = await context.newPage()
 
-    // 初期ページの読み込み完了を待機
+    // 初期の不要なナビゲーションが完了するまで待機
     console.log('初期ページの読み込み完了を待機')
     await page.waitForLoadState('domcontentloaded')
+    await page.waitForLoadState('networkidle')
 
-    // 認証ページに直接移動
+    // 認証ページに直接移動(不要なナビゲーションが完了した後)
     console.log('認証ページへ移動を開始')
     await page.goto('http://localhost:3000/auth/signin', {
       waitUntil: 'networkidle',

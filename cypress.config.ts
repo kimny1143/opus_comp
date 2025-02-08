@@ -1,5 +1,8 @@
 import { defineConfig } from 'cypress'
 import { setupTestDatabase, cleanupTestDatabase } from './cypress/support/helpers'
+import { PrismaClient, VendorCategory, VendorStatus, BusinessType } from '@prisma/client'
+
+const prisma = new PrismaClient()
 
 export default defineConfig({
   e2e: {
@@ -13,6 +16,60 @@ export default defineConfig({
         async cleanupTestDatabase() {
           await cleanupTestDatabase()
           return null
+        },
+        async 'db:seed'() {
+          try {
+            // テストデータの作成
+            await prisma.vendor.createMany({
+              data: [
+                {
+                  id: 'test-vendor-1',
+                  name: 'テスト株式会社',
+                  code: 'TEST001',
+                  category: VendorCategory.CORPORATION,
+                  status: VendorStatus.ACTIVE,
+                  email: 'test-vendor@example.com',
+                  phone: '03-1234-5678',
+                  createdById: 'system',
+                  updatedById: 'system'
+                },
+                {
+                  id: 'test-vendor-2',
+                  name: 'サンプル商事',
+                  code: 'TEST002',
+                  category: VendorCategory.CORPORATION,
+                  status: VendorStatus.ACTIVE,
+                  email: 'sample-vendor@example.com',
+                  phone: '03-8765-4321',
+                  createdById: 'system',
+                  updatedById: 'system'
+                }
+              ],
+              skipDuplicates: true
+            })
+
+            return null
+          } catch (error) {
+            console.error('Failed to seed test data:', error)
+            throw error
+          }
+        },
+        async 'db:cleanup'() {
+          try {
+            // テストデータのクリーンアップ
+            await prisma.vendor.deleteMany({
+              where: {
+                id: {
+                  in: ['test-vendor-1', 'test-vendor-2']
+                }
+              }
+            })
+
+            return null
+          } catch (error) {
+            console.error('Failed to cleanup test data:', error)
+            throw error
+          }
         }
       })
 
@@ -29,6 +86,10 @@ export default defineConfig({
     specPattern: 'cypress/e2e/**/*.cy.{js,jsx,ts,tsx}',
     video: false,
     screenshotOnRunFailure: false,
+    defaultCommandTimeout: 10000,
+    pageLoadTimeout: 10000,
+    requestTimeout: 10000,
+    responseTimeout: 10000
   },
   env: {
     apiUrl: 'http://localhost:3000/api'

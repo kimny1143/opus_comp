@@ -7,26 +7,32 @@ echo "テスト環境の初期化を開始します..."
 
 # 1. データベースの再作成
 echo "1. データベースを再作成しています..."
-psql -h localhost -U test -d postgres -c "DROP DATABASE IF EXISTS opus_test;"
-psql -h localhost -U test -d postgres -c "CREATE DATABASE opus_test;"
+# prisma migrate resetを使用してデータベースをリセット
+npx prisma migrate reset --force --skip-seed
 
 # スキーマの再適用
 echo "1.1 スキーマを適用しています..."
-npx prisma db push --schema=prisma/schema.prisma
+npx prisma db push
 
 # 2. Redisの全キーを削除
 echo "2. Redisのキーを削除しています..."
-redis-cli EVAL "return redis.call('del', unpack(redis.call('keys', 'opus_test:*')))" 0
-redis-cli EVAL "return redis.call('del', unpack(redis.call('keys', 'session:*')))" 0
-redis-cli EVAL "return redis.call('del', unpack(redis.call('keys', 'user-sessions:*')))" 0
-redis-cli EVAL "return redis.call('del', unpack(redis.call('keys', 'rate-limit:*')))" 0
-redis-cli EVAL "return redis.call('del', unpack(redis.call('keys', 'login-attempts:*')))" 0
+# 各パターンごとに個別にSCAN & DELを実行
+redis-cli KEYS "opus_test:*" | xargs -r redis-cli DEL
+redis-cli KEYS "session:*" | xargs -r redis-cli DEL
+redis-cli KEYS "user-sessions:*" | xargs -r redis-cli DEL
+redis-cli KEYS "rate-limit:*" | xargs -r redis-cli DEL
+redis-cli KEYS "login-attempts:*" | xargs -r redis-cli DEL
 
 # 3. テスト用ディレクトリのクリーンアップ
 echo "3. テスト関連ディレクトリをクリーンアップしています..."
 rm -rf test-results/*
 rm -rf playwright-report/*
 rm -rf e2e/.auth/*
+
+# 必要なディレクトリを作成
+mkdir -p test-results/videos
+mkdir -p e2e/.auth
+mkdir -p playwright-report
 
 # 4. 環境変数の再読み込み確認
 echo "4. 環境変数を確認しています..."

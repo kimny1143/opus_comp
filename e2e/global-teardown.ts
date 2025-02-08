@@ -14,6 +14,16 @@ async function globalTeardown(config: FullConfig) {
       })
 
       if (user) {
+        // 関連する請求書を削除
+        await tx.invoice.deleteMany({
+          where: {
+            OR: [
+              { createdById: user.id },
+              { updatedById: user.id }
+            ]
+          }
+        })
+
         // 関連する発注書を削除
         await tx.purchaseOrder.deleteMany({
           where: {

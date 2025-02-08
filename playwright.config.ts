@@ -5,22 +5,6 @@ import path from 'path'
 // テスト環境の設定を読み込み
 dotenv.config({ path: '.env.test' })
 
-// 共通設定
-const commonConfig = {
-  baseURL: 'http://localhost:3000',
-  viewport: { width: 1280, height: 720 },
-  ignoreHTTPSErrors: true,
-  launchOptions: {
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--no-startup-window'
-    ]
-  }
-}
-
 export default defineConfig({
   testDir: './e2e',
   
@@ -43,40 +27,24 @@ export default defineConfig({
     ['json', { outputFile: 'test-results/results.json' }]
   ],
 
-  // プロジェクト設定
-  projects: [
-    {
-      name: 'setup',
-      testMatch: /.*\.setup\.ts/,
-      use: {
-        ...commonConfig,
-        // セットアッププロジェクト固有の設定
-        launchOptions: {
-          ...commonConfig.launchOptions,
-          headless: true,
-          handleSIGINT: false
-        }
-      }
-    },
-    {
-      name: 'chromium',
-      use: { 
-        ...devices['Desktop Chrome'],
-        ...commonConfig,
-        storageState: path.join(__dirname, 'e2e/.auth/user.json'),
-        contextOptions: {
-          reducedMotion: 'reduce',
-          forcedColors: 'none',
-          strictSelectors: true,
-        }
-      },
-      dependencies: ['setup'],
-      testIgnore: ['**/auth.setup.ts'],
-    }
-  ],
-
   // グローバル設定
   use: {
+    // ベースURL設定
+    baseURL: 'http://localhost:3000',
+    
+    // ビューポート設定
+    viewport: { width: 1280, height: 720 },
+    
+    // ブラウザ設定
+    launchOptions: {
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ]
+    },
+    
     // タイムアウト設定
     actionTimeout: 15000,
     navigationTimeout: 30000,
@@ -85,7 +53,28 @@ export default defineConfig({
     trace: 'on',
     screenshot: 'on',
     video: 'on-first-retry',
+    
+    // その他の設定
+    ignoreHTTPSErrors: true,
+    bypassCSP: true,
   },
+
+  // プロジェクト設定
+  projects: [
+    {
+      name: 'setup',
+      testMatch: /.*\.setup\.ts/
+    },
+    {
+      name: 'chromium',
+      use: { 
+        ...devices['Desktop Chrome'],
+        storageState: path.join(__dirname, 'e2e/.auth/user.json')
+      },
+      dependencies: ['setup'],
+      testIgnore: ['**/auth.setup.ts'],
+    }
+  ],
 
   // 出力設定
   outputDir: 'test-results/',

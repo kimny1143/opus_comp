@@ -65,6 +65,20 @@ export default defineConfig({
     {
       name: 'setup',
       testMatch: /.*\.setup\.ts/,
+      use: {
+        // セットアッププロジェクト固有の設定
+        baseURL: 'http://localhost:3000',
+        launchOptions: {
+          // 初期ページを無効化
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--no-startup-window'
+          ]
+        }
+      }
     },
     {
       name: 'chromium',

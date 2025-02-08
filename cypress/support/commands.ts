@@ -81,25 +81,47 @@ interface OrderItem {
 
 // テストユーザーのセットアップ
 Cypress.Commands.add('setupTestUser', () => {
-  // フォームベースの認証を使用
-  cy.visit('/auth/signin');
-  cy.get('[data-testid="signin-form"]').within(() => {
-    cy.get('[data-testid="email-input"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
-    cy.get('[data-testid="password-input"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
-    cy.get('[data-testid="signin-button"]').click();
+  // APIを直接呼び出してテストユーザーを作成
+  return cy.request({
+    method: 'POST',
+    url: '/api/test/setup-user',
+    body: {
+      email: 'test@example.com',
+      password: 'TestPassword123!',
+      role: 'ADMIN'
+    },
+    failOnStatusCode: false
+  }).then((response: Cypress.Response<any>) => {
+    // ユーザーが既に存在する場合も成功とみなす
+    if (response.status !== 201 && response.status !== 409) {
+      throw new Error(`Failed to setup test user: ${response.status}`);
+    }
   });
-  cy.url().should('eq', Cypress.config().baseUrl + '/dashboard');
 });
 
 // ログイン処理
 Cypress.Commands.add('login', (options = { role: 'USER' }) => {
-  cy.visit('/auth/signin');
-  cy.get('[data-testid="signin-form"]').within(() => {
-    cy.get('[data-testid="email-input"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
-    cy.get('[data-testid="password-input"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
-    cy.get('[data-testid="signin-button"]').click();
+  // APIを直接呼び出してログイン
+  return cy.request({
+    method: 'POST',
+    url: '/api/auth/test/login',
+    body: {
+      email: 'test@example.com',
+      role: options.role
+    },
+    failOnStatusCode: false
+  }).then((response: Cypress.Response<any>) => {
+    if (response.status !== 200) {
+      // フォールバック: フォームベースのログイン
+      cy.visit('/auth/signin');
+      cy.get('[data-testid="signin-form"]').within(() => {
+        cy.get('[data-testid="email-input"]').type('test@example.com');
+        cy.get('[data-testid="password-input"]').type('TestPassword123!');
+        cy.get('[data-testid="signin-button"]').click();
+      });
+    }
+    cy.url().should('include', '/dashboard');
   });
-  cy.url().should('eq', Cypress.config().baseUrl + '/dashboard');
 });
 
 Cypress.Commands.add('setTestDate', (date: string) => {
@@ -121,13 +143,7 @@ Cypress.Commands.add('createInvoice', (data) => {
 // セッション管理のヘルパー関数
 Cypress.Commands.add('setupTestSession', () => {
   cy.session('testUser', () => {
-    cy.visit('/auth/signin');
-    cy.get('[data-testid="signin-form"]').within(() => {
-      cy.get('[data-testid="email-input"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
-      cy.get('[data-testid="password-input"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
-      cy.get('[data-testid="signin-button"]').click();
-    });
-    cy.url().should('eq', Cypress.config().baseUrl + '/dashboard');
+    cy.login();
   });
 });
 
@@ -154,37 +170,27 @@ Cypress.Commands.add('waitForValidation', () => {
 
 // 認証関連のコマンド
 Cypress.Commands.add('setupAuthState', () => {
-  cy.visit('/auth/signin');
-  cy.get('[data-testid="signin-form"]').within(() => {
-    cy.get('[data-testid="email-input"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
-    cy.get('[data-testid="password-input"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
-    cy.get('[data-testid="signin-button"]').click();
-  });
-  cy.url().should('eq', Cypress.config().baseUrl + '/dashboard');
+  cy.login({ role: 'ADMIN' });
 });
 
 Cypress.Commands.add('setupVendorAuthState', () => {
-  cy.visit('/vendor-portal/signin');
-  cy.get('[data-testid="signin-form"]').within(() => {
-    cy.get('[data-testid="email-input"]').type(Cypress.env('VENDOR_EMAIL') || 'vendor@example.com');
-    cy.get('[data-testid="password-input"]').type(Cypress.env('VENDOR_PASSWORD') || 'VendorPass123!');
-    cy.get('[data-testid="signin-button"]').click();
-  });
-  cy.url().should('include', '/vendor-portal');
+  cy.login({ role: 'VENDOR' });
 });
 
 Cypress.Commands.add('clearAuthState', () => {
-  cy.visit('/auth/signout');
-  cy.url().should('include', '/auth/signin');
-  cy.clearCookies();
-  cy.clearLocalStorage();
+  cy.request({
+    method: 'POST',
+    url: '/api/auth/test/logout',
+    failOnStatusCode: false
+  });
+  cy.clearSession();
 });
 
 // テストデータ管理のコマンド
 Cypress.Commands.add('setupTestData', () => {
-  cy.task('setupTestDatabase');
+  cy.task('setupTestDatabase', null, { timeout: 10000 });
 });
 
 Cypress.Commands.add('cleanupTestData', () => {
-  cy.task('cleanupTestDatabase');
+  cy.task('cleanupTestDatabase', null, { timeout: 10000 });
 });

@@ -1,8 +1,10 @@
 /// <reference types="cypress" />
 
+export {}
+
 declare global {
   namespace Cypress {
-    interface Chainable {
+    interface Chainable<Subject = any> {
       /**
        * テストユーザーとしてログインします
        * @example cy.login()
@@ -56,9 +58,16 @@ declare global {
        * @example cy.clearAuthState()
        */
       clearAuthState(): Chainable<void>
-      task(event: string, arg?: any): Chainable<any>
-      intercept(method: string, url: string, response?: any): Chainable<void>
-      intercept(url: string, response?: any): Chainable<void>
+      /**
+       * テストデータをセットアップします
+       * @example cy.setupTestData()
+       */
+      setupTestData(): Chainable<void>
+      /**
+       * テストデータをクリーンアップします
+       * @example cy.cleanupTestData()
+       */
+      cleanupTestData(): Chainable<void>
     }
   }
 }
@@ -83,7 +92,7 @@ Cypress.Commands.add('setupTestUser', () => {
 });
 
 // ログイン処理
-Cypress.Commands.add('login', (options = {}) => {
+Cypress.Commands.add('login', (options = { role: 'USER' }) => {
   cy.visit('/auth/signin');
   cy.get('[data-testid="signin-form"]').within(() => {
     cy.get('[data-testid="email-input"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
@@ -171,25 +180,11 @@ Cypress.Commands.add('clearAuthState', () => {
   cy.clearLocalStorage();
 });
 
-// データベースのシード処理
-Cypress.Commands.overwrite('task', (originalFn, event, arg) => {
-  return originalFn(event, arg);
+// テストデータ管理のコマンド
+Cypress.Commands.add('setupTestData', () => {
+  cy.task('setupTestDatabase');
 });
 
-// APIリクエストのインターセプト
-Cypress.Commands.overwrite('intercept', (originalFn, ...args) => {
-  return originalFn(...args);
+Cypress.Commands.add('cleanupTestData', () => {
+  cy.task('cleanupTestDatabase');
 });
-
-// モックデータ生成ヘルパー関数
-export const getMockOrderItem = (overrides: Partial<OrderItem> = {}): OrderItem => {
-  return {
-    name: 'テスト商品',
-    quantity: 1,
-    unitPrice: 1000,
-    taxRate: 0.10,
-    ...overrides
-  };
-};
-
-export {}

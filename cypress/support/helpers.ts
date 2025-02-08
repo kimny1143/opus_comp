@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import * as crypto from 'crypto'
 
 declare global {
   namespace Cypress {
@@ -19,17 +20,12 @@ declare global {
 
 // テスト用のPrismaクライアント
 const prisma = new PrismaClient({
-  log: ['error'],
-  datasources: {
-    db: {
-      url: Cypress.env('DATABASE_URL')
-    }
-  }
+  log: ['error']
 })
 
 // テスト用のパスワードハッシュ化(簡略化版)
 function hashPassword(password: string): string {
-  return require('crypto').createHash('sha256').update(password).digest('hex')
+  return crypto.createHash('sha256').update(password).digest('hex')
 }
 
 export async function setupTestDatabase() {
@@ -65,6 +61,7 @@ export async function setupTestDatabase() {
     })
 
     console.log('テストデータベースのセットアップが完了しました')
+    return null
   } catch (error) {
     console.error('テストデータベースのセットアップに失敗:', error)
     throw error
@@ -82,6 +79,7 @@ export async function cleanupTestDatabase() {
       }
     })
     console.log('テストデータベースのクリーンアップが完了しました')
+    return null
   } catch (error) {
     console.error('テストデータベースのクリーンアップに失敗:', error)
     throw error
@@ -104,12 +102,3 @@ interface OrderItem {
   unitPrice: number
   taxRate: number
 }
-
-// Cypressコマンドの拡張
-Cypress.Commands.add('setupTestData', () => {
-  cy.task('setupTestDatabase')
-})
-
-Cypress.Commands.add('cleanupTestData', () => {
-  cy.task('cleanupTestDatabase')
-})

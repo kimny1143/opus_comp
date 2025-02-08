@@ -3,15 +3,26 @@ import { setupTestDatabase, cleanupTestDatabase } from './cypress/support/helper
 
 export default defineConfig({
   e2e: {
-    setupNodeEvents(on, config) {
+    async setupNodeEvents(on, config) {
+      // タスクの定義
       on('task', {
-        setupTestDatabase: () => {
-          return setupTestDatabase()
+        async setupTestDatabase() {
+          await setupTestDatabase()
+          return null
         },
-        cleanupTestDatabase: () => {
-          return cleanupTestDatabase()
+        async cleanupTestDatabase() {
+          await cleanupTestDatabase()
+          return null
         }
       })
+
+      // 環境変数の設定
+      config.env = {
+        ...config.env,
+        DATABASE_URL: process.env.DATABASE_URL
+      }
+
+      return config
     },
     baseUrl: 'http://localhost:3000',
     supportFile: 'cypress/support/e2e.ts',
@@ -20,8 +31,7 @@ export default defineConfig({
     screenshotOnRunFailure: false,
   },
   env: {
-    apiUrl: 'http://localhost:3000/api',
-    DATABASE_URL: process.env.DATABASE_URL
+    apiUrl: 'http://localhost:3000/api'
   },
   viewportWidth: 1280,
   viewportHeight: 720,

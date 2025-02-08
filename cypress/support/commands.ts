@@ -70,58 +70,57 @@ interface OrderItem {
   taxRate: number;
 }
 
-// 既存のコマンド
+// テストユーザーのセットアップ
 Cypress.Commands.add('setupTestUser', () => {
-  // テストユーザーのセットアップ
-  cy.request({
-    method: 'POST',
-    url: '/api/test/setup-user',
-    body: {
-      email: 'test@example.com',
-      role: 'ADMIN'
-    }
+  // フォームベースの認証を使用
+  cy.visit('/auth/signin');
+  cy.get('form[name="signin-form"]').within(() => {
+    cy.get('input[name="email"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
+    cy.get('input[name="password"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
+    cy.get('button[type="submit"]').click();
   });
-})
+  cy.url().should('eq', Cypress.config().baseUrl + '/');
+});
 
+// ログイン処理
 Cypress.Commands.add('login', (options = {}) => {
-  // ログイン処理
-  cy.request({
-    method: 'POST',
-    url: '/api/auth/login',
-    body: {
-      email: 'test@example.com',
-      password: 'password123',
-      role: options.role || 'USER'
-    }
+  cy.visit('/auth/signin');
+  cy.get('form[name="signin-form"]').within(() => {
+    cy.get('input[name="email"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
+    cy.get('input[name="password"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
+    cy.get('button[type="submit"]').click();
   });
-})
+  cy.url().should('eq', Cypress.config().baseUrl + '/');
+});
 
 Cypress.Commands.add('setTestDate', (date: string) => {
   const timestamp = new Date(date).getTime()
   cy.clock(timestamp)
-})
+});
 
 Cypress.Commands.add('clearSession', () => {
-  cy.clearCookies()
-  cy.clearLocalStorage()
-})
+  cy.clearCookies();
+  cy.clearLocalStorage();
+});
 
 Cypress.Commands.add('createInvoice', (data) => {
   // 請求書の作成
-  cy.request({
-    method: 'POST',
-    url: '/api/invoices',
-    body: data
-  });
-})
+  cy.visit('/invoices/new');
+  // フォームの入力処理を実装
+});
 
 // セッション管理のヘルパー関数
 Cypress.Commands.add('setupTestSession', () => {
-  // テストセッションのセットアップ
   cy.session('testUser', () => {
-    // ここにセッションのセットアップロジックを追加
+    cy.visit('/auth/signin');
+    cy.get('form[name="signin-form"]').within(() => {
+      cy.get('input[name="email"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
+      cy.get('input[name="password"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
+      cy.get('button[type="submit"]').click();
+    });
+    cy.url().should('eq', Cypress.config().baseUrl + '/');
   });
-})
+});
 
 // 発注関連のコマンド
 Cypress.Commands.add('fillOrderItem', (index: number, item: OrderItem) => {
@@ -147,19 +146,21 @@ Cypress.Commands.add('waitForValidation', () => {
 // 認証関連のコマンド
 Cypress.Commands.add('setupAuthState', () => {
   cy.visit('/auth/signin');
-  cy.get('input[name="email"]').type('test@example.com');
-  cy.get('input[name="password"]').type('TestPass123');
-  cy.get('button[type="submit"]').click();
-  cy.url().should('include', '/dashboard');
-  
-  // セッションの保存はCypressが自動的に行う
+  cy.get('form[name="signin-form"]').within(() => {
+    cy.get('input[name="email"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
+    cy.get('input[name="password"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
+    cy.get('button[type="submit"]').click();
+  });
+  cy.url().should('eq', Cypress.config().baseUrl + '/');
 });
 
 Cypress.Commands.add('setupVendorAuthState', () => {
   cy.visit('/vendor-portal/signin');
-  cy.get('input[name="email"]').type('vendor@example.com');
-  cy.get('input[name="password"]').type('VendorPass123');
-  cy.get('button[type="submit"]').click();
+  cy.get('form[name="signin-form"]').within(() => {
+    cy.get('input[name="email"]').type(Cypress.env('VENDOR_EMAIL') || 'vendor@example.com');
+    cy.get('input[name="password"]').type(Cypress.env('VENDOR_PASSWORD') || 'VendorPass123!');
+    cy.get('button[type="submit"]').click();
+  });
   cy.url().should('include', '/vendor-portal');
 });
 
@@ -173,12 +174,12 @@ Cypress.Commands.add('clearAuthState', () => {
 // データベースのシード処理
 Cypress.Commands.overwrite('task', (originalFn, event, arg) => {
   return originalFn(event, arg);
-})
+});
 
 // APIリクエストのインターセプト
 Cypress.Commands.overwrite('intercept', (originalFn, ...args) => {
   return originalFn(...args);
-})
+});
 
 // モックデータ生成ヘルパー関数
 export const getMockOrderItem = (overrides: Partial<OrderItem> = {}): OrderItem => {

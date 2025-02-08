@@ -13,6 +13,9 @@ import {
   bulkActionSchema,
   type PurchaseOrderCreateInput
 } from './validation'
+import { createLogger } from '@/lib/logger'
+
+const logger = createLogger('purchase-orders')
 
 // 許可されているHTTPメソッド
 const ALLOWED_METHODS = ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
@@ -31,6 +34,54 @@ export async function OPTIONS() {
     }
   })
 }
+
+// 発注書の取得に使用する共通のinclude設定
+const purchaseOrderInclude = {
+  vendor: {
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      address: true
+    }
+  },
+  items: {
+    select: {
+      id: true,
+      itemName: true,
+      quantity: true,
+      unitPrice: true,
+      taxRate: true,
+      description: true,
+      amount: true
+    }
+  },
+  tags: {
+    select: {
+      id: true,
+      name: true
+    }
+  },
+  statusHistory: {
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      comment: true,
+      createdAt: true,
+      user: {
+        select: {
+          id: true,
+          name: true
+        }
+      }
+    },
+    orderBy: {
+      createdAt: 'desc' as const
+    },
+    take: 5 // 最新5件のみ取得
+  }
+} as const
 
 // GET: 発注書一覧の取得
 export async function GET(request: NextRequest) {
@@ -76,47 +127,12 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    // 一度のクエリで必要なデータを全て取得
     const [total, purchaseOrders] = await Promise.all([
       prisma.purchaseOrder.count({ where }),
       prisma.purchaseOrder.findMany({
         where,
-        select: {
-          id: true,
-          orderNumber: true,
-          orderDate: true,
-          deliveryDate: true,
-          status: true,
-          totalAmount: true,
-          description: true,
-          terms: true,
-          createdAt: true,
-          updatedAt: true,
-          vendor: {
-            select: {
-              id: true,
-              name: true,
-              code: true,
-              address: true
-            }
-          },
-          items: {
-            select: {
-              id: true,
-              itemName: true,
-              quantity: true,
-              unitPrice: true,
-              taxRate: true,
-              description: true,
-              amount: true
-            }
-          },
-          tags: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
-        },
+        include: purchaseOrderInclude,
         orderBy: {
           createdAt: 'desc'
         },
@@ -131,7 +147,11 @@ export async function GET(request: NextRequest) {
       orderDate: order.orderDate?.toISOString(),
       deliveryDate: order.deliveryDate?.toISOString(),
       createdAt: order.createdAt.toISOString(),
-      updatedAt: order.updatedAt.toISOString()
+      updatedAt: order.updatedAt.toISOString(),
+      statusHistory: order.statusHistory.map(history => ({
+        ...history,
+        createdAt: history.createdAt.toISOString()
+      }))
     }))
 
     // レスポンスデータをシリアライズ
@@ -149,6 +169,9 @@ export async function GET(request: NextRequest) {
       }
     })
   } catch (error) {
+    logger.error('発注書一覧の取得に失敗しました', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    })
     return handleApiError(error)
   }
 }
@@ -181,7 +204,9 @@ export async function POST(request: NextRequest) {
     // バリデーション
     const validationResult = purchaseOrderCreateSchema.safeParse(data)
     if (!validationResult.success) {
-      console.error('バリデーションエラー:', validationResult.error)
+      logger.warn('バリデーションエラー', {
+        errors: validationResult.error.errors
+      })
       return NextResponse.json(
         { 
           error: validationMessages.validation.invalid,
@@ -214,49 +239,62 @@ export async function POST(request: NextRequest) {
       return sum.add(amount)
     }, new Prisma.Decimal(0))
 
-    // Prismaのスキーマに合わせてデータを整形
-    const createData: Prisma.PurchaseOrderCreateInput = {
-      ...restData,
-      orderNumber,
-      description: notes || null,
-      orderDate: new Date(orderDate),
-      deliveryDate: new Date(deliveryDate),
-      status,
-      totalAmount,
-      taxAmount: new Prisma.Decimal(0), // デフォルト値を設定
-      createdBy: {
-        connect: { id: session.user.id }
-      },
-      updatedBy: {
-        connect: { id: session.user.id }
-      },
-      vendor: {
-        connect: { id: vendorId }
-      },
-      items: {
-        create: items.map(item => ({
-          itemName: item.itemName,
-          quantity: Number(item.quantity),
-          unitPrice: item.unitPrice,
-          taxRate: item.taxRate,
-          description: item.description || null,
-          amount: item.quantity
-            .mul(item.unitPrice)
-            .mul(new Prisma.Decimal(1).add(item.taxRate))
-        }))
-      },
-      tags: {
-        create: tags.map(tag => ({ name: tag.name }))
-      }
-    }
+    // トランザクションを使用して一括で作成
+    const purchaseOrder = await prisma.$transaction(async (tx) => {
+      // 発注書の作成
+      const order = await tx.purchaseOrder.create({
+        data: {
+          ...restData,
+          orderNumber,
+          description: notes || null,
+          orderDate: new Date(orderDate),
+          deliveryDate: new Date(deliveryDate),
+          status,
+          totalAmount,
+          taxAmount: new Prisma.Decimal(0),
+          createdBy: {
+            connect: { id: session.user.id }
+          },
+          updatedBy: {
+            connect: { id: session.user.id }
+          },
+          vendor: {
+            connect: { id: vendorId }
+          },
+          items: {
+            create: items.map(item => ({
+              itemName: item.itemName,
+              quantity: Number(item.quantity),
+              unitPrice: item.unitPrice,
+              taxRate: item.taxRate,
+              description: item.description || null,
+              amount: item.quantity
+                .mul(item.unitPrice)
+                .mul(new Prisma.Decimal(1).add(item.taxRate))
+            }))
+          },
+          tags: {
+            create: tags.map(tag => ({ name: tag.name }))
+          },
+          statusHistory: {
+            create: {
+              type: 'PURCHASE_ORDER',
+              status,
+              user: {
+                connect: { id: session.user.id }
+              }
+            }
+          }
+        },
+        include: purchaseOrderInclude
+      })
 
-    const purchaseOrder = await prisma.purchaseOrder.create({
-      data: createData,
-      include: {
-        vendor: true,
-        items: true,
-        tags: true
-      }
+      return order
+    })
+
+    logger.info('発注書を作成しました', {
+      purchaseOrderId: purchaseOrder.id,
+      orderNumber: purchaseOrder.orderNumber
     })
 
     return NextResponse.json({ 
@@ -265,6 +303,9 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
+    logger.error('発注書の作成に失敗しました', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    })
     return handleApiError(error)
   }
 }
@@ -305,7 +346,9 @@ export async function PATCH(request: NextRequest) {
     // バリデーション
     const validationResult = purchaseOrderUpdateSchema.safeParse(updateData)
     if (!validationResult.success) {
-      console.error('バリデーションエラー:', validationResult.error)
+      logger.warn('バリデーションエラー', {
+        errors: validationResult.error.errors
+      })
       return NextResponse.json(
         { 
           error: validationMessages.validation.invalid,
@@ -336,69 +379,84 @@ export async function PATCH(request: NextRequest) {
       orderNumber?: string
     }
 
-    // 更新データの準備
-    const updateDataInput: Prisma.PurchaseOrderUpdateInput = {
-      ...restData,
-      ...(orderNumber && { orderNumber }),
-      ...(notes !== undefined && { description: notes || null }),
-      ...(orderDate && { orderDate: new Date(orderDate) }),
-      ...(deliveryDate && { deliveryDate: new Date(deliveryDate) }),
-      ...(status && { status: status as PurchaseOrderStatus }),
-      ...(vendorId && {
-        vendor: {
-          connect: { id: vendorId }
-        }
-      }),
-      updatedBy: {
-        connect: { id: session.user.id }
-      }
-    }
+    // トランザクションを使用して一括で更新
+    const purchaseOrder = await prisma.$transaction(async (tx) => {
+      let totalAmount = undefined
 
-    // itemsが指定されている場合は、既存のitemsを削除して新しいものを作成
-    if (items) {
-      // 合計金額の再計算
-      const totalAmount = items.reduce((sum, item) => {
-        const quantity = new Prisma.Decimal(item.quantity)
-        const unitPrice = new Prisma.Decimal(item.unitPrice)
-        const taxRate = new Prisma.Decimal(item.taxRate)
-        const amount = quantity
-          .mul(unitPrice)
-          .mul(new Prisma.Decimal(1).add(taxRate))
-        return sum.add(amount)
-      }, new Prisma.Decimal(0))
-
-      updateDataInput.totalAmount = totalAmount
-      updateDataInput.items = {
-        deleteMany: {},
-        create: items.map(item => ({
-          itemName: item.itemName,
-          quantity: Number(item.quantity),
-          unitPrice: item.unitPrice,
-          taxRate: item.taxRate,
-          description: item.description || null,
-          amount: item.quantity
-            .mul(item.unitPrice)
-            .mul(new Prisma.Decimal(1).add(item.taxRate))
-        }))
+      // itemsが指定されている場合は、合計金額を再計算
+      if (items) {
+        totalAmount = items.reduce((sum, item) => {
+          const quantity = new Prisma.Decimal(item.quantity)
+          const unitPrice = new Prisma.Decimal(item.unitPrice)
+          const taxRate = new Prisma.Decimal(item.taxRate)
+          const amount = quantity
+            .mul(unitPrice)
+            .mul(new Prisma.Decimal(1).add(taxRate))
+          return sum.add(amount)
+        }, new Prisma.Decimal(0))
       }
-    }
 
-    // tagsが指定されている場合は、既存のtagsを削除して新しいものを作成
-    if (tags) {
-      updateDataInput.tags = {
-        deleteMany: {},
-        create: tags.map(tag => ({ name: tag.name }))
-      }
-    }
+      // 発注書の更新
+      const order = await tx.purchaseOrder.update({
+        where: { id },
+        data: {
+          ...restData,
+          ...(orderNumber && { orderNumber }),
+          ...(notes !== undefined && { description: notes || null }),
+          ...(orderDate && { orderDate: new Date(orderDate) }),
+          ...(deliveryDate && { deliveryDate: new Date(deliveryDate) }),
+          ...(status && { status }),
+          ...(totalAmount && { totalAmount }),
+          ...(vendorId && {
+            vendor: {
+              connect: { id: vendorId }
+            }
+          }),
+          updatedBy: {
+            connect: { id: session.user.id }
+          },
+          ...(items && {
+            items: {
+              deleteMany: {},
+              create: items.map(item => ({
+                itemName: item.itemName,
+                quantity: Number(item.quantity),
+                unitPrice: item.unitPrice,
+                taxRate: item.taxRate,
+                description: item.description || null,
+                amount: item.quantity
+                  .mul(item.unitPrice)
+                  .mul(new Prisma.Decimal(1).add(item.taxRate))
+              }))
+            }
+          }),
+          ...(tags && {
+            tags: {
+              deleteMany: {},
+              create: tags.map(tag => ({ name: tag.name }))
+            }
+          }),
+          ...(status && {
+            statusHistory: {
+              create: {
+                type: 'PURCHASE_ORDER',
+                status,
+                user: {
+                  connect: { id: session.user.id }
+                }
+              }
+            }
+          })
+        },
+        include: purchaseOrderInclude
+      })
 
-    const purchaseOrder = await prisma.purchaseOrder.update({
-      where: { id },
-      data: updateDataInput,
-      include: {
-        vendor: true,
-        items: true,
-        tags: true
-      }
+      return order
+    })
+
+    logger.info('発注書を更新しました', {
+      purchaseOrderId: purchaseOrder.id,
+      orderNumber: purchaseOrder.orderNumber
     })
 
     return NextResponse.json({ 
@@ -407,6 +465,9 @@ export async function PATCH(request: NextRequest) {
     })
 
   } catch (error) {
+    logger.error('発注書の更新に失敗しました', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    })
     return handleApiError(error)
   }
 }
@@ -444,10 +505,14 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // 関連するitemsとtagsも削除
-    await prisma.purchaseOrder.delete({
-      where: { id }
+    // トランザクションを使用して関連データと一括で削除
+    await prisma.$transaction(async (tx) => {
+      await tx.purchaseOrder.delete({
+        where: { id }
+      })
     })
+
+    logger.info('発注書を削除しました', { purchaseOrderId: id })
 
     return NextResponse.json({ 
       success: true,
@@ -455,6 +520,9 @@ export async function DELETE(request: NextRequest) {
     })
 
   } catch (error) {
+    logger.error('発注書の削除に失敗しました', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    })
     return handleApiError(error)
   }
 }

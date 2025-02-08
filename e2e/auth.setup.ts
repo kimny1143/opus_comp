@@ -1,41 +1,45 @@
-import { test as setup } from '@playwright/test'
+import { test as setup, chromium } from '@playwright/test'
 import path from 'path'
 import fs from 'fs'
 
 // 認証セットアップ
-setup('認証セットアップ', async ({ browser }) => {
+setup('認証セットアップ', async () => {
   console.log('認証セットアップを開始')
 
-  // ブラウザの初期化を完了させる
-  await browser.newPage()
-  const contexts = browser.contexts()
-  await Promise.all(contexts.map(context => context.close()))
-  
-  // 新しいコンテキストを作成
-  const context = await browser.newContext({
-    baseURL: 'http://localhost:3000',
-    viewport: { width: 1280, height: 720 },
-    ignoreHTTPSErrors: true,
-    serviceWorkers: 'block',
-    javaScriptEnabled: true,
-    bypassCSP: true,
-    extraHTTPHeaders: {
-      'Accept-Language': 'ja-JP'
-    }
+  // ブラウザを直接起動
+  const browser = await chromium.launch({
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      'about:blank'
+    ]
   })
 
   try {
-    // 既存のページをすべて閉じる
-    const pages = await context.pages()
-    await Promise.all(pages.map(page => page.close()))
+    // コンテキストを直接作成(初期ページなし)
+    const context = await browser.newContext({
+      baseURL: 'http://localhost:3000',
+      viewport: { width: 1280, height: 720 },
+      ignoreHTTPSErrors: true,
+      javaScriptEnabled: true,
+      bypassCSP: true,
+      acceptDownloads: false,
+      hasTouch: false,
+      isMobile: false,
+      locale: 'ja-JP',
+      timezoneId: 'Asia/Tokyo'
+    })
 
     console.log('新しいページを作成')
     const page = await context.newPage()
 
     // 認証ページに直接移動
     console.log('認証ページへ移動を開始')
-    await page.goto('/auth/signin')
-    await page.waitForLoadState('networkidle')
+    await page.goto('/auth/signin', {
+      waitUntil: 'networkidle'
+    })
     
     console.log('認証ページへの移動完了')
 
@@ -87,8 +91,8 @@ setup('認証セットアップ', async ({ browser }) => {
     console.error('認証セットアップ中にエラーが発生:', error)
     throw error
   } finally {
-    // コンテキストを必ず閉じる
-    console.log('ブラウザコンテキストをクリーンアップ')
-    await context.close()
+    // ブラウザを必ず閉じる
+    console.log('ブラウザをクリーンアップ')
+    await browser.close()
   }
 })

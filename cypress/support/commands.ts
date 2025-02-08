@@ -74,23 +74,23 @@ interface OrderItem {
 Cypress.Commands.add('setupTestUser', () => {
   // フォームベースの認証を使用
   cy.visit('/auth/signin');
-  cy.get('form[name="signin-form"]').within(() => {
-    cy.get('input[name="email"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
-    cy.get('input[name="password"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
-    cy.get('button[type="submit"]').click();
+  cy.get('[data-testid="signin-form"]').within(() => {
+    cy.get('[data-testid="email-input"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
+    cy.get('[data-testid="password-input"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
+    cy.get('[data-testid="signin-button"]').click();
   });
-  cy.url().should('eq', Cypress.config().baseUrl + '/');
+  cy.url().should('eq', Cypress.config().baseUrl + '/dashboard');
 });
 
 // ログイン処理
 Cypress.Commands.add('login', (options = {}) => {
   cy.visit('/auth/signin');
-  cy.get('form[name="signin-form"]').within(() => {
-    cy.get('input[name="email"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
-    cy.get('input[name="password"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
-    cy.get('button[type="submit"]').click();
+  cy.get('[data-testid="signin-form"]').within(() => {
+    cy.get('[data-testid="email-input"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
+    cy.get('[data-testid="password-input"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
+    cy.get('[data-testid="signin-button"]').click();
   });
-  cy.url().should('eq', Cypress.config().baseUrl + '/');
+  cy.url().should('eq', Cypress.config().baseUrl + '/dashboard');
 });
 
 Cypress.Commands.add('setTestDate', (date: string) => {
@@ -113,12 +113,12 @@ Cypress.Commands.add('createInvoice', (data) => {
 Cypress.Commands.add('setupTestSession', () => {
   cy.session('testUser', () => {
     cy.visit('/auth/signin');
-    cy.get('form[name="signin-form"]').within(() => {
-      cy.get('input[name="email"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
-      cy.get('input[name="password"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
-      cy.get('button[type="submit"]').click();
+    cy.get('[data-testid="signin-form"]').within(() => {
+      cy.get('[data-testid="email-input"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
+      cy.get('[data-testid="password-input"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
+      cy.get('[data-testid="signin-button"]').click();
     });
-    cy.url().should('eq', Cypress.config().baseUrl + '/');
+    cy.url().should('eq', Cypress.config().baseUrl + '/dashboard');
   });
 });
 
@@ -146,20 +146,20 @@ Cypress.Commands.add('waitForValidation', () => {
 // 認証関連のコマンド
 Cypress.Commands.add('setupAuthState', () => {
   cy.visit('/auth/signin');
-  cy.get('form[name="signin-form"]').within(() => {
-    cy.get('input[name="email"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
-    cy.get('input[name="password"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
-    cy.get('button[type="submit"]').click();
+  cy.get('[data-testid="signin-form"]').within(() => {
+    cy.get('[data-testid="email-input"]').type(Cypress.env('TEST_USER_EMAIL') || 'test@example.com');
+    cy.get('[data-testid="password-input"]').type(Cypress.env('TEST_USER_PASSWORD') || 'TestPassword123!');
+    cy.get('[data-testid="signin-button"]').click();
   });
-  cy.url().should('eq', Cypress.config().baseUrl + '/');
+  cy.url().should('eq', Cypress.config().baseUrl + '/dashboard');
 });
 
 Cypress.Commands.add('setupVendorAuthState', () => {
   cy.visit('/vendor-portal/signin');
-  cy.get('form[name="signin-form"]').within(() => {
-    cy.get('input[name="email"]').type(Cypress.env('VENDOR_EMAIL') || 'vendor@example.com');
-    cy.get('input[name="password"]').type(Cypress.env('VENDOR_PASSWORD') || 'VendorPass123!');
-    cy.get('button[type="submit"]').click();
+  cy.get('[data-testid="signin-form"]').within(() => {
+    cy.get('[data-testid="email-input"]').type(Cypress.env('VENDOR_EMAIL') || 'vendor@example.com');
+    cy.get('[data-testid="password-input"]').type(Cypress.env('VENDOR_PASSWORD') || 'VendorPass123!');
+    cy.get('[data-testid="signin-button"]').click();
   });
   cy.url().should('include', '/vendor-portal');
 });

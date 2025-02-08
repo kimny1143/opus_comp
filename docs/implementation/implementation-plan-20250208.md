@@ -1,166 +1,243 @@
-# OPUS実装計画書(2025/02/08更新)
+# 実装計画書: セッション管理・API改善計画 (2025/02/08)
 
-## 1. 概要
+## 1. 現状の問題点
 
-本計画書は、現在発生している問題に対する具体的な実装計画を示すものです。fromPM.mdの指示内容、特に17章のエスカレーション対応指示に基づき作成しています。
+### 1.1 セッション管理の非効率性
 
-## 2. 現状の課題
+1. **セッションストレージの問題**
 
-### 2.1 重大な技術的問題
+   - cleanup()メソッドがredis.keys()を使用し、大規模データセットで性能低下
+   - 期限切れセッションの削除が非効率
+   - セッション再生成時に既存セッションを全て削除
 
-- E2EテストおよびPlaywrightテストの大規模な失敗
-- APIエンドポイントの405エラー
-- セッション管理の非効率性
-- データベースクエリの最適化問題
+2. **認証システムの脆弱性**
+   - loginAttemptsがメモリ上のMapで管理され、サーバー再起動で消失
+   - ログインブロックが分散環境で整合性なし
+   - セッショントークン管理の不備
 
-### 2.2 セキュリティリスク
+### 1.2 APIエンドポイントの問題
 
-- DoS脆弱性の可能性(過剰なセッション生成)
-- セッショントークン管理の不備
-- APIエンドポイントの認可制御問題
-- 認証フローの信頼性低下
+1. **405エラーの発生**
 
-## 3. 実装計画
+   - メソッドチェックロジックの重複
+   - 不完全なCORS設定
+   - エラーレスポンス形式の非統一
 
-### 3.1 緊急対応フェーズ(1週間)
+2. **パフォーマンス問題**
+   - N+1問題の可能性(特にstatusHistory)
+   - 非効率なトランザクション処理
 
-#### Day 1-2: セッション管理の改善
+## 2. 改善計画
 
-- [ ] Redisを使用した効率的なセッション管理の実装
-- [ ] セッションクリーンアップロジックの導入
-- [ ] セッション生成の最適化
+### 2.1 セッション管理の改善
 
-#### Day 3-4: APIエンドポイント修正
+```typescript
+// セッションクリーンアップの改善案
+async cleanup(): Promise<void> {
+  const BATCH_SIZE = 100;
+  const pattern = `${SESSION_PREFIX}*`;
 
-- [ ] HTTPメソッド制御の実装
-- [ ] エラーハンドリングの強化
-- [ ] 認可制御の見直し
+  try {
+    const redis = await getRedisClient();
+    let cursor = '0';
+    let cleanedCount = 0;
 
-#### Day 5-7: 認証システム強化
+    do {
+      // SCAN を使用して効率的にキーを取得
+      const [newCursor, keys] = await redis.scan(
+        cursor,
+        'MATCH', pattern,
+        'COUNT', BATCH_SIZE
+      );
+      cursor = newCursor;
 
-- [ ] セッション固定攻撃対策の実装
-- [ ] 多要素認証の導入検討
-- [ ] E2Eテストの再整備
+      if (keys.length > 0) {
+        // パイプラインを使用して一括処理
+        const pipeline = redis.pipeline();
+        keys.forEach(key => pipeline.get(key));
+        const results = await pipeline.exec();
 
-### 3.2 中期対応フェーズ(2-3週間)
+        const expiredKeys = [];
+        results?.forEach((result, index) => {
+          if (result[1]) {
+            const session = JSON.parse(result[1] as string);
+            if (new Date() > new Date(session.expiresAt)) {
+              expiredKeys.push(keys[index]);
+            }
+          }
+        });
 
-#### Week 1: データベース最適化
+        if (expiredKeys.length > 0) {
+          await redis.del(...expiredKeys);
+          cleanedCount += expiredKeys.length;
+        }
+      }
+    } while (cursor !== '0');
 
-- [ ] N+1問題の解消
-- [ ] インデックス最適化
-- [ ] クエリパフォーマンスの改善
+    logger.info('期限切れセッションのクリーンアップを完了しました', {
+      cleanedCount
+    });
+  } catch (error) {
+    logger.error('セッションクリーンアップ中にエラーが発生しました:', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}
+```
 
-#### Week 2: セキュリティ監視強化
+### 2.2 認証システムの強化
 
-- [ ] ログ監視システムの導入
-- [ ] アラート設定の実装
-- [ ] 脆弱性スキャンの導入
+```typescript
+// Redisベースのログイン試行管理
+class LoginAttemptManager {
+  private readonly redis: Redis;
+  private readonly PREFIX = "login-attempt:";
+  private readonly BLOCK_DURATION = 15 * 60; // 15分(秒)
 
-#### Week 3: テストフレームワーク改善
+  constructor(redis: Redis) {
+    this.redis = redis;
+  }
 
-- [ ] テストシナリオの見直し
-- [ ] CI環境との整合性確保
-- [ ] カバレッジ向上施策の実施
+  private getKey(email: string): string {
+    return `${this.PREFIX}${email}`;
+  }
 
-## 4. チーム別実装タスク
+  async checkAttempts(email: string): Promise<boolean> {
+    const key = this.getKey(email);
+    const attempts = await this.redis.get(key);
 
-### 4.1 エンジニアチーム
+    if (!attempts) {
+      await this.redis.set(key, "1", "EX", this.BLOCK_DURATION);
+      return true;
+    }
 
-- セッション管理コードのリファクタリング
-- APIメソッド制御の実装
-- 405エラーの原因究明と修正
-- データベースクエリの最適化
+    const count = parseInt(attempts, 10);
+    if (count >= MAX_LOGIN_ATTEMPTS) {
+      return false;
+    }
 
-### 4.2 セキュリティチーム
+    await this.redis.incr(key);
+    return true;
+  }
 
-- DoS脆弱性対策の実装
-- 認証フローの強化
-- セキュリティ監視の導入
-- 多要素認証の実装サポート
+  async resetAttempts(email: string): Promise<void> {
+    await this.redis.del(this.getKey(email));
+  }
+}
+```
 
-### 4.3 QAチーム
+### 2.3 APIエンドポイント改善
 
-- テストフレームワークの見直し
-- テストデータの更新
-- APIエラーハンドリングの検証
-- 不具合の追跡調査
+```typescript
+// 共通のミドルウェア関数
+async function withErrorHandler(
+  req: NextRequest,
+  handler: (req: NextRequest) => Promise<NextResponse>
+): Promise<NextResponse> {
+  try {
+    // メソッドチェック
+    if (!ALLOWED_METHODS.includes(req.method)) {
+      return new NextResponse(
+        JSON.stringify({
+          error: `Method ${req.method} Not Allowed`,
+        }),
+        {
+          status: 405,
+          headers: {
+            Allow: ALLOWED_METHODS.join(", "),
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
 
-## 5. 進捗報告体制
+    // 認証チェック
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return new NextResponse(
+        JSON.stringify({
+          error: validationMessages.auth.required,
+        }),
+        {
+          status: 401,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
 
-### 5.1 日次報告
+    return await handler(req);
+  } catch (error) {
+    logger.error("APIエラーが発生しました", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      path: req.url,
+    });
+    return handleApiError(error);
+  }
+}
+```
 
-- 実施内容: 緊急対応の進捗報告
-- 報告先: #escalationチャンネル
-- タイミング: 毎日17時まで
-- 報告項目:
-  - 完了したタスク
-  - 発生した問題
-  - 次日の予定
+## 3. 実装スケジュール
 
-### 5.2 週次報告
+### Week 1 (2/12-2/16)
 
-- 実施内容: 中期対応の進捗報告
-- 報告先: 管理者
-- タイミング: 毎週金曜17時
-- 報告項目:
-  - 週間の達成事項
-  - リスク評価更新
-  - 次週の計画
+- セッション管理の改善
+  - Redis SCAN ベースのクリーンアップ実装
+  - セッション再生成ロジックの最適化
+  - ユニットテスト作成
 
-## 6. 成果物
+### Week 2 (2/19-2/23)
 
-### 6.1 技術文書
+- 認証システム強化
+  - Redis ベースのログイン試行管理実装
+  - セッショントークン管理の改善
+  - セキュリティテスト実施
 
-- セッション管理設計書
-- API実装仕様書
-- セキュリティ対策実装書
-- テスト計画書
+### Week 3 (2/26-3/1)
 
-### 6.2 報告書
+- APIエンドポイント改善
+  - 共通ミドルウェアの実装
+  - N+1問題の解消
+  - パフォーマンステスト実施
 
-- 日次進捗報告
-- セキュリティリスク評価更新
-- パフォーマンス計測結果
-- 最終実装報告書
+## 4. リスク評価
 
-## 7. リスク管理
+1. **データ整合性リスク**
 
-### 7.1 技術的リスク
+   - Redis クラスタ環境での動作検証が必要
+   - セッションデータの移行計画の策定
 
-- セッション管理の移行による一時的な機能停止
-- データベース最適化による既存機能への影響
-- 認証システム強化による互換性問題
+2. **パフォーマンスリスク**
 
-### 7.2 対策
+   - 大規模データでのSCAN操作の影響評価
+   - キャッシュ戦略の見直し
 
-- 段階的な導入とロールバック計画の準備
-- 十分なテスト環境での検証
-- 影響範囲の事前評価と対策
+3. **セキュリティリスク**
+   - トークン生成・検証ロジックの強化
+   - レート制限の適切な設定
 
-## 8. スケジュール
+## 5. 承認依頼事項
 
-### Week 1(緊急対応)
+1. Redis SCAN ベースのセッション管理への移行
+2. ログイン試行管理のRedis実装
+3. APIミドルウェアの共通化
+4. 実装スケジュールの妥当性
 
-- Day 1-2: セッション管理改善
-- Day 3-4: APIエンドポイント修正
-- Day 5-7: 認証システム強化
+## 6. モニタリング計画
 
-### Week 2-4(中期対応)
+1. **パフォーマンスメトリクス**
 
-- Week 2: データベース最適化
-- Week 3: セキュリティ監視強化
-- Week 4: テストフレームワーク改善
+   - Redisオペレーションのレイテンシ
+   - セッション数とクリーンアップ効率
+   - API レスポンスタイム
 
-## 9. 承認依頼
-
-本計画書の内容について、以下の承認をお願いいたします:
-
-1. 緊急対応計画の実施承認
-2. 中期対応計画の実施承認
-3. リソース配分の承認
-4. スケジュールの承認
+2. **セキュリティメトリクス**
+   - ログイン試行失敗率
+   - セッション異常終了数
+   - 不正アクセス検知数
 
 ---
 
-更新日: 2025/02/08
+作成日: 2025/02/08
 作成者: 開発チーム

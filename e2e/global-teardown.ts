@@ -5,24 +5,41 @@ const prisma = new PrismaClient()
 
 async function globalTeardown(config: FullConfig) {
   try {
-    // テストユーザーの削除
-    await prisma.user.deleteMany({
-      where: {
-        email: process.env.TEST_USER_EMAIL || 'test@example.com'
+    // テストユーザーと関連データの削除
+    const testUserEmail = process.env.TEST_USER_EMAIL || 'test@example.com'
+    await prisma.$transaction(async (tx) => {
+      // テストユーザーを検索
+      const user = await tx.user.findUnique({
+        where: { email: testUserEmail }
+      })
+
+      if (user) {
+        // 関連する発注書を削除
+        await tx.purchaseOrder.deleteMany({
+          where: {
+            OR: [
+              { createdById: user.id },
+              { updatedById: user.id }
+            ]
+          }
+        })
+
+        // セッションを削除
+        await tx.session.deleteMany({
+          where: { userId: user.id }
+        })
+
+        // アカウントを削除
+        await tx.account.deleteMany({
+          where: { userId: user.id }
+        })
+
+        // ユーザーを削除
+        await tx.user.delete({
+          where: { id: user.id }
+        })
       }
     })
-
-    // テストで作成された関連データの削除
-    await prisma.$transaction([
-      prisma.session.deleteMany({}),
-      prisma.account.deleteMany({
-        where: {
-          user: {
-            email: process.env.TEST_USER_EMAIL || 'test@example.com'
-          }
-        }
-      })
-    ])
 
     // Redisのセッションデータをクリア
     const redis = await (await import('@/lib/redis/client')).getRedisClient()

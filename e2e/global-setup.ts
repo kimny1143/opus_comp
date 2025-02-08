@@ -16,21 +16,50 @@ async function globalSetup(config: FullConfig) {
   )
 
   try {
-    // 既存のテストユーザーを削除
-    await prisma.user.deleteMany({
-      where: {
-        email: process.env.TEST_USER_EMAIL || 'test@example.com'
-      }
-    })
+    // 既存のテストユーザーに関連するデータを削除
+    const testUserEmail = process.env.TEST_USER_EMAIL || 'test@example.com'
+    await prisma.$transaction(async (tx) => {
+      // テストユーザーを検索
+      const user = await tx.user.findUnique({
+        where: { email: testUserEmail }
+      })
 
-    // テストユーザーを作成
-    await prisma.user.create({
-      data: {
-        email: process.env.TEST_USER_EMAIL || 'test@example.com',
-        name: 'Test User',
-        hashedPassword,
-        role: 'USER'
+      if (user) {
+        // 関連する発注書を削除
+        await tx.purchaseOrder.deleteMany({
+          where: {
+            OR: [
+              { createdById: user.id },
+              { updatedById: user.id }
+            ]
+          }
+        })
+
+        // セッションを削除
+        await tx.session.deleteMany({
+          where: { userId: user.id }
+        })
+
+        // アカウントを削除
+        await tx.account.deleteMany({
+          where: { userId: user.id }
+        })
+
+        // ユーザーを削除
+        await tx.user.delete({
+          where: { id: user.id }
+        })
       }
+
+      // 新しいテストユーザーを作成
+      await tx.user.create({
+        data: {
+          email: testUserEmail,
+          name: 'Test User',
+          hashedPassword,
+          role: 'USER'
+        }
+      })
     })
 
     // テスト用のセッションデータをクリア

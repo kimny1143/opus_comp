@@ -13,11 +13,11 @@ describe('取引先管理', () => {
 
   it('取引先の新規登録', () => {
     // 新規登録ページに移動
-    cy.get('[data-testid="create-vendor-button"]').click();
+    cy.contains('button', '新規登録').click();
     cy.url().should('include', '/vendors/new');
 
     // フォームの入力
-    cy.get('[data-testid="vendor-form"]').within(() => {
+    cy.get('form').within(() => {
       cy.get('input[name="name"]').type('新規テスト株式会社');
       cy.get('input[name="code"]').type('NEW001');
       cy.get('select[name="category"]').select('CORPORATION');
@@ -34,10 +34,10 @@ describe('取引先管理', () => {
   it('取引先情報の編集', () => {
     // 既存の取引先を選択
     cy.contains('テスト株式会社').click();
-    cy.get('[data-testid="edit-vendor-button"]').click();
+    cy.contains('button', '編集').click();
 
     // フォームの編集
-    cy.get('[data-testid="vendor-form"]').within(() => {
+    cy.get('form').within(() => {
       cy.get('input[name="name"]').clear().type('更新テスト株式会社');
       cy.get('button[type="submit"]').click();
     });
@@ -49,8 +49,8 @@ describe('取引先管理', () => {
 
   it('取引先の検索', () => {
     // 検索の実行
-    cy.get('[data-testid="search-input"]').type('テスト');
-    cy.get('[data-testid="search-button"]').click();
+    cy.get('input[placeholder*="検索"]').type('テスト');
+    cy.get('button').contains('検索').click();
 
     // 検索結果の確認
     cy.contains('テスト株式会社').should('exist');
@@ -60,14 +60,14 @@ describe('取引先管理', () => {
   it('取引先のタグ管理', () => {
     // タグの追加
     cy.contains('テスト株式会社').click();
-    cy.get('[data-testid="add-tag-button"]').click();
-    cy.get('[data-testid="tag-input"]').type('重要{enter}');
+    cy.get('button').contains('タグを追加').click();
+    cy.get('input[placeholder*="タグ"]').type('重要{enter}');
 
     // タグの確認
-    cy.contains('重要').should('exist');
+    cy.get('.badge').contains('重要').should('exist');
 
     // タグの削除
-    cy.get('[data-testid="remove-tag-button"]').click();
-    cy.contains('重要').should('not.exist');
+    cy.get('.badge').contains('重要').parent().find('button').click();
+    cy.get('.badge').contains('重要').should('not.exist');
   });
 });

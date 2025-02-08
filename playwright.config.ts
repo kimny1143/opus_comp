@@ -65,10 +65,6 @@ export default defineConfig({
     {
       name: 'setup',
       testMatch: /.*\.setup\.ts/,
-      use: {
-        // セットアップ用の専用コンテキスト
-        storageState: path.join(__dirname, 'e2e/.auth/user.json'),
-      },
     },
     {
       name: 'chromium',

@@ -1,15 +1,44 @@
 import { test as setup, expect } from '@playwright/test'
+import path from 'path'
+import fs from 'fs'
+
+// スクリーンショット保存ディレクトリの作成
+const screenshotDir = path.join(process.cwd(), 'test-results')
+if (!fs.existsSync(screenshotDir)) {
+  fs.mkdirSync(screenshotDir, { recursive: true })
+}
 
 // 認証セットアップ
-setup('認証セットアップ', async ({ page }) => {
-  // ブラウザコンテキストの準備
-  await page.setViewportSize({ width: 1280, height: 720 })
+setup('認証セットアップ', async ({ browser }) => {
+  console.log('認証セットアップを開始')
   
-  console.log('認証ページへ移動を開始')
-  
+  // 新しいコンテキストを毎回作成(再利用しない)
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 720 },
+    ignoreHTTPSErrors: true,
+    recordVideo: {
+      dir: 'test-results/videos'
+    }
+  })
+
   try {
+    console.log('新しいページを作成')
+    const page = await context.newPage()
+
+    // コンソールログの収集を開始
+    page.on('console', msg => {
+      fs.appendFileSync(
+        path.join(screenshotDir, 'browser-console.log'),
+        `[${msg.type()}] ${msg.text()}\n`
+      )
+    })
+
+    // ナビゲーション開始前にページの状態を確認
+    console.log('認証ページへ移動を開始')
+    await page.waitForLoadState('networkidle')
+    
     // 認証ページに移動
-    await page.goto('/auth/signin', {
+    await page.goto('http://localhost:3000/auth/signin', {
       waitUntil: 'networkidle',
       timeout: 30000
     })
@@ -19,14 +48,14 @@ setup('認証セットアップ', async ({ page }) => {
     // ログインフォームが表示されるまで待機
     const form = await page.waitForSelector('form[name="signin-form"]', {
       state: 'visible',
-      timeout: 10000
+      timeout: 15000
     })
     
     console.log('ログインフォームの表示を確認')
 
     // フォームが完全に読み込まれるまで待機
     await page.waitForLoadState('domcontentloaded')
-    await page.waitForTimeout(1000) // 追加の安定化待機
+    await page.waitForLoadState('networkidle')
 
     // テストユーザーでログイン
     await page.getByLabel('Email').fill(process.env.TEST_USER_EMAIL || 'test@example.com')
@@ -34,7 +63,11 @@ setup('認証セットアップ', async ({ page }) => {
     
     console.log('認証情報を入力完了')
 
+    // フォーム送信前の状態を確認
+    await page.waitForLoadState('networkidle')
+
     // フォーム送信とナビゲーション完了を待機
+    console.log('ログインボタンをクリック')
     await Promise.all([
       page.waitForNavigation({
         waitUntil: 'networkidle',
@@ -43,10 +76,10 @@ setup('認証セットアップ', async ({ page }) => {
       page.getByRole('button', { name: 'ログイン' }).click()
     ])
     
-    console.log('ログインボタンをクリック、ナビゲーション完了を待機')
+    console.log('ナビゲーション完了を待機')
 
     // ログイン後のページ遷移を確認
-    await page.waitForURL('/', {
+    await page.waitForURL('http://localhost:3000/', {
       timeout: 30000,
       waitUntil: 'networkidle'
     })
@@ -55,27 +88,63 @@ setup('認証セットアップ', async ({ page }) => {
 
     // ログイン状態の検証
     await expect(page.getByText(process.env.TEST_USER_EMAIL || 'test@example.com')).toBeVisible({
-      timeout: 10000
+      timeout: 15000
     })
     
     console.log('ログイン状態の検証完了')
 
-    // ストレージステートを保存
-    await page.context().storageState({
-      path: 'e2e/.auth/user.json'
+    // 認証状態を保存
+    const authDir = path.join(process.cwd(), 'e2e/.auth')
+    if (!fs.existsSync(authDir)) {
+      fs.mkdirSync(authDir, { recursive: true })
+    }
+
+    await context.storageState({
+      path: path.join(authDir, 'user.json')
     })
     
     console.log('認証状態を保存完了')
+
+    // 成功時のスクリーンショット
+    await page.screenshot({
+      path: path.join(screenshotDir, 'auth-setup-success.png'),
+      fullPage: true
+    })
     
   } catch (error) {
     console.error('認証セットアップ中にエラーが発生:', error)
     
-    // エラー時のスクリーンショットを保存
-    await page.screenshot({
-      path: 'test-results/auth-setup-error.png',
-      fullPage: true
-    })
+    try {
+      // エラー時のスクリーンショットとビデオを保存
+      const page = await context.pages()[0]
+      if (page) {
+        const screenshotPath = path.join(screenshotDir, 'auth-setup-error.png')
+        await page.screenshot({
+          path: screenshotPath,
+          fullPage: true
+        })
+        console.log('エラー時のスクリーンショットを保存:', screenshotPath)
+        
+        // ページのエラーログを保存
+        const errorLogs = await page.evaluate(() => {
+          return {
+            errors: (window as any).errors || [],
+            networkErrors: (window as any).networkErrors || []
+          }
+        })
+        fs.writeFileSync(
+          path.join(screenshotDir, 'page-errors.log'),
+          JSON.stringify(errorLogs, null, 2)
+        )
+      }
+    } catch (screenshotError) {
+      console.error('スクリーンショット保存に失敗:', screenshotError)
+    }
     
     throw error
+  } finally {
+    // コンテキストを必ず閉じる
+    console.log('ブラウザコンテキストをクリーンアップ')
+    await context.close()
   }
 })

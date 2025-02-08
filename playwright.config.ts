@@ -7,22 +7,18 @@ dotenv.config({ path: '.env.test' })
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 30000, // グローバルタイムアウト: 30秒
+  
+  // タイムアウト設定 (統合指示文書セクション21に基づく)
+  timeout: 30000,
   expect: {
-    timeout: 5000, // アサーションのタイムアウト: 5秒
-    toHaveScreenshot: {
-      maxDiffPixels: 100,
-    },
-    toMatchSnapshot: {
-      maxDiffPixelRatio: 0.1,
-    },
+    timeout: 15000, // 最小15秒
   },
 
   // テストの実行設定
-  fullyParallel: false, // 並列実行を無効化
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
-  workers: 1, // ワーカー数を1に制限
+  retries: process.env.CI ? 1 : 0, // リトライは1回のみ
+  workers: process.env.CI ? 2 : undefined, // CI環境では2ワーカーに制限
   
   // レポート設定
   reporter: [
@@ -41,7 +37,7 @@ export default defineConfig({
     
     // ブラウザ設定
     launchOptions: {
-      slowMo: 100, // 操作を遅くして安定性を向上
+      slowMo: 100,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -54,10 +50,10 @@ export default defineConfig({
     actionTimeout: 15000,
     navigationTimeout: 30000,
     
-    // トレースとデバッグ
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    // トレースとデバッグ (常時有効化)
+    trace: 'on',
+    screenshot: 'on',
+    video: 'on-first-retry',
     
     // その他の設定
     ignoreHTTPSErrors: true,
@@ -70,6 +66,7 @@ export default defineConfig({
       name: 'setup',
       testMatch: /.*\.setup\.ts/,
       use: {
+        // セットアップ用の専用コンテキスト
         storageState: path.join(__dirname, 'e2e/.auth/user.json'),
       },
     },

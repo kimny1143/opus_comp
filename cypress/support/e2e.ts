@@ -2,23 +2,19 @@
 /// <reference types="@testing-library/cypress" />
 
 import './commands'
+import './helpers'
 
 declare global {
   namespace Cypress {
     interface Chainable {
-      task(event: 'seedLargeDataset', options: { count: number }): Chainable<void>
-      clock(timestamp: number): Chainable<void>
+      task(event: string, arg?: any): Chainable<any>
+      intercept(method: string, url: string, response?: any): Chainable<void>
+      intercept(url: string, response?: any): Chainable<void>
+      /**
+       * テスト情報をログ出力します
+       * @example cy.logTestInfo('テスト開始')
+       */
       logTestInfo(message: string, data?: Record<string, unknown>): Chainable<void>
-    }
-
-    interface Interception {
-      response?: {
-        statusCode: number;
-        body: any;
-      };
-      request?: {
-        body: any;
-      };
     }
   }
 }
@@ -38,20 +34,28 @@ Cypress.Commands.add('logTestInfo', (message: string, data?: Record<string, unkn
   cy.log(JSON.stringify(testInfo, null, 2));
 });
 
-// テスト開始時のログ
+// テスト開始時のログとセットアップ
 beforeEach(() => {
+  // テストデータのセットアップ
+  cy.setupTestData();
+
+  // ログ出力
   cy.logTestInfo('テスト開始', {
     env: Cypress.env(),
     baseUrl: Cypress.config('baseUrl')
   });
 });
 
-// テスト終了時のログ
+// テスト終了時のログとクリーンアップ
 afterEach(() => {
+  // ログ出力
   cy.logTestInfo('テスト終了', {
     status: (cy as any).state('test').state,
     duration: (cy as any).state('test').duration
   });
+
+  // テストデータのクリーンアップ
+  cy.cleanupTestData();
 });
 
 // エラーハンドリング
@@ -72,4 +76,4 @@ Cypress.on('uncaught:exception', (err) => {
     timestamp: new Date().toISOString()
   });
   return true;
-}); 
+});

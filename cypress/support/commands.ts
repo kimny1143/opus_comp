@@ -101,27 +101,32 @@ Cypress.Commands.add('setupTestUser', () => {
 
 // ログイン処理
 Cypress.Commands.add('login', (options = { role: 'USER' }) => {
-  // APIを直接呼び出してログイン
-  return cy.request({
-    method: 'POST',
-    url: '/api/auth/test/login',
-    body: {
-      email: 'test@example.com',
-      role: options.role
-    },
-    failOnStatusCode: false
-  }).then((response: Cypress.Response<any>) => {
-    if (response.status !== 200) {
-      // フォールバック: フォームベースのログイン
-      cy.visit('/auth/signin');
-      cy.get('[data-testid="signin-form"]').within(() => {
-        cy.get('[data-testid="email-input"]').type('test@example.com');
-        cy.get('[data-testid="password-input"]').type('TestPassword123!');
-        cy.get('[data-testid="signin-button"]').click();
+  // まずフォームベースのログインを試行
+  cy.visit('/auth/signin');
+  cy.get('[data-testid="signin-form"]').within(() => {
+    cy.get('[data-testid="email-input"]').type('test@example.com');
+    cy.get('[data-testid="password-input"]').type('TestPassword123!');
+    cy.get('[data-testid="signin-button"]').click();
+  });
+
+  // フォームベースのログインが失敗した場合、APIを使用
+  cy.location('pathname').then((pathname: string) => {
+    if (pathname !== '/dashboard') {
+      cy.request({
+        method: 'POST',
+        url: '/api/auth/test/login',
+        body: {
+          email: 'test@example.com',
+          role: options.role
+        }
+      }).then(() => {
+        cy.visit('/dashboard');
       });
     }
-    cy.url().should('include', '/dashboard');
   });
+
+  // ダッシュボードへの遷移を確認
+  cy.location('pathname').should('eq', '/dashboard');
 });
 
 Cypress.Commands.add('setTestDate', (date: string) => {

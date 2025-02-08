@@ -1,57 +1,22 @@
-import { test as setup, chromium, BrowserContext } from '@playwright/test'
+import { test as setup } from '@playwright/test'
 import path from 'path'
 import fs from 'fs'
 
 // 認証セットアップ
-setup('認証セットアップ', async () => {
+setup('認証セットアップ', async ({ browser }) => {
   console.log('認証セットアップを開始')
 
-  let browser
-  let context: BrowserContext | undefined
+  // 新しいコンテキストを作成(最小限の設定)
+  const context = await browser.newContext()
 
   try {
-    // ブラウザを直接起動
-    browser = await chromium.launch({
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-      ]
-    })
-
-    // コンテキストを作成
-    context = await browser.newContext({
-      baseURL: 'http://localhost:3000',
-      viewport: { width: 1280, height: 720 },
-      ignoreHTTPSErrors: true,
-      locale: 'ja-JP',
-      timezoneId: 'Asia/Tokyo'
-    })
-
-    // 既存のページをすべて閉じる
-    const pages = await context.pages()
-    await Promise.all(pages.map(page => page.close()))
-
     console.log('新しいページを作成')
     const page = await context.newPage()
 
     // 認証ページに直接移動
     console.log('認証ページへ移動を開始')
-    await page.route('**/*', route => {
-      // 不要なリソースをブロック
-      if (route.request().resourceType() === 'image' || 
-          route.request().resourceType() === 'font' ||
-          route.request().resourceType() === 'media') {
-        route.abort()
-      } else {
-        route.continue()
-      }
-    })
-
-    await page.goto('/auth/signin', {
-      waitUntil: 'networkidle'
-    })
+    await page.goto('http://localhost:3000/auth/signin')
+    await page.waitForLoadState('networkidle')
     
     console.log('認証ページへの移動完了')
 
@@ -81,7 +46,7 @@ setup('認証セットアップ', async () => {
     console.log('ナビゲーション完了を待機')
 
     // ログイン後のページ遷移を確認
-    await page.waitForURL('/', {
+    await page.waitForURL('http://localhost:3000/', {
       waitUntil: 'networkidle'
     })
     
@@ -103,13 +68,8 @@ setup('認証セットアップ', async () => {
     console.error('認証セットアップ中にエラーが発生:', error)
     throw error
   } finally {
-    // リソースを確実に解放
-    if (context) {
-      await context.close()
-    }
-    if (browser) {
-      await browser.close()
-    }
-    console.log('ブラウザをクリーンアップ完了')
+    // コンテキストを必ず閉じる
+    await context.close()
+    console.log('ブラウザコンテキストをクリーンアップ完了')
   }
 })

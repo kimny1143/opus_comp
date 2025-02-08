@@ -8,17 +8,17 @@ dotenv.config({ path: '.env.test' })
 export default defineConfig({
   testDir: './e2e',
   
-  // タイムアウト設定 (統合指示文書セクション21に基づく)
+  // タイムアウト設定
   timeout: 30000,
   expect: {
-    timeout: 15000, // 最小15秒
+    timeout: 15000
   },
 
   // テストの実行設定
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0, // リトライは1回のみ
-  workers: process.env.CI ? 2 : undefined, // CI環境では2ワーカーに制限
+  retries: process.env.CI ? 1 : 0,
+  workers: process.env.CI ? 2 : undefined,
   
   // レポート設定
   reporter: [
@@ -29,20 +29,10 @@ export default defineConfig({
 
   // グローバル設定
   use: {
-    // ベースURL設定
-    baseURL: 'http://localhost:3000',
-    
-    // ビューポート設定
-    viewport: { width: 1280, height: 720 },
-    
     // ブラウザ設定
+    headless: false, // 動作確認のため無効化
     launchOptions: {
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-      ]
+      slowMo: 1000, // 動作を遅くして確認
     },
     
     // タイムアウト設定
@@ -52,24 +42,20 @@ export default defineConfig({
     // トレースとデバッグ (常時有効化)
     trace: 'on',
     screenshot: 'on',
-    video: 'on-first-retry',
-    
-    // その他の設定
-    ignoreHTTPSErrors: true,
-    bypassCSP: true,
+    video: 'on',
   },
 
   // プロジェクト設定
   projects: [
     {
       name: 'setup',
-      testMatch: /.*\.setup\.ts/
+      testMatch: /.*\.setup\.ts/,
     },
     {
       name: 'chromium',
       use: { 
         ...devices['Desktop Chrome'],
-        storageState: path.join(__dirname, 'e2e/.auth/user.json')
+        storageState: path.join(__dirname, 'e2e/.auth/user.json'),
       },
       dependencies: ['setup'],
       testIgnore: ['**/auth.setup.ts'],

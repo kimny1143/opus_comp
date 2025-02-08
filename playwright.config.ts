@@ -28,25 +28,38 @@ export default defineConfig({
     ['json', { outputFile: 'test-results/results.json' }]
   ],
   use: {
-    baseURL: 'http://localhost:3000', // 開発サーバーのURL
-    trace: 'on-first-retry', // 最初のリトライ時にトレースを記録
-    screenshot: 'only-on-failure', // 失敗時のみスクリーンショットを保存
-    video: 'retain-on-failure', // 失敗時のみビデオを保存
+    // テスト環境のベースURL
+    baseURL: process.env.TEST_BASE_URL || 'http://localhost:3000',
+    
+    // ブラウザの設定
+    viewport: { width: 1280, height: 720 },
+    ignoreHTTPSErrors: true,
+    
+    // トレースとデバッグ
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+    
+    // その他の設定
+    actionTimeout: 10000,
+    navigationTimeout: 15000,
   },
   projects: [
     {
       name: 'setup',
       testMatch: /.*\.setup\.ts/,
+      use: {
+        storageState: path.join(__dirname, 'e2e/.auth/user.json'),
+      },
     },
     {
       name: 'chromium',
       use: { 
         ...devices['Desktop Chrome'],
-        viewport: { width: 1280, height: 720 }, // ビューポートサイズを指定
+        storageState: path.join(__dirname, 'e2e/.auth/user.json'),
       },
       dependencies: ['setup'],
       testIgnore: ['**/auth.setup.ts'],
-      timeout: 60000, // プロジェクト固有のタイムアウト: 60秒
     }
   ],
   outputDir: 'test-results/',

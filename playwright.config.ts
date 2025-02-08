@@ -28,7 +28,7 @@ export default defineConfig({
     ['json', { outputFile: 'test-results/results.json' }]
   ],
   use: {
-    baseURL: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    baseURL: 'http://localhost:3000', // 開発サーバーのURL
     trace: 'on-first-retry', // 最初のリトライ時にトレースを記録
     screenshot: 'only-on-failure', // 失敗時のみスクリーンショットを保存
     video: 'retain-on-failure', // 失敗時のみビデオを保存
@@ -40,7 +40,10 @@ export default defineConfig({
     },
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { 
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 720 }, // ビューポートサイズを指定
+      },
       dependencies: ['setup'],
       testIgnore: ['**/auth.setup.ts'],
       timeout: 60000, // プロジェクト固有のタイムアウト: 60秒

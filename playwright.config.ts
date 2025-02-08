@@ -10,7 +10,6 @@ export default defineConfig({
   timeout: 30000, // グローバルタイムアウト: 30秒
   expect: {
     timeout: 5000, // アサーションのタイムアウト: 5秒
-    // カスタムマッチャーの設定
     toHaveScreenshot: {
       maxDiffPixels: 100,
     },
@@ -18,22 +17,39 @@ export default defineConfig({
       maxDiffPixelRatio: 0.1,
     },
   },
-  fullyParallel: false, // リソース制約を考慮し、並列実行を無効化
-  forbidOnly: !!process.env.CI, // CI環境では特定のテストのみの実行を禁止
-  retries: process.env.CI ? 1 : 0, // CI環境では1回のリトライを許可
-  workers: process.env.CI ? 1 : undefined, // CI環境ではワーカー数を1に制限
+
+  // テストの実行設定
+  fullyParallel: false, // 並列実行を無効化
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
+  workers: 1, // ワーカー数を1に制限
+  
+  // レポート設定
   reporter: [
     ['html'],
     ['list'],
     ['json', { outputFile: 'test-results/results.json' }]
   ],
+
+  // グローバル設定
   use: {
-    // テスト環境のベースURL
     baseURL: process.env.TEST_BASE_URL || 'http://localhost:3000',
-    
-    // ブラウザの設定
     viewport: { width: 1280, height: 720 },
-    ignoreHTTPSErrors: true,
+    
+    // ブラウザ設定
+    launchOptions: {
+      slowMo: 100, // 操作を遅くして安定性を向上
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ]
+    },
+    
+    // タイムアウト設定
+    actionTimeout: 15000,
+    navigationTimeout: 30000,
     
     // トレースとデバッグ
     trace: 'retain-on-failure',
@@ -41,9 +57,11 @@ export default defineConfig({
     video: 'retain-on-failure',
     
     // その他の設定
-    actionTimeout: 10000,
-    navigationTimeout: 15000,
+    ignoreHTTPSErrors: true,
+    bypassCSP: true,
   },
+
+  // プロジェクト設定
   projects: [
     {
       name: 'setup',
@@ -57,12 +75,21 @@ export default defineConfig({
       use: { 
         ...devices['Desktop Chrome'],
         storageState: path.join(__dirname, 'e2e/.auth/user.json'),
+        contextOptions: {
+          reducedMotion: 'reduce',
+          forcedColors: 'none',
+          strictSelectors: true,
+        }
       },
       dependencies: ['setup'],
       testIgnore: ['**/auth.setup.ts'],
     }
   ],
+
+  // 出力設定
   outputDir: 'test-results/',
+  
+  // グローバルセットアップ/ティアダウン
   globalSetup: path.join(__dirname, 'e2e/global-setup.ts'),
   globalTeardown: path.join(__dirname, 'e2e/global-teardown.ts'),
 });

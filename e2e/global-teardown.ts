@@ -1,5 +1,6 @@
 import { FullConfig } from '@playwright/test'
 import { PrismaClient } from '@prisma/client'
+import path from 'path'
 
 const prisma = new PrismaClient()
 
@@ -62,20 +63,25 @@ async function globalTeardown(config: FullConfig) {
     })
 
     // Redisのセッションデータをクリア
-    const redis = await (await import('@/lib/redis/client')).getRedisClient()
-    const sessionKeys = await redis.keys('session:*')
+    const Redis = require('ioredis')
+    const redis = new Redis(process.env.REDIS_URL)
+    
+    const sessionKeys = await redis.keys(`${process.env.REDIS_PREFIX || 'opus_test:'}session:*`)
     if (sessionKeys.length > 0) {
       await redis.del(...sessionKeys)
     }
-    const userSessionKeys = await redis.keys('user-sessions:*')
+    
+    const userSessionKeys = await redis.keys(`${process.env.REDIS_PREFIX || 'opus_test:'}user-sessions:*`)
     if (userSessionKeys.length > 0) {
       await redis.del(...userSessionKeys)
     }
-    const loginAttemptKeys = await redis.keys('login-attempt:*')
+    
+    const loginAttemptKeys = await redis.keys(`${process.env.REDIS_PREFIX || 'opus_test:'}login-attempt:*`)
     if (loginAttemptKeys.length > 0) {
       await redis.del(...loginAttemptKeys)
     }
 
+    await redis.quit()
     console.log('テスト環境のクリーンアップが完了しました')
   } catch (error) {
     console.error('テスト環境のクリーンアップに失敗しました:', error)

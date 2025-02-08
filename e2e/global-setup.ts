@@ -2,6 +2,7 @@ import { chromium, FullConfig } from '@playwright/test'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import dotenv from 'dotenv'
+import path from 'path'
 
 // テスト環境の設定を読み込み
 dotenv.config({ path: '.env.test' })
@@ -83,20 +84,25 @@ async function globalSetup(config: FullConfig) {
     })
 
     // テスト用のセッションデータをクリア
-    const redis = await (await import('@/lib/redis/client')).getRedisClient()
-    const sessionKeys = await redis.keys('session:*')
+    const Redis = require('ioredis')
+    const redis = new Redis(process.env.REDIS_URL)
+    
+    const sessionKeys = await redis.keys(`${process.env.REDIS_PREFIX || 'opus_test:'}session:*`)
     if (sessionKeys.length > 0) {
       await redis.del(...sessionKeys)
     }
-    const userSessionKeys = await redis.keys('user-sessions:*')
+    
+    const userSessionKeys = await redis.keys(`${process.env.REDIS_PREFIX || 'opus_test:'}user-sessions:*`)
     if (userSessionKeys.length > 0) {
       await redis.del(...userSessionKeys)
     }
-    const loginAttemptKeys = await redis.keys('login-attempt:*')
+    
+    const loginAttemptKeys = await redis.keys(`${process.env.REDIS_PREFIX || 'opus_test:'}login-attempt:*`)
     if (loginAttemptKeys.length > 0) {
       await redis.del(...loginAttemptKeys)
     }
 
+    await redis.quit()
     console.log('テスト環境のセットアップが完了しました')
   } catch (error) {
     console.error('テスト環境のセットアップに失敗しました:', error)

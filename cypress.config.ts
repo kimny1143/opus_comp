@@ -19,6 +19,20 @@ export default defineConfig({
         },
         async 'db:seed'() {
           try {
+            // テストユーザーの作成
+            const user = await prisma.user.upsert({
+              where: { email: 'test@example.com' },
+              update: {
+                role: 'ADMIN',
+                hashedPassword: 'test-hash'
+              },
+              create: {
+                email: 'test@example.com',
+                role: 'ADMIN',
+                hashedPassword: 'test-hash'
+              }
+            })
+
             // テストデータの作成
             await prisma.vendor.createMany({
               data: [
@@ -30,8 +44,8 @@ export default defineConfig({
                   status: VendorStatus.ACTIVE,
                   email: 'test-vendor@example.com',
                   phone: '03-1234-5678',
-                  createdById: 'system',
-                  updatedById: 'system'
+                  createdById: user.id,
+                  updatedById: user.id
                 },
                 {
                   id: 'test-vendor-2',
@@ -41,8 +55,8 @@ export default defineConfig({
                   status: VendorStatus.ACTIVE,
                   email: 'sample-vendor@example.com',
                   phone: '03-8765-4321',
-                  createdById: 'system',
-                  updatedById: 'system'
+                  createdById: user.id,
+                  updatedById: user.id
                 }
               ],
               skipDuplicates: true
@@ -62,6 +76,12 @@ export default defineConfig({
                 id: {
                   in: ['test-vendor-1', 'test-vendor-2']
                 }
+              }
+            })
+
+            await prisma.user.deleteMany({
+              where: {
+                email: 'test@example.com'
               }
             })
 

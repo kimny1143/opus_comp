@@ -2,16 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 import { prisma } from '@/lib/prisma'
-import { handleApiError } from '@/lib/api-utils'
-import { Prisma } from '@prisma/client'
+import { handlePrismaError, createSuccessResponse, createErrorResponse } from '@/lib/api-utils'
 import { InvoiceStatus } from '@prisma/client'
-import { TagFormData } from '@/types/tag'
 
 interface RouteContext {
   params: Promise<{ id: string }>
 }
 
-// @ts-ignore - Temporary bypass for Next.js 15 type checking
 export async function GET(
   request: NextRequest,
   context: RouteContext
@@ -19,58 +16,91 @@ export async function GET(
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
-      return NextResponse.json(
-        { success: false, error: '認証が必要です' },
-        { status: 401 }
-      )
+      return createErrorResponse('認証が必要です', 401)
     }
 
     const invoice = await prisma.invoice.findUnique({
       where: { id: (await context.params).id },
       include: {
         items: true,
-        vendor: true,
-        purchaseOrder: true,
-        template: true,
-        tags: true
+        vendor: {
+          select: {
+            name: true,
+            email: true
+          }
+        }
       }
     })
 
     if (!invoice) {
-      return NextResponse.json(
-        { success: false, error: '請求書が見つかりません' },
-        { status: 404 }
-      )
+      return createErrorResponse('請求書が見つかりません', 404)
     }
 
-    return NextResponse.json({ success: true, data: invoice })
+    return createSuccessResponse(invoice)
   } catch (error) {
-    return handleApiError(error)
+    return handlePrismaError(error)
   }
 }
 
-export async function PATCH(request: Request, props: { params: Promise<{ id: string }> }) {
-  const params = await props.params;
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return new NextResponse('Unauthorized', { status: 401 })
-  }
-
+export async function PUT(
+  request: NextRequest,
+  context: RouteContext
+) {
   try {
-    const { status } = await request.json()
-    if (!status || !Object.values(InvoiceStatus).includes(status)) {
-      return new NextResponse('Invalid status', { status: 400 })
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return createErrorResponse('認証が必要です', 401)
     }
 
-    const invoice = await prisma.invoice.update({
-      where: { id: params.id },
-      data: { status: status as InvoiceStatus }
+    const { amount, status } = await request.json()
+    const id = (await context.params).id
+
+    // 請求書の存在確認
+    const invoice = await prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        vendor: {
+          select: {
+            name: true,
+            email: true
+          }
+        }
+      }
     })
 
-    return NextResponse.json(invoice)
+    if (!invoice) {
+      return createErrorResponse('請求書が見つかりません', 404)
+    }
+
+    // 承認済みの請求書は編集不可
+    if (invoice.status === 'APPROVED' && amount) {
+      return createErrorResponse('承認済みの請求書は編集できません', 400)
+    }
+
+    const updateData: any = {}
+    if (amount !== undefined) {
+      updateData.totalAmount = amount
+    }
+    if (status !== undefined) {
+      updateData.status = status
+    }
+
+    const updatedInvoice = await prisma.invoice.update({
+      where: { id },
+      data: updateData,
+      include: {
+        vendor: {
+          select: {
+            name: true,
+            email: true
+          }
+        }
+      }
+    })
+
+    return createSuccessResponse(updatedInvoice)
   } catch (error) {
-    console.error('Error updating invoice status:', error)
-    return new NextResponse('Internal Server Error', { status: 500 })
+    return handlePrismaError(error)
   }
 }
 
@@ -81,102 +111,31 @@ export async function DELETE(
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
-      return NextResponse.json(
-        { success: false, error: '認証が必要です' },
-        { status: 401 }
-      )
+      return createErrorResponse('認証が必要です', 401)
+    }
+
+    const id = (await context.params).id
+
+    // 請求書の存在確認
+    const invoice = await prisma.invoice.findUnique({
+      where: { id }
+    })
+
+    if (!invoice) {
+      return createErrorResponse('請求書が見つかりません', 404)
+    }
+
+    // 承認済みの請求書は削除不可
+    if (invoice.status === 'APPROVED') {
+      return createErrorResponse('承認済みの請求書は削除できません', 400)
     }
 
     await prisma.invoice.delete({
-      where: { id: (await context.params).id }
+      where: { id }
     })
 
-    return NextResponse.json({ success: true })
+    return createSuccessResponse({ success: true })
   } catch (error) {
-    return handleApiError(error)
-  }
-}
-
-export async function PUT(request: NextRequest, props: { params: Promise<{ id: string }> }) {
-  const params = await props.params;
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
-      return NextResponse.json({ success: false, error: '認証が必要です' }, { status: 401 })
-    }
-
-    const { id } = params
-    const body = await request.json()
-
-    // トランザクションを使用してタグの更新を確実に行う
-    const updatedInvoice = await prisma.$transaction(async (tx) => {
-      // タグの作成または取得
-      const tagPromises = (body.tags as TagFormData[])?.map(async (tag) => {
-        return tx.tag.upsert({
-          where: { name: tag.name },
-          create: { 
-            name: tag.name,
-            type: tag.type
-          },
-          update: {}
-        })
-      }) || []
-
-      const createdTags = await Promise.all(tagPromises)
-
-      // 一旦全てのタグとの関連を削除
-      await tx.invoice.update({
-        where: { id },
-        data: {
-          tags: {
-            set: []
-          }
-        }
-      })
-
-      // 請求書情報とタグを更新
-      return tx.invoice.update({
-        where: { id },
-        data: {
-          invoiceNumber: body.invoiceNumber,
-          status: body.status,
-          issueDate: body.issueDate ? new Date(body.issueDate) : undefined,
-          dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
-          notes: body.notes,
-          updatedById: session.user.id,
-          tags: {
-            connect: createdTags.map(tag => ({ id: tag.id }))
-          }
-        },
-        include: {
-          items: true,
-          vendor: true,
-          purchaseOrder: true,
-          template: true,
-          tags: true
-        }
-      })
-    })
-
-    // Decimalデータをシリアライズ
-    const serializedInvoice = {
-      ...updatedInvoice,
-      totalAmount: updatedInvoice.totalAmount.toString(),
-      items: updatedInvoice.items.map(item => ({
-        ...item,
-        unitPrice: item.unitPrice.toString(),
-        taxRate: item.taxRate.toString(),
-      })),
-      purchaseOrder: updatedInvoice.purchaseOrder ? {
-        ...updatedInvoice.purchaseOrder,
-        totalAmount: updatedInvoice.purchaseOrder.totalAmount.toString(),
-        taxAmount: updatedInvoice.purchaseOrder.taxAmount.toString(),
-      } : null,
-    }
-
-    return NextResponse.json(serializedInvoice)
-  } catch (error) {
-    console.error('Error updating invoice:', error)
-    return NextResponse.json({ error: 'Failed to update invoice' }, { status: 500 })
+    return handlePrismaError(error)
   }
 }

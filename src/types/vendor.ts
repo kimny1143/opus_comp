@@ -1,54 +1,44 @@
-/**
- * 取引先の基本情報を定義するインターフェース
- * MVPの要件に合わせて最小限の項目のみを含む
- */
+export type VendorType = 'INDIVIDUAL' | 'CORPORATION'
+
 export interface Vendor {
   id: string
   name: string
   email: string
   phone?: string | null
   address?: string | null
+  type: VendorType
+  invoiceNumber?: string | null  // インボイス番号(T+13桁)
+  individualId?: string | null   // マイナンバー(個人の場合)
+  corporateId?: string | null    // 法人番号(法人の場合)
   firstTag?: string | null
   secondTag?: string | null
   createdAt: Date
   updatedAt: Date
+  createdById: string
 }
 
-/**
- * 取引先作成時のデータ型
- * 必須項目のみを含む
- */
-export type CreateVendorInput = {
+export interface CreateVendorInput {
   name: string
   email: string
   phone?: string
   address?: string
-  tags?: string[] // APIレベルでは配列として受け取り、内部で分割して保存
+  type: VendorType
+  invoiceNumber?: string
+  individualId?: string
+  corporateId?: string
+  firstTag?: string
+  secondTag?: string
 }
 
-/**
- * 取引先更新時のデータ型
- * すべてのフィールドをオプショナルに
- */
-export type UpdateVendorInput = Partial<CreateVendorInput>
-
-/**
- * 取引先の検索パラメータ
- * MVPではシンプルな検索のみをサポート
- */
-export interface VendorSearchParams {
-  query?: string // 名前による検索
-  tag?: string  // 単一のタグによる検索
-}
-
-/**
- * APIレスポンスの型
- */
-export interface VendorResponse {
-  vendor: Vendor
-}
-
-export interface VendorListResponse {
-  vendors: Vendor[]
-  total: number
+export interface UpdateVendorInput {
+  name?: string
+  email?: string
+  phone?: string | null
+  address?: string | null
+  type?: VendorType
+  invoiceNumber?: string | null
+  individualId?: string | null
+  corporateId?: string | null
+  firstTag?: string | null
+  secondTag?: string | null
 }

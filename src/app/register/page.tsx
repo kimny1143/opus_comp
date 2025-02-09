@@ -1,23 +1,14 @@
 'use client'
 
-import { signIn, useSession } from 'next-auth/react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useState, useEffect } from 'react'
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const { data: session, status } = useSession()
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (status === 'authenticated') {
-      router.push('/dashboard')
-    }
-  }, [status, router])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -28,29 +19,21 @@ export default function LoginPage() {
     const password = formData.get('password') as string
 
     try {
-      const result = await signIn('credentials', {
-        email,
-        password,
-        redirect: false,
-        callbackUrl: '/dashboard'
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
       })
 
-      if (result?.error) {
-        setError('認証に失敗しました')
-      } else if (result?.url) {
-        router.push(result.url)
+      if (res.ok) {
+        router.push('/login?registered=true')
+      } else {
+        const data = await res.json()
+        setError(data.error || '登録に失敗しました')
       }
     } catch (error) {
       setError('エラーが発生しました')
     }
-  }
-
-  if (status === 'loading') {
-    return <div className="p-4">Loading...</div>
-  }
-
-  if (status === 'authenticated') {
-    return null
   }
 
   return (
@@ -58,13 +41,8 @@ export default function LoginPage() {
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            ログイン
+            アカウント登録
           </h2>
-          {searchParams.get('registered') === 'true' && (
-            <p className="mt-2 text-center text-sm text-green-600">
-              登録が完了しました。ログインしてください。
-            </p>
-          )}
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
@@ -77,7 +55,6 @@ export default function LoginPage() {
                 name="email"
                 type="email"
                 required
-                data-cy="email-input"
                 className="rounded-t-md"
                 placeholder="メールアドレス"
               />
@@ -91,7 +68,6 @@ export default function LoginPage() {
                 name="password"
                 type="password"
                 required
-                data-cy="password-input"
                 className="rounded-b-md"
                 placeholder="パスワード"
               />
@@ -105,21 +81,17 @@ export default function LoginPage() {
           )}
 
           <div>
-            <Button
-              type="submit"
-              data-cy="login-button"
-              className="w-full"
-            >
-              ログイン
+            <Button type="submit" className="w-full">
+              登録
             </Button>
           </div>
 
           <div className="text-sm text-center">
             <Link
-              href="/register"
+              href="/login"
               className="font-medium text-indigo-600 hover:text-indigo-500"
             >
-              新規登録はこちら
+              すでにアカウントをお持ちの方はこちら
             </Link>
           </div>
         </form>

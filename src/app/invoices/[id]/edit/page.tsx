@@ -2,38 +2,50 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import type { Invoice } from '@/types/invoice'
+import { useSession } from 'next-auth/react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import type { InvoiceWithVendor, InvoiceStatus } from '@/types/invoice'
 
 export default function EditInvoicePage({ params }: { params: { id: string } }) {
   const router = useRouter()
-  const [invoice, setInvoice] = useState<Invoice | null>(null)
+  const { data: session, status } = useSession()
+  const [invoice, setInvoice] = useState<InvoiceWithVendor | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [taxIncluded, setTaxIncluded] = useState(true)
+  const [invoiceStatus, setInvoiceStatus] = useState<InvoiceStatus>('DRAFT')
 
-  // 請求書データの取得
   useEffect(() => {
-    const fetchInvoice = async () => {
-      try {
-        const response = await fetch(`/api/invoices?id=${params.id}`)
-        if (!response.ok) throw new Error('請求書の取得に失敗しました')
-        
-        const data = await response.json()
-        setInvoice(data.invoice)
-
-        // 承認済みの請求書は編集不可
-        if (data.invoice.status === 'APPROVED') {
-          router.push('/invoices')
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '請求書の取得に失敗しました')
-      } finally {
-        setIsLoading(false)
-      }
+    if (status === 'unauthenticated') {
+      router.push('/login')
+      return
     }
 
-    fetchInvoice()
-  }, [params.id, router])
+    if (status === 'authenticated') {
+      fetchInvoice()
+    }
+  }, [status, router])
+
+  // 請求書データの取得
+  const fetchInvoice = async () => {
+    try {
+      const response = await fetch(`/api/invoices/${params.id}`, {
+        credentials: 'include'
+      })
+      if (!response.ok) throw new Error('請求書の取得に失敗しました')
+      
+      const data = await response.json()
+      setInvoice(data.data)
+      setTaxIncluded(data.data.taxIncluded)
+      setInvoiceStatus(data.data.status)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '請求書の取得に失敗しました')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // フォームの送信
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -45,12 +57,17 @@ export default function EditInvoicePage({ params }: { params: { id: string } }) 
     const amount = parseFloat(formData.get('amount') as string)
 
     try {
-      const response = await fetch(`/api/invoices?id=${params.id}`, {
+      const response = await fetch(`/api/invoices/${params.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ amount }),
+        credentials: 'include',
+        body: JSON.stringify({ 
+          amount,
+          taxIncluded,
+          status: invoiceStatus
+        }),
       })
 
       if (!response.ok) {
@@ -66,8 +83,12 @@ export default function EditInvoicePage({ params }: { params: { id: string } }) 
     }
   }
 
-  if (isLoading) {
+  if (status === 'loading' || isLoading) {
     return <div className="container mx-auto px-4 py-8">読み込み中...</div>
+  }
+
+  if (status === 'unauthenticated') {
+    return null
   }
 
   if (!invoice) {
@@ -105,36 +126,87 @@ export default function EditInvoicePage({ params }: { params: { id: string } }) 
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <span className="text-gray-500 sm:text-sm">¥</span>
             </div>
-            <input
+            <Input
               type="number"
               name="amount"
               required
               min="0"
               step="1"
-              defaultValue={invoice.totalAmount}
-              className="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              defaultValue={Number(invoice.totalAmount)}
+              className="pl-7"
               data-cy="amount-input"
             />
           </div>
         </div>
 
+        {/* 内税/外税の選択 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            消費税の計算方式
+          </label>
+          <div className="flex gap-4">
+            <label className="inline-flex items-center">
+              <input
+                type="radio"
+                name="taxType"
+                checked={taxIncluded}
+                onChange={() => setTaxIncluded(true)}
+                className="form-radio h-4 w-4 text-indigo-600"
+              />
+              <span className="ml-2">内税(税込)</span>
+            </label>
+            <label className="inline-flex items-center">
+              <input
+                type="radio"
+                name="taxType"
+                checked={!taxIncluded}
+                onChange={() => setTaxIncluded(false)}
+                className="form-radio h-4 w-4 text-indigo-600"
+              />
+              <span className="ml-2">外税(税抜)</span>
+            </label>
+          </div>
+          <p className="mt-1 text-sm text-gray-500">
+            {taxIncluded 
+              ? '※ 入力した金額から消費税額を計算します'
+              : '※ 入力した金額に消費税を加算します'}
+          </p>
+        </div>
+
+        {/* ステータスの選択 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            ステータス
+          </label>
+          <select
+            value={invoiceStatus}
+            onChange={(e) => setInvoiceStatus(e.target.value as InvoiceStatus)}
+            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+          >
+            <option value="DRAFT">下書き</option>
+            <option value="PENDING">承認待ち</option>
+            <option value="APPROVED">承認済み</option>
+            <option value="PAID">支払済み</option>
+            <option value="OVERDUE">支払期限超過</option>
+          </select>
+        </div>
+
         {/* 送信ボタン */}
         <div className="flex justify-end space-x-4">
-          <button
+          <Button
             type="button"
+            variant="outline"
             onClick={() => router.back()}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             キャンセル
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
             disabled={isSaving}
-            className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             data-cy="submit-invoice-button"
           >
             {isSaving ? '保存中...' : '保存'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

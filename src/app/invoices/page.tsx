@@ -1,95 +1,104 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import type { Invoice } from '@/types/invoice'
+import { useSession } from 'next-auth/react'
+import { Button } from '@/components/ui/button'
+import { InvoiceWithVendor, InvoiceStatus } from '@/types/invoice'
+
+// ステータスの日本語表示
+const statusLabels: Record<InvoiceStatus, string> = {
+  DRAFT: '下書き',
+  PENDING: '承認待ち',
+  APPROVED: '承認済み',
+  PAID: '支払済み',
+  OVERDUE: '支払期限超過'
+}
+
+// ステータスに応じたスタイル
+const statusStyles: Record<InvoiceStatus, string> = {
+  DRAFT: 'bg-gray-100 text-gray-800',
+  PENDING: 'bg-yellow-100 text-yellow-800',
+  APPROVED: 'bg-green-100 text-green-800',
+  PAID: 'bg-blue-100 text-blue-800',
+  OVERDUE: 'bg-red-100 text-red-800'
+}
 
 export default function InvoicesPage() {
   const router = useRouter()
-  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const { data: session, status } = useSession()
+  const [invoices, setInvoices] = useState<InvoiceWithVendor[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // 請求書一覧の取得
   useEffect(() => {
-    const fetchInvoices = async () => {
-      try {
-        const response = await fetch('/api/invoices')
-        const data = await response.json()
-        setInvoices(data.invoices)
-      } catch (err) {
-        setError('請求書の取得に失敗しました')
-      } finally {
-        setIsLoading(false)
-      }
+    if (status === 'unauthenticated') {
+      router.push('/login')
+      return
     }
 
-    fetchInvoices()
-  }, [])
+    if (status === 'authenticated') {
+      fetchInvoices()
+    }
+  }, [status, router])
 
-  // 請求書の削除
+  const fetchInvoices = async () => {
+    try {
+      const response = await fetch('/api/invoices', {
+        credentials: 'include'
+      })
+      if (!response.ok) throw new Error('請求書の取得に失敗しました')
+      
+      const data = await response.json()
+      setInvoices(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '請求書の取得に失敗しました')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleDelete = async (id: string) => {
     if (!confirm('この請求書を削除してもよろしいですか?')) {
       return
     }
 
     try {
-      const response = await fetch(`/api/invoices?id=${id}`, {
-        method: 'DELETE'
+      const response = await fetch(`/api/invoices/${id}`, {
+        method: 'DELETE',
+        credentials: 'include'
       })
 
       if (!response.ok) {
-        throw new Error('削除に失敗しました')
+        const data = await response.json()
+        throw new Error(data.error || '請求書の削除に失敗しました')
       }
 
-      // 一覧を更新
-      setInvoices(invoices.filter(invoice => invoice.id !== id))
+      // 請求書一覧を更新
+      fetchInvoices()
     } catch (err) {
-      setError('請求書の削除に失敗しました')
+      setError(err instanceof Error ? err.message : '請求書の削除に失敗しました')
     }
   }
 
-  // ステータスの更新
-  const handleStatusChange = async (id: string, newStatus: 'DRAFT' | 'APPROVED') => {
-    try {
-      const response = await fetch(`/api/invoices?id=${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ status: newStatus })
-      })
-
-      if (!response.ok) {
-        throw new Error('更新に失敗しました')
-      }
-
-      // 一覧を更新
-      const data = await response.json()
-      setInvoices(invoices.map(invoice => 
-        invoice.id === id ? data.invoice : invoice
-      ))
-    } catch (err) {
-      setError('ステータスの更新に失敗しました')
-    }
-  }
-
-  if (isLoading) {
+  if (status === 'loading' || isLoading) {
     return <div className="container mx-auto px-4 py-8">読み込み中...</div>
+  }
+
+  if (status === 'unauthenticated') {
+    return null
   }
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">請求書一覧</h1>
-        <Link
-          href="/invoices/new"
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+        <Button
+          onClick={() => router.push('/invoices/new')}
           data-cy="create-invoice-button"
         >
           新規作成
-        </Link>
+        </Button>
       </div>
 
       {error && (
@@ -98,68 +107,85 @@ export default function InvoicesPage() {
         </div>
       )}
 
-      <div className="grid gap-4">
-        {invoices.map((invoice) => (
-          <div
-            key={invoice.id}
-            className="border rounded p-4 flex justify-between items-center"
-            data-cy="invoice-item"
-          >
-            <div>
-              <h2 className="font-bold">{invoice.vendor.name}</h2>
-              <p className="text-gray-600">{invoice.vendor.email}</p>
-              <p className="text-gray-600">¥{invoice.totalAmount.toLocaleString()}</p>
-              <span
-                className={`inline-block px-2 py-1 text-sm rounded ${
-                  invoice.status === 'APPROVED'
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-yellow-100 text-yellow-800'
-                }`}
-              >
-                {invoice.status === 'APPROVED' ? '承認済み' : '下書き'}
-              </span>
-            </div>
-            <div className="flex space-x-2">
-              {invoice.status === 'DRAFT' && (
-                <>
-                  <button
-                    onClick={() => handleStatusChange(invoice.id, 'APPROVED')}
-                    className="text-green-500 hover:text-green-700"
-                    data-cy="approve-invoice-button"
-                  >
-                    承認
-                  </button>
-                  <Link
-                    href={`/invoices/${invoice.id}/edit`}
-                    className="text-blue-500 hover:text-blue-700"
+      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                請求書番号
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                取引先
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                金額
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                ステータス
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                発行日
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                操作
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {invoices.map((invoice) => (
+              <tr key={invoice.id}>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {invoice.invoiceNumber}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {invoice.vendor.name}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  ¥{Number(invoice.totalAmount).toLocaleString()}
+                  <span className="text-xs text-gray-500 ml-1">
+                    {invoice.taxIncluded ? '(税込)' : '(税抜)'}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusStyles[invoice.status]}`}>
+                    {statusLabels[invoice.status]}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {new Date(invoice.issueDate).toLocaleDateString('ja-JP')}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <Button
+                    variant="ghost"
+                    className="text-indigo-600 hover:text-indigo-900 mr-2"
+                    onClick={() => router.push(`/invoices/${invoice.id}/edit`)}
                     data-cy="edit-invoice-button"
                   >
                     編集
-                  </Link>
-                  <button
-                    onClick={() => handleDelete(invoice.id)}
-                    className="text-red-500 hover:text-red-700"
-                    data-cy="delete-invoice-button"
+                  </Button>
+                  {invoice.status === 'DRAFT' && (
+                    <Button
+                      variant="ghost"
+                      className="text-red-600 hover:text-red-900"
+                      onClick={() => handleDelete(invoice.id)}
+                      data-cy="delete-invoice-button"
+                    >
+                      削除
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    className="text-green-600 hover:text-green-900 ml-2"
+                    onClick={() => router.push(`/invoices/${invoice.id}/preview`)}
+                    data-cy="preview-pdf-button"
                   >
-                    削除
-                  </button>
-                </>
-              )}
-              <button
-                onClick={() => window.open(`/api/invoices/${invoice.id}/pdf`, '_blank')}
-                className="text-gray-500 hover:text-gray-700"
-                data-cy="download-pdf-button"
-              >
-                PDF
-              </button>
-            </div>
-          </div>
-        ))}
-        {invoices.length === 0 && (
-          <div className="text-center text-gray-500">
-            請求書がありません
-          </div>
-        )}
+                    PDF
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )

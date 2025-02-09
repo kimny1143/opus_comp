@@ -1,53 +1,34 @@
-/**
- * 請求書の基本情報を定義するインターフェース
- * MVPの要件に合わせて最小限の項目のみを含む
- */
-export interface Invoice {
-  id: string
-  vendorId: string
-  status: 'DRAFT' | 'APPROVED'
-  totalAmount: number
-  createdAt: Date
-  updatedAt: Date
-  vendor: {
-    name: string
-    email: string
-  }
+import { Invoice as PrismaInvoice, InvoiceStatus as PrismaInvoiceStatus } from '@prisma/client'
+
+export type InvoiceStatus = PrismaInvoiceStatus
+
+export interface Invoice extends Omit<PrismaInvoice, 'totalAmount'> {
+  totalAmount: string
+  taxIncluded: boolean
 }
 
-/**
- * 請求書作成時のデータ型
- */
 export type CreateInvoiceInput = {
   vendorId: string
   amount: number
+  taxIncluded?: boolean
 }
 
-/**
- * 請求書更新時のデータ型
- */
 export type UpdateInvoiceInput = {
   amount?: number
-  status?: 'DRAFT' | 'APPROVED'
+  status?: InvoiceStatus
+  taxIncluded?: boolean
 }
 
-/**
- * 請求書の検索パラメータ
- * MVPではシンプルな検索のみをサポート
- */
-export interface InvoiceSearchParams {
-  vendorId?: string
-  status?: 'DRAFT' | 'APPROVED'
+export type InvoiceWithVendor = Invoice & {
+  vendor: {
+    name: string
+    email: string
+    address?: string | null
+  }
 }
 
-/**
- * APIレスポンスの型
- */
-export interface InvoiceResponse {
-  invoice: Invoice
-}
-
-export interface InvoiceListResponse {
-  invoices: Invoice[]
-  total: number
+// 金額のフォーマット用ユーティリティ関数
+export const formatAmount = (amount: string | number): string => {
+  const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
+  return numAmount.toLocaleString()
 }

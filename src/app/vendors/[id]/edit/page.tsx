@@ -1,232 +1,265 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { Vendor, UpdateVendorInput } from '@/types/vendor'
+import { useSession } from 'next-auth/react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Vendor, VendorType } from '@/types/vendor'
 
-export default function EditVendorPage({ params }: { params: { id: string } }) {
+export default function EditVendorPage({
+  params
+}: {
+  params: { id: string }
+}) {
   const router = useRouter()
+  const { data: session, status } = useSession()
   const [vendor, setVendor] = useState<Vendor | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [tags, setTags] = useState<string[]>([])
-  const [tagInput, setTagInput] = useState('')
+  const [vendorType, setVendorType] = useState<VendorType>('CORPORATION')
 
-  // 取引先データの取得
   useEffect(() => {
-    const fetchVendor = async () => {
-      try {
-        const response = await fetch(`/api/vendors?id=${params.id}`)
-        if (!response.ok) throw new Error('取引先の取得に失敗しました')
-        
-        const data = await response.json()
-        setVendor(data.vendor)
-        // 既存のタグを設定
-        const existingTags = [
-          data.vendor.firstTag,
-          data.vendor.secondTag
-        ].filter((tag): tag is string => !!tag)
-        setTags(existingTags)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '取引先の取得に失敗しました')
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchVendor()
-  }, [params.id])
-
-  // タグの追加
-  const handleAddTag = () => {
-    if (!tagInput.trim()) return
-    if (tags.length >= 2) {
-      setError('タグは最大2つまでしか設定できません')
+    if (status === 'unauthenticated') {
+      router.push('/login')
       return
     }
-    setTags([...tags, tagInput.trim()])
-    setTagInput('')
-    setError(null)
+
+    if (status === 'authenticated') {
+      fetchVendor()
+    }
+  }, [status, router])
+
+  async function fetchVendor() {
+    try {
+      const res = await fetch(`/api/vendors/${params.id}`, {
+        credentials: 'include' // セッションクッキーを送信
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setVendor(data)
+        setVendorType(data.type)
+      } else {
+        setError('取引先の取得に失敗しました')
+      }
+    } catch (error) {
+      setError('エラーが発生しました')
+    }
   }
 
-  // タグの削除
-  const handleRemoveTag = (index: number) => {
-    setTags(tags.filter((_, i) => i !== index))
-    setError(null)
-  }
-
-  // フォームの送信
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setIsSubmitting(true)
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
     setError(null)
 
-    const formData = new FormData(e.currentTarget)
-    const vendorData: UpdateVendorInput = {
+    const formData = new FormData(event.currentTarget)
+    const vendorData = {
       name: formData.get('name') as string,
       email: formData.get('email') as string,
-      phone: formData.get('phone') as string,
-      address: formData.get('address') as string,
-      tags
+      phone: formData.get('phone') as string || null,
+      address: formData.get('address') as string || null,
+      type: vendorType,
+      invoiceNumber: formData.get('invoiceNumber') as string || null,
+      individualId: vendorType === 'INDIVIDUAL' ? (formData.get('individualId') as string || null) : null,
+      corporateId: vendorType === 'CORPORATION' ? (formData.get('corporateId') as string || null) : null,
+      firstTag: formData.get('firstTag') as string || null,
+      secondTag: formData.get('secondTag') as string || null,
     }
 
     try {
-      const response = await fetch(`/api/vendors?id=${params.id}`, {
+      const res = await fetch(`/api/vendors/${params.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(vendorData),
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // セッションクッキーを送信
+        body: JSON.stringify(vendorData)
       })
 
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || '取引先の更新に失敗しました')
+      if (res.ok) {
+        router.push('/vendors')
+      } else {
+        const data = await res.json()
+        setError(data.error || '取引先の更新に失敗しました')
       }
-
-      router.push('/vendors')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '取引先の更新に失敗しました')
-    } finally {
-      setIsSubmitting(false)
+    } catch (error) {
+      setError('エラーが発生しました')
     }
   }
 
-  if (isLoading) {
-    return <div className="container mx-auto px-4 py-8">読み込み中...</div>
+  if (status === 'loading' || !vendor) {
+    return <div className="p-4">Loading...</div>
   }
 
-  if (!vendor) {
-    return <div className="container mx-auto px-4 py-8">取引先が見つかりません</div>
+  if (status === 'unauthenticated') {
+    return null
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="max-w-2xl mx-auto p-4 sm:p-6 lg:p-8">
       <h1 className="text-2xl font-bold mb-6">取引先の編集</h1>
-
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4" role="alert">
-          <span className="block sm:inline">{error}</span>
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* 基本情報 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            取引先区分
+          </label>
+          <div className="flex gap-4">
+            <label className="inline-flex items-center">
+              <input
+                type="radio"
+                name="type"
+                value="CORPORATION"
+                checked={vendorType === 'CORPORATION'}
+                onChange={(e) => setVendorType('CORPORATION')}
+                className="mr-2"
+              />
+              法人
+            </label>
+            <label className="inline-flex items-center">
+              <input
+                type="radio"
+                name="type"
+                value="INDIVIDUAL"
+                checked={vendorType === 'INDIVIDUAL'}
+                onChange={(e) => setVendorType('INDIVIDUAL')}
+                className="mr-2"
+              />
+              個人
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             取引先名 *
           </label>
-          <input
-            type="text"
+          <Input
             name="name"
+            type="text"
             required
             defaultValue={vendor.name}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            data-cy="vendor-name-input"
+            placeholder="取引先名"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             メールアドレス *
           </label>
-          <input
-            type="email"
+          <Input
             name="email"
+            type="email"
             required
             defaultValue={vendor.email}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            data-cy="vendor-email-input"
+            placeholder="example@example.com"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             電話番号
           </label>
-          <input
-            type="tel"
+          <Input
             name="phone"
+            type="tel"
             defaultValue={vendor.phone || ''}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            data-cy="vendor-phone-input"
+            placeholder="03-1234-5678"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             住所
           </label>
-          <input
-            type="text"
+          <Input
             name="address"
+            type="text"
             defaultValue={vendor.address || ''}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            data-cy="vendor-address-input"
+            placeholder="東京都千代田区..."
           />
         </div>
 
-        {/* タグ */}
         <div>
-          <label className="block text-sm font-medium text-gray-700">
-            タグ (最大2つ)
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            インボイス番号
           </label>
-          <div className="mt-1 flex items-center space-x-2">
-            <input
-              type="text"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-              placeholder="タグを入力..."
-              data-cy="vendor-tag-input"
-            />
-            <button
-              type="button"
-              onClick={handleAddTag}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              data-cy="add-tag-button"
-            >
-              追加
-            </button>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {tags.map((tag, index) => (
-              <span
-                key={index}
-                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800"
-              >
-                {tag}
-                <button
-                  type="button"
-                  onClick={() => handleRemoveTag(index)}
-                  className="ml-1 text-indigo-600 hover:text-indigo-900"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
+          <Input
+            name="invoiceNumber"
+            type="text"
+            defaultValue={vendor.invoiceNumber || ''}
+            placeholder="T1234567890123"
+            pattern="T\d{13}"
+            title="T+13桁の数字"
+          />
         </div>
 
-        {/* 送信ボタン */}
-        <div className="flex justify-end space-x-4">
-          <button
+        {vendorType === 'INDIVIDUAL' ? (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              マイナンバー
+            </label>
+            <Input
+              name="individualId"
+              type="text"
+              defaultValue={vendor.individualId || ''}
+              placeholder="12桁の数字"
+              pattern="\d{12}"
+              title="12桁の数字"
+            />
+          </div>
+        ) : (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              法人番号
+            </label>
+            <Input
+              name="corporateId"
+              type="text"
+              defaultValue={vendor.corporateId || ''}
+              placeholder="13桁の数字"
+              pattern="\d{13}"
+              title="13桁の数字"
+            />
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            タグ1
+          </label>
+          <Input
+            name="firstTag"
+            type="text"
+            defaultValue={vendor.firstTag || ''}
+            placeholder="タグ1"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            タグ2
+          </label>
+          <Input
+            name="secondTag"
+            type="text"
+            defaultValue={vendor.secondTag || ''}
+            placeholder="タグ2"
+          />
+        </div>
+
+        {error && (
+          <div className="text-red-500 text-sm" role="alert">
+            {error}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-4">
+          <Button
             type="button"
+            variant="outline"
             onClick={() => router.back()}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             キャンセル
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            data-cy="submit-vendor-button"
-          >
-            {isSubmitting ? '保存中...' : '保存'}
-          </button>
+          </Button>
+          <Button type="submit">
+            更新
+          </Button>
         </div>
       </form>
     </div>

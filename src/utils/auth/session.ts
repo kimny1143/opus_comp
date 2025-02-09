@@ -1,5 +1,7 @@
 import { cookies } from 'next/headers'
 import { decode } from 'next-auth/jwt'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth-options'
 
 export interface AuthUser {
   userId: string
@@ -12,23 +14,16 @@ export interface AuthUser {
  * @throws Error 認証情報が無効な場合
  */
 export async function getAuthUser(): Promise<AuthUser> {
-  const cookieStore = cookies()
-  const token = cookieStore.get('auth-token')
+  const session = await getServerSession(authOptions)
 
-  if (!token) {
-    throw new Error('認証トークンがありません')
+  if (!session?.user?.id || !session?.user?.role) {
+    throw new Error('認証情報がありません')
   }
 
-  const decoded = await decode({
-    token: token.value,
-    secret: process.env.NEXTAUTH_SECRET || 'mvp-secret'
-  }) as AuthUser | null
-
-  if (!decoded || !decoded.userId || !decoded.role) {
-    throw new Error('無効な認証トークンです')
+  return {
+    userId: session.user.id,
+    role: session.user.role as 'USER' | 'ADMIN'
   }
-
-  return decoded
 }
 
 /**

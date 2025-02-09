@@ -1,16 +1,19 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/check-purchase-orders",
-      "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/check-invoices",
-      "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/cron/check-reminders",
-      "schedule": "0 9 * * *"
+  "version": 2,
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["hnd1"],
+  "env": {
+    "NEXTAUTH_URL": "@nextauth_url",
+    "NEXTAUTH_SECRET": "@nextauth_secret",
+    "DATABASE_URL": "@database_url"
+  },
+  "build": {
+    "env": {
+      "NEXTAUTH_URL": "@nextauth_url",
+      "NEXTAUTH_SECRET": "@nextauth_secret",
+      "DATABASE_URL": "@database_url"
     }
-  ]
-} 
+  }
+}

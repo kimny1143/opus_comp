@@ -31,7 +31,7 @@
     "next": "14.0.4",
     "next-auth": "^4.24.11",
     "node-fetch": "^3.3.2",
-    "pdfkit": "^0.14.0",
+    "pdfkit": "^0.16.0",
     "puppeteer": "^24.2.0",
     "react": "^18",
     "react-day-picker": "^9.5.1",
